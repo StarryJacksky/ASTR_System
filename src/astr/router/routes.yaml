@@ -1,0 +1,51 @@
+# ASTR ModelRouter 路由表
+# 落点：P0-T04 → src/astr/router/routes.yaml
+# 规范：03_CONTRACTS.md §4。代码里不出现具体模型名，全在这张表；改模型/换价/被封只改这里。
+# ⚠️ 模型 ID：除 Anthropic 外多为占位，开工 T00 必须按 LiteLLM 文档核对当时最新型号（标 ← 核对）。
+#
+# 智囊团 6 家分工（总规 §2.3.1 / §2.5.2）：
+#   Claude  = 首席情感分析 / 物理家(直觉)
+#   GPT     = 常识逻辑     / 数学家(严谨)
+#   Gemini  = 多模态+联网  / 批判者
+#   Grok    = 梗与时事     / 工程师(落地)
+#   DeepSeek= 便宜走量     / 凌晨批量评分
+#   Qwen(云)= 中文写作特化 / 图书馆员(检索·事实核对)
+
+tasks:
+  # —— 本地灵魂（秋秋本人，不出网）——
+  soul_reply:   { free: local-qwen3-8b, cheap: local-qwen3-8b, balanced: local-qwen3-8b, max: claude-sonnet }
+  intent:       { free: local-qwen3-8b }
+
+  # —— MoA 智囊团分析（产出结构化 JSON，不是回答本身）——
+  emotion_analysis:   { cheap: deepseek-chat, balanced: claude-haiku, max: claude-sonnet }   # 首席情感 = Claude
+  logic_analysis:     { cheap: deepseek-chat, balanced: gpt-mini,     max: gpt-flagship }     # 逻辑     = GPT
+  retrieval_analysis: { cheap: gemini-flash,  balanced: gemini-flash, max: gemini-pro }       # 多模态联网 = Gemini
+  zeitgeist_analysis: { cheap: grok,          balanced: grok,         max: grok }              # 梗/时事  = Grok
+  chinese_writing:    { cheap: qwen-max,      balanced: qwen-max,     max: qwen-max }          # 中文写作 = Qwen
+
+  # —— 学术圆桌席位（总规 §2.5.2）——
+  roundtable_mathematician: { balanced: gpt-mini,     max: gpt-flagship }
+  roundtable_physicist:     { balanced: claude-haiku, max: claude-sonnet }
+  roundtable_critic:        { balanced: gemini-flash, max: gemini-pro }
+  roundtable_engineer:      { balanced: grok,         max: grok }
+  roundtable_librarian:     { cheap: qwen-max,        balanced: deepseek-chat }   # 检索 / 事实核对
+
+  # —— 凌晨批量评分（judge 必须与被评模型异家，99 #11；本地灵魂是 qwen 系，评分故用非 qwen）——
+  scoring:      { cheap: deepseek-chat, balanced: claude-haiku }
+
+models:   # 唯一允许出现具体模型 ID 的地方
+  local-qwen3-8b: { litellm: "openai/qwen3-8b", api_base: "http://127.0.0.1:8080/v1" }   # 本地 llama.cpp
+  claude-sonnet:  { litellm: "anthropic/claude-sonnet-4-6" }
+  claude-haiku:   { litellm: "anthropic/claude-haiku-4-5" }
+  claude-opus:    { litellm: "anthropic/claude-opus-4-8" }     # 备用：max 档情感/物理可升 opus
+  gpt-flagship:   { litellm: "openai/gpt-5.1" }                # ← 核对最新
+  gpt-mini:       { litellm: "openai/gpt-5.1-mini" }           # ← 核对最新
+  gemini-pro:     { litellm: "gemini/gemini-3-pro" }           # ← 核对最新
+  gemini-flash:   { litellm: "gemini/gemini-3-flash" }         # ← 核对最新
+  grok:           { litellm: "xai/grok-4" }                    # ← 核对最新
+  deepseek-chat:  { litellm: "deepseek/deepseek-chat" }
+  qwen-max:       { litellm: "dashscope/qwen-max" }            # 云 Qwen（DashScope），区别于本地 qwen3-8b
+
+# 降级链（03 §4 规则 4）：任一 max/balanced 调用失败 → 依次回退到更便宜档 → 全失败落 local 并标 degraded=true
+fallback:
+  default: [balanced, cheap, free]
