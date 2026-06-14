@@ -43,3 +43,14 @@ src/astr/
 ## 红线
 
 `soul_package/` 内**永不允许**出现模型权重（`.safetensors/.gguf/.bin/.pt/...`）。CI 与 pre-commit 的 `scripts/check_soul_purity.py` 强制执行（总规 §0.4 灵魂可迁移宪法）。
+
+## 许可证与合规
+
+本项目（ASTR 应用主仓）采用 **AGPL-3.0**（见 `LICENSE`）——三根支柱 AstrBot / SillyTavern / MaiBot 均为 copyleft，且 AGPL 与"家庭主权、不被圈占"立场同向。第三方组件声明见 `THIRD_PARTY_NOTICES.md`；CI 跑 `scripts/check_licenses.py` 兜底扫描依赖许可（UNKNOWN 即失败）。合规边界详见 `../engineering_plan/06_LICENSING_AND_COMPLIANCE.md`。
+
+## 站在巨人肩上（Built on / Inspired by）
+
+- **[AstrBot](https://github.com/AstrBotDevs/AstrBot)**（AGPL-3.0）— 多平台中枢网关；ASTR 以桥接插件接入。
+- **[SillyTavern](https://github.com/SillyTavern/SillyTavern)**（AGPL-3.0）— 人格卡/世界书/记忆存储，仅经 REST 调用。
+- **[NapCat](https://github.com/NapNeko/NapCatQQ)** — QQ(OneBot v11) 协议端。
+- **[MaiBot](https://github.com/MaiM-with-u/MaiBot)**（GPL-3.0）— 拟人化机制的**灵感来源**（情感状态机、分条打字、选择性回复）。ASTR **未使用其代码**，相关模块均为 clean-room 重写并在此致以敬意。

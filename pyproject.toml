@@ -3,6 +3,7 @@ name = "astr"
 version = "0.1.0"
 description = "ASTR System —— 露怀秋（秋秋）的主权 AI 内核：灵魂与算力解耦。"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
 authors = [
     { name = "StarryJacksky", email = "xiaohu302a@126.com" }
 ]
