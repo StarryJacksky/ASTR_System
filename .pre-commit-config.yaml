@@ -1,0 +1,18 @@
+# P0-T02 pre-commit：提交前 ruff lint+format + 灵魂纯度兜底扫描。
+# 代码仓库这边 soul-purity 跑全量扫描（无 pass_filenames）；soul_package 独立仓库用 pass_filenames 模式（见脚本头注释）。
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: soul-purity
+        name: soul purity (no weights in soul_package)
+        entry: uv run python scripts/check_soul_purity.py
+        language: system
+        pass_filenames: false
+        always_run: true

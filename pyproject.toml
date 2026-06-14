@@ -1,0 +1,51 @@
+[project]
+name = "astr"
+version = "0.1.0"
+description = "ASTR System —— 露怀秋（秋秋）的主权 AI 内核：灵魂与算力解耦。"
+readme = "README.md"
+authors = [
+    { name = "StarryJacksky", email = "xiaohu302a@126.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=1.5.9",
+    "fastapi>=0.136.3",
+    "httpx>=0.28.1",
+    "litellm>=1.89.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
+    "python-dotenv>=1.2.2",
+    "python-ulid>=3.1.0",
+    "pyyaml>=6.0.3",
+    "redis>=8.0.0",
+    "structlog>=26.1.0",
+    "uvicorn>=0.49.0",
+]
+
+[project.scripts]
+astr = "astr.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.0",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.17",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # 行长由 formatter 管，lint 不重复报
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
