@@ -34,7 +34,9 @@ async def fake_route(req: RouteRequest) -> RouteResponse:
     )
 
 
-_MEDIUM_TEXT = "帮我仔细分析一下这个方案的逻辑有没有漏洞，越详细越好，真的拜托你了秋秋"  # 30+ 字，落中档
+_MEDIUM_TEXT = (
+    "帮我仔细分析一下这个方案的逻辑有没有漏洞，越详细越好，真的拜托你了秋秋"  # 30+ 字，落中档
+)
 
 
 def test_select_seats_by_length() -> None:
