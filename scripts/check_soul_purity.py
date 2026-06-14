@@ -68,8 +68,13 @@ def _under_soul(path: Path) -> bool:
 
 
 def find_violations(paths: list[Path]) -> list[Path]:
-    """返回 paths 中位于 soul_package 内且为权重文件的清单。供 `astr soul validate` 复用。"""
-    return [p for p in paths if p.is_file() and _under_soul(p) and _is_weight(p)]
+    """返回 paths 中位于 soul_package 内且为权重文件的清单。供 `astr soul validate` 复用。
+
+    pre-commit 以仓库相对路径传入（如 world/x.gguf），而 soul_package 仓库根本身就在
+    soul_package/ 下——必须先 resolve 成绝对路径，_under_soul 才能命中 marker，否则漏判。
+    """
+    resolved = (p.resolve() for p in paths)
+    return [p for p in resolved if p.is_file() and _under_soul(p) and _is_weight(p)]
 
 
 def scan_root(root: Path) -> list[Path]:
