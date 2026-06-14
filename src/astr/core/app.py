@@ -44,6 +44,24 @@ class IngestResponse(BaseModel):
     trace_id: str
 
 
+class RespondRequest(BaseModel):
+    text: str
+    platform: str = "qq"
+    lang: str = "zh"
+    user_id: str = "jacksky"  # 统一会话键；等级由白名单解析
+    group_id: str | None = None
+    timeout_s: int = 60
+
+
+class RespondResponse(BaseModel):
+    reply: str
+    segments: list[str]  # 分条打字用（拟人化拆分）
+    emotion_tag: str | None = None
+    intent: str | None = None
+    trace_id: str
+    timed_out: bool = False
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from astr.router.core import route as route_fn
@@ -84,6 +102,51 @@ async def ingest(req: IngestRequest) -> IngestResponse:
     )
     await app.state.bus.publish(evt)
     return IngestResponse(event_id=evt.id, trace_id=evt.trace_id)
+
+
+@app.post("/v1/respond", response_model=RespondResponse)
+async def respond(req: RespondRequest) -> RespondResponse:
+    """同步：注入发言并等待这条因果链的 soul.decision，返回分条好的回复（AstrBot 桥用）。"""
+    from astr.presentation.humanize import split_reply
+
+    bus: Bus = app.state.bus
+    trace = new_trace_id()
+    # 先锚定当前流末尾，避免发布后再订阅丢事件
+    last = await bus.r.xrevrange(bus.stream, count=1)
+    start_id = last[0][0] if last else "0"
+
+    evt = Event(
+        source=f"sensor.{req.platform}",
+        type=EventType.USER_UTTERANCE,
+        payload=UserUtterancePayload(
+            text=req.text, platform=req.platform, lang=req.lang
+        ).model_dump(),
+        auth=AuthContext(astr_user_id=req.user_id, level=get_settings().resolve_level(req.user_id)),
+        trace_id=trace,
+    )
+    await bus.publish(evt)
+
+    async def _wait() -> Event | None:
+        async for d in bus.tail([EventType.SOUL_DECISION], last_id=start_id):
+            if d.trace_id == trace:
+                return d
+        return None
+
+    try:
+        decision = await asyncio.wait_for(_wait(), timeout=req.timeout_s)
+    except TimeoutError:
+        decision = None
+
+    if decision is None:
+        return RespondResponse(reply="", segments=[], trace_id=trace, timed_out=True)
+    reply = decision.payload.get("reply_text", "")
+    return RespondResponse(
+        reply=reply,
+        segments=split_reply(reply),
+        emotion_tag=decision.payload.get("emotion_tag"),
+        intent=decision.payload.get("intent"),
+        trace_id=trace,
+    )
 
 
 @app.get("/v1/stream")
