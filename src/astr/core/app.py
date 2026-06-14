@@ -50,6 +50,7 @@ class RespondRequest(BaseModel):
     lang: str = "zh"
     user_id: str = "jacksky"  # 统一会话键；等级由白名单解析
     group_id: str | None = None
+    mentioned: bool = False  # 被 @/点名（桥可探测；ASTR 也按名字兜底）
     timeout_s: int = 60
 
 
@@ -74,6 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.worker = asyncio.create_task(run_worker(bus, stop=stop))
     app.state.heartbeat = Heartbeat(bus, route_fn, soul_name=get_settings().soul_name)
     app.state.heartbeat.start()
+    app.state.engagement = {}  # session_key -> [近期回复时间戳]，给选择性回复门控算冷场/退避
     log.info("astr_core_started", port=8300)
     try:
         yield
@@ -104,10 +106,51 @@ async def ingest(req: IngestRequest) -> IngestResponse:
     return IngestResponse(event_id=evt.id, trace_id=evt.trace_id)
 
 
+def _engagement_decision(req: RespondRequest, settings) -> tuple[bool, str]:
+    """选择性回复门控：群里没被点名就按概率决定回不回。返回 (是否回复, session_key)。"""
+    import time
+
+    from astr.soul import emotion
+    from astr.soul.engagement import EngagementInput, should_reply
+
+    is_group = bool(req.group_id)
+    session_key = (
+        f"{req.platform}:group:{req.group_id}" if is_group else f"{req.platform}:{req.user_id}"
+    )
+    history: list[float] = app.state.engagement.setdefault(session_key, [])
+    now = time.time()
+    history[:] = [t for t in history if now - t < 120.0]  # 只看近 2 分钟
+    since_last = (now - max(history)) if history else 1e9
+    mood = emotion.decayed(emotion.load(settings.soul_name))
+    mentioned = req.mentioned or any(n in req.text for n in ("秋秋", "露怀秋"))
+    ok, _p, _reason = should_reply(
+        EngagementInput(
+            is_group=is_group,
+            mentioned=mentioned,
+            level=settings.resolve_level(req.user_id),
+            text=req.text,
+            talkativeness=mood.talkativeness,
+            irritation=mood.irritation,
+            loneliness=mood.loneliness,
+            seconds_since_last_reply=since_last,
+            recent_replies=len(history),
+        )
+    )
+    return ok, session_key
+
+
 @app.post("/v1/respond", response_model=RespondResponse)
 async def respond(req: RespondRequest) -> RespondResponse:
     """同步：注入发言并等待这条因果链的 soul.decision，返回分条好的回复（AstrBot 桥用）。"""
+    import time
+
     from astr.presentation.humanize import split_reply
+
+    settings = get_settings()
+    # 选择性回复门控：群里没被点名且掷骰子不中 → 静默（真人不回群里每句话）
+    will_reply, session_key = _engagement_decision(req, settings)
+    if not will_reply:
+        return RespondResponse(reply="", segments=[], trace_id="", timed_out=False)
 
     bus: Bus = app.state.bus
     trace = new_trace_id()
@@ -140,6 +183,8 @@ async def respond(req: RespondRequest) -> RespondResponse:
     if decision is None:
         return RespondResponse(reply="", segments=[], trace_id=trace, timed_out=True)
     reply = decision.payload.get("reply_text", "")
+    if reply:
+        app.state.engagement.setdefault(session_key, []).append(time.time())  # 记一次回复（退避用）
     return RespondResponse(
         reply=reply,
         segments=split_reply(reply),
