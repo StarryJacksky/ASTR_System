@@ -35,3 +35,28 @@ def test_clamp_bounds() -> None:
     s.clamp()
     assert s.loneliness == 1.0
     assert s.irritation == 0.0
+
+
+def test_coupling_irritation_suppresses_excitement() -> None:
+    # 高烦躁应把"兴奋"的有效回归目标压到基线以下（情绪互相影响）
+    now = datetime.now(UTC)
+    state = emotion.EmotionVector(irritation=1.0, excitement=0.1, updated_at=now)
+    targets = emotion._effective_targets(state, now)
+    assert targets["excitement"] < emotion.BASELINE["excitement"]
+
+
+def test_coupling_loneliness_raises_talkativeness() -> None:
+    # 孤独应抬高"倾诉欲"的目标（孤独→更想说话）
+    now = datetime.now(UTC)
+    state = emotion.EmotionVector(loneliness=1.0, updated_at=now)
+    targets = emotion._effective_targets(state, now)
+    assert targets["talkativeness"] > emotion.BASELINE["talkativeness"]
+
+
+def test_circadian_night_higher_than_day() -> None:
+    from datetime import datetime as _dt
+
+    local_tz = _dt.now().astimezone().tzinfo  # 本地时区，保证构造的本地小时不被偏移
+    night = emotion._circadian_loneliness(_dt(2026, 6, 15, 3, 0, tzinfo=local_tz))
+    day = emotion._circadian_loneliness(_dt(2026, 6, 15, 15, 0, tzinfo=local_tz))
+    assert night > day

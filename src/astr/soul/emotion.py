@@ -15,7 +15,9 @@ from pydantic import BaseModel
 
 from astr.contracts.settings import get_settings
 
-# 基线（衰减目标）。孤独基线略高于 0：独处久了会寂寞。
+DIMS = ("loneliness", "talkativeness", "irritation", "excitement")
+
+# 基线（均值回归目标）。孤独基线略高于 0：独处久了会寂寞。
 BASELINE = {"loneliness": 0.3, "talkativeness": 0.2, "irritation": 0.0, "excitement": 0.1}
 # 各维半衰期（秒）。孤独衰减慢（慢慢累积），烦躁/兴奋来得快去得也快。
 HALF_LIFE_S = {
@@ -24,6 +26,17 @@ HALF_LIFE_S = {
     "irritation": 900.0,
     "excitement": 1200.0,
 }
+
+# 情绪耦合矩阵 C[i][j] = 维 j 偏离基线对维 i「有效目标」的牵引系数（赶超 MaiBot 的关键：情绪互相影响，非各自独立衰减）。
+# 解读：孤独↑→更想倾诉、略微更不兴奋；烦躁↑→压低兴奋与倾诉欲；兴奋↑→更想说话。
+COUPLING: dict[str, dict[str, float]] = {
+    "loneliness": {},
+    "talkativeness": {"loneliness": 0.35, "irritation": -0.20, "excitement": 0.20},
+    "irritation": {"loneliness": 0.10},
+    "excitement": {"loneliness": -0.10, "irritation": -0.35},
+}
+# 昼夜节律：深夜孤独基线抬高的幅度（与心跳深夜独白呼应）。
+CIRCADIAN_LONELINESS_AMP = 0.15
 
 
 class EmotionVector(BaseModel):
@@ -94,28 +107,37 @@ def save(state: EmotionVector, soul_name: str = "justin") -> None:
     p.write_text(state.model_dump_json(indent=2), encoding="utf-8")
 
 
+def _circadian_loneliness(now: datetime) -> float:
+    """深夜孤独基线抬高，0~CIRCADIAN_LONELINESS_AMP（余弦在 03:00 取峰、15:00 取谷）。"""
+    hour = now.astimezone().hour + now.astimezone().minute / 60.0
+    night = (math.cos((hour - 3.0) / 24.0 * 2.0 * math.pi) + 1.0) / 2.0
+    return CIRCADIAN_LONELINESS_AMP * night
+
+
+def _effective_targets(state: EmotionVector, now: datetime) -> dict[str, float]:
+    """有效回归目标 = 基线 + 昼夜节律 + 情绪耦合（其它维偏离基线的牵引）。"""
+    base = dict(BASELINE)
+    base["loneliness"] += _circadian_loneliness(now)
+    dev = {k: getattr(state, k) - BASELINE[k] for k in DIMS}
+    targets: dict[str, float] = {}
+    for i in DIMS:
+        shift = sum(c * dev[j] for j, c in COUPLING[i].items())
+        targets[i] = max(0.0, min(1.0, base[i] + shift))
+    return targets
+
+
 def decayed(state: EmotionVector, now: datetime | None = None) -> EmotionVector:
-    """按距上次更新的时长做时间衰减；孤独向高基线漂、其余回落。"""
+    """连续时间均值回归（OU 精确解）+ 情绪耦合 + 昼夜节律。
+
+    每维 X(t+Δ)=μ_eff+(X−μ_eff)·e^(−θΔ)，θ=ln2/半衰期，与采样间隔无关；
+    μ_eff 含昼夜节律与其它情绪的耦合牵引——相对 MaiBot 朴素逐 tick 衰减的升级。
+    """
     now = now or datetime.now(UTC)
     last = state.updated_at or now
     elapsed = max(0.0, (now - last).total_seconds())
-    new = EmotionVector(
-        loneliness=_decay_value(
-            state.loneliness, BASELINE["loneliness"], HALF_LIFE_S["loneliness"], elapsed
-        ),
-        talkativeness=_decay_value(
-            state.talkativeness, BASELINE["talkativeness"], HALF_LIFE_S["talkativeness"], elapsed
-        ),
-        irritation=_decay_value(
-            state.irritation, BASELINE["irritation"], HALF_LIFE_S["irritation"], elapsed
-        ),
-        excitement=_decay_value(
-            state.excitement, BASELINE["excitement"], HALF_LIFE_S["excitement"], elapsed
-        ),
-        updated_at=now,
-    )
-    # 无互动时孤独额外缓慢上涨
-    new.loneliness += min(0.2, elapsed / 36000.0)
+    targets = _effective_targets(state, now)
+    vals = {k: _decay_value(getattr(state, k), targets[k], HALF_LIFE_S[k], elapsed) for k in DIMS}
+    new = EmotionVector(**vals, updated_at=now)
     new.clamp()
     return new
 
