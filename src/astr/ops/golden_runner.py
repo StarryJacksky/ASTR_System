@@ -133,13 +133,18 @@ function exp(){{
     return out
 
 
-async def _local_responder(prompt: str) -> str:
-    """默认 responder：经 SoulOrchestrator 走完整链路（需本地端点 + MoA key）。"""
+async def _run_local(items: list[dict], label: str) -> list[dict]:
+    """构建一次 orchestrator（避免逐条冷启动），跑完整链路；CBG 落 logs 不脏灵魂仓库。"""
     from astr.soul.orchestrator import SoulOrchestrator
 
     orch = SoulOrchestrator("justin")
-    reply, _ = await orch.respond(prompt)
-    return reply
+    orch.cbg_path = get_settings().logs_dir / "golden_eval.cbg.jsonl"
+
+    async def responder(prompt: str) -> str:
+        reply, _ = await orch.respond(prompt)
+        return reply
+
+    return await generate_report(items, responder, label)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -164,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
         items = load_golden(golden)
-        rows = asyncio.run(generate_report(items, _local_responder, args.label))
+        rows = asyncio.run(_run_local(items, args.label))
         out = save_report(rows, args.label)
         html = to_html(out)
         print(f"✓ 报告：{out}\n✓ 人评页：{html}")
