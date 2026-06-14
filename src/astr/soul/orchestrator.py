@@ -19,6 +19,7 @@ from astr.contracts.events import new_trace_id
 from astr.contracts.router import RouteRequest, RouteResponse
 from astr.contracts.settings import get_settings
 from astr.contracts.soul import Candidate, DecisionTrace
+from astr.memory import episodic_writer
 from astr.router.core import route as _default_route
 from astr.soul import moa
 
@@ -123,6 +124,18 @@ class SoulOrchestrator:
         )
         reply = sanitize_reply(resp.content)
         dec_id = self._write_decision_trace(text, reply, report, trace_id)
+        # 情景记忆写入（P1-W3）：失败不影响回复
+        try:
+            await episodic_writer.write_turn(
+                self.soul_name,
+                text,
+                reply,
+                trace_id,
+                route_fn=self._route_fn,
+                adapter=self.adapter,
+            )
+        except Exception:  # noqa: BLE001
+            log.exception("episodic_write_failed", trace_id=trace_id)
         log.info(
             "soul_respond",
             trace_id=trace_id,

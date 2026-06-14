@@ -104,6 +104,14 @@ class PromptBootAdapter(EmbodimentAdapter):
             )
         return chunks_loader.recall(self._collection, query, k=k, embedder=self._embedder)
 
+    def add_memory(self, text: str, doc_id: str) -> None:
+        """把一条新记忆增量写入向量库（episodic_writer 用），下次 recall 即可命中。"""
+        if self._collection is None:
+            self._collection = chunks_loader.build_collection(
+                self.soul_name, embedder=self._embedder
+            )
+        chunks_loader.add_chunk(self._collection, doc_id, text, embedder=self._embedder)
+
     def derive_weights(self) -> str:
         raise NotImplementedError(
             "PromptBootAdapter 不派生权重（零微调躯壳）。LoRA 见 P4 TransformerLoRAAdapter。"

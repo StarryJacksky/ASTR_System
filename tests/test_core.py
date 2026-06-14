@@ -15,8 +15,12 @@ from astr.core.worker import handle_utterance
 async def _fake_route(req: RouteRequest) -> RouteResponse:
     # 意图分类兜底时返回 chat
     return RouteResponse(
-        content="chat", task=req.task, model_key="local-qwen3-8b",
-        model="openai/qwen3-8b", tier_used="free", trace_id=req.trace_id,
+        content="chat",
+        task=req.task,
+        model_key="local-qwen3-8b",
+        model="openai/qwen3-8b",
+        tier_used="free",
+        trace_id=req.trace_id,
     )
 
 

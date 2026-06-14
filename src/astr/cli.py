@@ -47,6 +47,19 @@ def _cmd_core(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_memory(args: argparse.Namespace) -> int:
+    from astr.memory import semantic
+
+    if args.memory_action == "review":
+        return semantic.review_cli(soul_name=args.soul_name)
+    if args.memory_action == "add":
+        semantic.add_pending(args.soul_name, args.fact)
+        print(f"已加入待批：{args.fact}")
+        return 0
+    print("用法: astr memory review | astr memory add <事实>", file=sys.stderr)
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="astr", description="ASTR System CLI（露怀秋内核）")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -68,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_core = sub.add_parser("core", help="启动 ASTR Core 守护进程（FastAPI :8300）")
     p_core.add_argument("--port", type=int, default=8300)
     p_core.set_defaults(func=_cmd_core)
+
+    p_mem = sub.add_parser("memory", help="语义记忆（待批队列）")
+    p_mem.add_argument("memory_action", choices=["review", "add"])
+    p_mem.add_argument("fact", nargs="?", default="")
+    p_mem.add_argument("--soul-name", default="justin")
+    p_mem.set_defaults(func=_cmd_memory)
 
     return parser
 

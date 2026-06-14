@@ -101,7 +101,8 @@ def build_collection(
 
     ids: list[str] = []
     docs: list[str] = []
-    for md in sorted(cdir.glob("*.md")):
+    # 递归：含 episodic 写入的 YYYY-MM/ 子目录
+    for md in sorted(cdir.rglob("*.md")):
         text = md.read_text(encoding="utf-8").strip()
         if not text:
             continue
@@ -114,6 +115,12 @@ def build_collection(
     else:
         log.info("chunks_empty", collection=col.name)
     return col
+
+
+def add_chunk(col, doc_id: str, text: str, *, embedder: Embedder | None = None) -> None:
+    """增量写入一条记忆到向量库（episodic 写入用）。同 id 覆盖。"""
+    embedder = embedder or default_embedder()
+    col.upsert(ids=[doc_id], documents=[text], embeddings=embedder([text]))
 
 
 def recall(col, query: str, k: int = 6, *, embedder: Embedder | None = None) -> list[str]:
