@@ -100,8 +100,13 @@ def _build_params(model_cfg: dict[str, str], req: RouteRequest) -> dict[str, Any
     api_base = model_cfg.get("api_base")
     if api_base:
         params["api_base"] = api_base
-        # 本地 OpenAI 兼容端点不校验 key，但 litellm 要求非空
-        params["api_key"] = "sk-local"
+        key_env = model_cfg.get("api_key_env")
+        if key_env:
+            # OpenAI 兼容的云端点（如硅基流动）：key 经 Settings 读，永不裸取 os.environ
+            params["api_key"] = getattr(get_settings(), key_env.lower(), "") or ""
+        else:
+            # 本地端点不校验 key，但 litellm 要求非空
+            params["api_key"] = "sk-local"
     return params
 
 

@@ -87,6 +87,24 @@ async def test_budget_downgrade(monkeypatch):
     assert resp.degraded is True
 
 
+# ── 云 Qwen 走硅基流动（OpenAI 兼容 + api_key_env）──
+def test_siliconflow_qwen_routing(cfg):
+    assert core.resolve_model_key(cfg, "chinese_writing", "balanced") == "qwen-sf"
+    model_cfg = cfg.models["qwen-sf"]
+    assert model_cfg["litellm"].startswith("openai/Qwen/")
+    assert "siliconflow" in model_cfg["api_base"]
+    assert model_cfg["api_key_env"] == "SILICONFLOW_API_KEY"
+    req = RouteRequest(
+        task="chinese_writing",
+        messages=[{"role": "user", "content": "写一段"}],
+        cost_tier="balanced",
+        trace_id="trc_t",
+    )
+    params = core._build_params(model_cfg, req)
+    assert params["api_base"] == "https://api.siliconflow.cn/v1"
+    assert "api_key" in params  # 从 Settings.siliconflow_api_key 读，值取决于 .env
+
+
 # ── require_local：永不出网，直接打本地 ──
 async def test_require_local(monkeypatch):
     async def fake_acompletion(**kwargs):

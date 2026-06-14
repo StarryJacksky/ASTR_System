@@ -1,43 +1,49 @@
 # P0-T03：下载 llama.cpp（Windows CUDA 预编译）+ Qwen3-8B-Q4_K_M.gguf。
-# 国内网络优先用 hf-mirror.com。整体约 ~5GB，按需执行（脚本默认只打印计划，加 -Run 才真正下载）。
+# 实测可用源（2026-06，本机网络）：
+#   - llama.cpp：GitHub releases（ggml-org/llama.cpp）b9631，CUDA 12.4（驱动 560.94 / CUDA 12.6 上限，12.4 兼容）。
+#   - GGUF：魔搭 ModelScope（国内直连稳；hf-mirror 的 /resolve 会 308 跳回 huggingface.co 且 CDN 在本网 schannel 握手失败）。
+# 整体约 ~5.6GB。默认只打印计划，加 -Run 才真正下载。
 #
-#   powershell -File scripts\download_models.ps1            # 只打印将做什么
+#   powershell -File scripts\download_models.ps1            # 预览
 #   powershell -File scripts\download_models.ps1 -Run       # 真正下载
 
 param(
     [switch]$Run,
-    [string]$LlamaUrl = "",   # llama.cpp release 的 win-cuda zip 直链（开工核对最新 release）
-    [string]$HfEndpoint = "https://hf-mirror.com",
-    [string]$GgufRepo = "Qwen/Qwen3-8B-GGUF",
+    [string]$LlamaTag = "b9631",
+    [string]$Cuda = "12.4",
+    [string]$MsRepo = "Qwen/Qwen3-8B-GGUF",
     [string]$GgufFile = "Qwen3-8B-Q4_K_M.gguf"
 )
 
 $binDir = "D:\ASTR\bin\llama"
 $modelDir = "D:\ASTR\embodiments\base_models"
+$ghBase = "https://github.com/ggml-org/llama.cpp/releases/download/$LlamaTag"
+$mainZip = "llama-$LlamaTag-bin-win-cuda-$Cuda-x64.zip"
+$cudartZip = "cudart-llama-bin-win-cuda-$Cuda-x64.zip"
+$msUrl = "https://modelscope.cn/models/$MsRepo/resolve/master/$GgufFile"
 
 Write-Host "=== 计划 ==="
-Write-Host "1) llama.cpp CUDA 预编译 → $binDir"
-Write-Host "   下载地址（核对最新）: https://github.com/ggml-org/llama.cpp/releases  选 llama-bXXXX-bin-win-cuda-x64.zip"
-Write-Host "2) GGUF 模型 → $modelDir\$GgufFile（自 $HfEndpoint/$GgufRepo）"
+Write-Host "1) llama.cpp $LlamaTag (CUDA $Cuda) → $binDir"
+Write-Host "     $ghBase/$mainZip"
+Write-Host "     $ghBase/$cudartZip"
+Write-Host "2) GGUF → $modelDir\$GgufFile  （自魔搭 $msUrl）"
 if (-not $Run) {
-    Write-Host "`n(预览模式) 加 -Run 真正执行。或手动下载后用 scripts\start_llm.ps1 启动。"
+    Write-Host "`n(预览模式) 加 -Run 真正执行。"
     exit 0
 }
 
 New-Item -ItemType Directory -Force -Path $binDir, $modelDir | Out-Null
 
-# 1) llama.cpp
-if ($LlamaUrl -ne "") {
-    $zip = Join-Path $env:TEMP "llama-cuda.zip"
-    Write-Host "下载 llama.cpp ..."
-    Invoke-WebRequest -Uri $LlamaUrl -OutFile $zip
-    Expand-Archive -Path $zip -DestinationPath $binDir -Force
-} else {
-    Write-Warning "未提供 -LlamaUrl，跳过 llama.cpp 下载（请手动放到 $binDir）。"
-}
+# 1) llama.cpp 主程序 + CUDA 运行时（两个都要，解压到同目录）
+Write-Host "下载 llama.cpp 主程序 ..."
+curl.exe -L --ssl-no-revoke "$ghBase/$mainZip" -o "$env:TEMP\llama_cuda.zip"
+curl.exe -L --ssl-no-revoke "$ghBase/$cudartZip" -o "$env:TEMP\cudart.zip"
+Expand-Archive "$env:TEMP\llama_cuda.zip" -DestinationPath $binDir -Force
+Expand-Archive "$env:TEMP\cudart.zip" -DestinationPath $binDir -Force
+if (-not (Test-Path "$binDir\llama-server.exe")) { Write-Error "llama-server.exe 解压后未找到"; exit 1 }
 
-# 2) GGUF（用 huggingface_hub，走镜像）
-$env:HF_ENDPOINT = $HfEndpoint
-Write-Host "下载 $GgufFile（经 $HfEndpoint）..."
-uv run python -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='$GgufRepo', filename='$GgufFile', local_dir=r'$modelDir')"
+# 2) GGUF（魔搭，断点续传）
+Write-Host "下载 $GgufFile（魔搭，~5GB，可中断后重跑续传）..."
+curl.exe -L -C - --ssl-no-revoke --retry 5 --retry-delay 3 -o "$modelDir\$GgufFile" $msUrl
+
 Write-Host "完成。用 scripts\start_llm.ps1 启动端点。"

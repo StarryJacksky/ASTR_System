@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     xai_api_key: str = ""
     deepseek_api_key: str = ""
+    # 云 Qwen 走硅基流动（SiliconFlow，OpenAI 兼容）；保留 dashscope 字段以备切换
+    siliconflow_api_key: str = ""
     dashscope_api_key: str = ""
 
     # —— 本地推理与数据目录 ——

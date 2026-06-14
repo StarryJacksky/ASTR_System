@@ -21,14 +21,14 @@ tasks:
   logic_analysis:     { cheap: deepseek-chat, balanced: gpt-mini,     max: gpt-flagship }     # 逻辑     = GPT
   retrieval_analysis: { cheap: gemini-flash,  balanced: gemini-flash, max: gemini-pro }       # 多模态联网 = Gemini
   zeitgeist_analysis: { cheap: grok,          balanced: grok,         max: grok }              # 梗/时事  = Grok
-  chinese_writing:    { cheap: qwen-max,      balanced: qwen-max,     max: qwen-max }          # 中文写作 = Qwen
+  chinese_writing:    { cheap: qwen-sf,       balanced: qwen-sf,      max: qwen-sf }           # 中文写作 = Qwen(硅基流动)
 
   # —— 学术圆桌席位（总规 §2.5.2）——
   roundtable_mathematician: { balanced: gpt-mini,     max: gpt-flagship }
   roundtable_physicist:     { balanced: claude-haiku, max: claude-sonnet }
   roundtable_critic:        { balanced: gemini-flash, max: gemini-pro }
   roundtable_engineer:      { balanced: grok,         max: grok }
-  roundtable_librarian:     { cheap: qwen-max,        balanced: deepseek-chat }   # 检索 / 事实核对
+  roundtable_librarian:     { cheap: qwen-sf,         balanced: deepseek-chat }   # 检索 / 事实核对
 
   # —— 凌晨批量评分（judge 必须与被评模型异家，99 #11；本地灵魂是 qwen 系，评分故用非 qwen）——
   scoring:      { cheap: deepseek-chat, balanced: claude-haiku }
@@ -44,7 +44,8 @@ models:   # 唯一允许出现具体模型 ID 的地方
   gemini-flash:   { litellm: "gemini/gemini-3-flash" }         # ← 核对最新
   grok:           { litellm: "xai/grok-4" }                    # ← 核对最新
   deepseek-chat:  { litellm: "deepseek/deepseek-chat" }
-  qwen-max:       { litellm: "dashscope/qwen-max" }            # 云 Qwen（DashScope），区别于本地 qwen3-8b
+  # 云 Qwen 走硅基流动（OpenAI 兼容：openai/ 前缀 + api_base + SILICONFLOW_API_KEY），区别于本地 qwen3-8b
+  qwen-sf:        { litellm: "openai/Qwen/Qwen3-235B-A22B-Instruct-2507", api_base: "https://api.siliconflow.cn/v1", api_key_env: "SILICONFLOW_API_KEY" }   # ← 按你 SiliconFlow 账号开通的模型核对
 
 # 降级链（03 §4 规则 4）：任一 max/balanced 调用失败 → 依次回退到更便宜档 → 全失败落 local 并标 degraded=true
 fallback:
