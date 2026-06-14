@@ -40,6 +40,13 @@ def _cmd_chat(_: argparse.Namespace) -> int:
     return chat_loop()
 
 
+def _cmd_core(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    uvicorn.run("astr.core.app:app", host="127.0.0.1", port=args.port, log_level="info")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="astr", description="ASTR System CLI（露怀秋内核）")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -57,6 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_chat = sub.add_parser("chat", help="终端对话循环（soul_demo）")
     p_chat.set_defaults(func=_cmd_chat)
+
+    p_core = sub.add_parser("core", help="启动 ASTR Core 守护进程（FastAPI :8300）")
+    p_core.add_argument("--port", type=int, default=8300)
+    p_core.set_defaults(func=_cmd_core)
 
     return parser
 

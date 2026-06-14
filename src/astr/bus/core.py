@@ -93,6 +93,38 @@ class Bus:
                 finally:
                     await self.ack(group, msg_id)
 
+    async def tail(
+        self,
+        types: Iterable[EventType] | None = None,
+        *,
+        last_id: str = "$",
+        block_ms: int = 2000,
+    ):
+        """从 last_id（默认 "$"=只看新事件）持续产出事件，供 SSE 流转发。不用消费组，不影响消费进度。
+
+        "$" 会先解析成当前末尾 id（用具体 id 游标，避免阻塞超时重试时重新锚到"现在"而漏事件）；
+        阻塞读超时/瞬断时静默重试，不中断长连接。
+        """
+        import redis.exceptions as rexc
+
+        wanted = set(types) if types else None
+        cursor = last_id
+        if cursor == "$":
+            last = await self.r.xrevrange(self.stream, count=1)
+            cursor = last[0][0] if last else "0"
+        while True:
+            try:
+                resp = await self.r.xread({self.stream: cursor}, count=20, block=block_ms)
+            except (rexc.TimeoutError, rexc.ConnectionError, TimeoutError):
+                continue
+            for _stream, messages in resp or []:
+                for msg_id, fields in messages:
+                    cursor = msg_id
+                    data = fields.get("data") if isinstance(fields, dict) else fields[b"data"]
+                    event = Event.model_validate_json(data)
+                    if wanted is None or event.type in wanted:
+                        yield event
+
     async def replay(self, since: str = "-", until: str = "+") -> list[Event]:
         """回放历史事件（审计/重建用）。since/until 为 stream id，默认全量。"""
         entries = await self.r.xrange(self.stream, min=since, max=until)
