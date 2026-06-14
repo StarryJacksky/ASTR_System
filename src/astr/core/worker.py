@@ -18,6 +18,7 @@ from astr.contracts.events import (
     PresentationTtsPayload,
     SoulDecisionPayload,
 )
+from astr.soul.intent import classify_intent
 from astr.soul.orchestrator import SoulOrchestrator
 
 log = structlog.get_logger("astr.core.worker")
@@ -42,14 +43,19 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
     text = event.payload.get("text", "")
     if not text:
         return
+
+    intent = await classify_intent(text, event.trace_id, route_fn=orch._route_fn)
     await _emit(
         bus,
         event,
         EventType.AGENT_THOUGHT,
-        AgentThoughtPayload(text="（在想了……）", stage="start").model_dump(),
+        AgentThoughtPayload(text=f"（意图：{intent}）", stage="intent").model_dump(),
     )
+    if intent == "silent_observe":
+        log.info("utterance_observed_silently", trace_id=event.trace_id)
+        return
 
-    reply, report = await orch.respond(text, trace_id=event.trace_id)
+    reply, report = await orch.respond(text, trace_id=event.trace_id, intent=intent)
 
     if report.get("summary"):
         await _emit(
@@ -64,7 +70,7 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         bus,
         event,
         EventType.SOUL_DECISION,
-        SoulDecisionPayload(reply_text=reply, emotion_tag=emotion).model_dump(),
+        SoulDecisionPayload(reply_text=reply, emotion_tag=emotion, intent=intent).model_dump(),
     )
     await _emit(
         bus,
@@ -72,7 +78,7 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         EventType.PRESENTATION_TTS,
         PresentationTtsPayload(text=reply, emotion_tag=emotion).model_dump(),
     )
-    log.info("utterance_handled", trace_id=event.trace_id, reply_chars=len(reply))
+    log.info("utterance_handled", trace_id=event.trace_id, intent=intent, reply_chars=len(reply))
 
 
 async def run_worker(

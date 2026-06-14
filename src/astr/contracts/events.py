@@ -101,6 +101,7 @@ class SoulDecisionPayload(BaseModel):
 
     reply_text: str
     emotion_tag: str | None = None
+    intent: str | None = None  # 意图标签（P1-W2）：tool/research/coding/emotion/silent_observe/chat
     decision_trace_ref: str | None = None  # causal_behavior_graph/decisions.cbg.jsonl 行 id
 
 

@@ -8,11 +8,22 @@ import fakeredis.aioredis
 
 from astr.bus.core import Bus
 from astr.contracts.events import AuthContext, Event, EventType, new_trace_id
+from astr.contracts.router import RouteRequest, RouteResponse
 from astr.core.worker import handle_utterance
 
 
+async def _fake_route(req: RouteRequest) -> RouteResponse:
+    # 意图分类兜底时返回 chat
+    return RouteResponse(
+        content="chat", task=req.task, model_key="local-qwen3-8b",
+        model="openai/qwen3-8b", tier_used="free", trace_id=req.trace_id,
+    )
+
+
 class _FakeOrch:
-    async def respond(self, text: str, trace_id: str | None = None):
+    _route_fn = staticmethod(_fake_route)
+
+    async def respond(self, text: str, trace_id: str | None = None, intent: str | None = None):
         return "……行吧，知道了。", {"summary": "[emotion] 安抚", "emotion_estimate": "平淡"}
 
 

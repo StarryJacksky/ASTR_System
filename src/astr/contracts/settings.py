@@ -46,6 +46,22 @@ class Settings(BaseSettings):
     # —— 平台 ——
     telegram_bot_token: str = ""
 
+    # —— 鉴权白名单（P1-W2-b）：owner 恒 L2；逗号分隔的平台 id 映射等级 ——
+    astr_owner_id: str = "jacksky"
+    astr_l2_user_ids: str = ""  # 额外 L2，如 "telegram:123,qq:456"
+    astr_l1_user_ids: str = ""  # L1（半信任）
+
+    def _csv(self, raw: str) -> set[str]:
+        return {x.strip() for x in raw.split(",") if x.strip()}
+
+    def resolve_level(self, user_id: str) -> int:
+        """平台 id → 鉴权等级。声纹双因素在 P1-W9 升级。"""
+        if user_id == self.astr_owner_id or user_id in self._csv(self.astr_l2_user_ids):
+            return 2
+        if user_id in self._csv(self.astr_l1_user_ids):
+            return 1
+        return 0
+
     # —— 派生路径（不从 env 读，由 astr_data_dir 计算）——
     @property
     def soul_package_dir(self) -> Path:

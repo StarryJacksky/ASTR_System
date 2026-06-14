@@ -62,8 +62,13 @@ class SoulOrchestrator:
         soul_dir = get_settings().soul_package_dir / soul_name
         self.cbg_path = soul_dir / "causal_behavior_graph" / "decisions.cbg.jsonl"
 
-    def _build_context(self, report: dict, memories: list[str]) -> str:
+    def _build_context(self, report: dict, memories: list[str], intent: str | None = None) -> str:
         lines = ["【智囊团圆桌纪要 · 供参考，用你自己的话，别照搬】"]
+        if intent in ("tool", "research", "coding"):
+            lines.append(
+                f"⚠ 用户意图疑似需要动手（{intent}），但执行层还没上线（P2 才有）——"
+                "口头回应就行，真要动手的明说现在还做不到，别假装能做。"
+            )
         if report.get("intent"):
             lines.append(f"用户真实意图：{report['intent']}")
         if report.get("emotion_estimate"):
@@ -93,12 +98,14 @@ class SoulOrchestrator:
             f.write(trace.model_dump_json() + "\n")
         return trace.id
 
-    async def respond(self, text: str, trace_id: str | None = None) -> tuple[str, dict]:
-        """对一句话作答，返回 (回复文本, 圆桌纪要)。"""
+    async def respond(
+        self, text: str, trace_id: str | None = None, intent: str | None = None
+    ) -> tuple[str, dict]:
+        """对一句话作答，返回 (回复文本, 圆桌纪要)。intent 由 P1-W2 意图路由传入。"""
         trace_id = trace_id or new_trace_id()
         report = await moa.analyze(text, trace_id, route_fn=self._route_fn)
         memories = self.adapter.recall(text, k=6)
-        context = self._build_context(report, memories)
+        context = self._build_context(report, memories, intent)
         messages = [
             {"role": "system", "content": self.handle.system_prompt},
             {"role": "system", "content": context},

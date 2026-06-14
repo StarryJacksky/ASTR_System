@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
-from typing import Literal
 
 import structlog
 from fastapi import FastAPI
@@ -37,8 +36,7 @@ class IngestRequest(BaseModel):
     text: str
     platform: str = "cli"
     lang: str = "zh"
-    user_id: str = "jacksky"
-    level: Literal[0, 1, 2, 3] = 2  # 完整白名单鉴权在 P1-W2-b
+    user_id: str = "jacksky"  # 等级由白名单解析，不信任客户端自报
 
 
 class IngestResponse(BaseModel):
@@ -75,7 +73,7 @@ async def ingest(req: IngestRequest) -> IngestResponse:
         payload=UserUtterancePayload(
             text=req.text, platform=req.platform, lang=req.lang
         ).model_dump(),
-        auth=AuthContext(astr_user_id=req.user_id, level=req.level),
+        auth=AuthContext(astr_user_id=req.user_id, level=get_settings().resolve_level(req.user_id)),
         trace_id=new_trace_id(),
     )
     await app.state.bus.publish(evt)
