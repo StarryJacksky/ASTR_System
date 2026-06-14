@@ -10,14 +10,24 @@ from astr.presentation import humanize
 def test_short_reply_not_split() -> None:
     assert humanize.split_reply("？") == ["？"]
     assert humanize.split_reply("在呢") == ["在呢"]
+    # 短的多句也只发一条（口语短句不该拆）
+    assert len(humanize.split_reply("行吧。知道了。")) == 1
 
 
 def test_long_reply_splits_and_caps() -> None:
     rng = random.Random(0)
     text = "怕孤独？那是进化给你的警告，群居动物的本能。可你偏偏活成了反骨，硬把它当成浪漫。"
-    segs = humanize.split_reply(text, max_segments=3, merge_prob=0.0, rng=rng)
+    # whole_prob=0 强制走拆分路径
+    segs = humanize.split_reply(text, max_segments=3, merge_prob=0.0, whole_prob=0.0, rng=rng)
     assert 1 < len(segs) <= 3
     assert "".join(s.replace("，", "") for s in segs)  # 非空
+
+
+def test_can_send_whole() -> None:
+    # whole_prob=1 → 长回复也整条发（不是非得拆）
+    text = "怕孤独？那是进化给你的警告，群居动物的本能。可你偏偏活成了反骨。"
+    segs = humanize.split_reply(text, whole_prob=1.0, rng=random.Random(1))
+    assert len(segs) == 1
 
 
 def test_typing_delay_bounds() -> None:

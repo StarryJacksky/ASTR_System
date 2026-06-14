@@ -19,19 +19,26 @@ def split_reply(
     *,
     max_segments: int = 3,
     merge_prob: float = 0.5,
+    min_split_chars: int = 18,
+    whole_prob: float = 0.4,
     rng: random.Random | None = None,
 ) -> list[str]:
-    """把回复拆成多条短消息。短回复（≤1 句）原样返回；越短越倾向不拆。
+    """把回复拆成多条短消息——但不是每次都拆。短回复/相当概率下就发一整条。
 
-    merge_prob：相邻分句合并的概率（越高越少拆条）。max_segments：最多发几条。
+    规则：① 短于 min_split_chars 或只有一句 → 一条；② 否则有 whole_prob 概率整条发；
+    ③ 其余情况按 merge_prob 概率合并相邻句，最多 max_segments 条。这样有时一句、有时两三句，像真人。
     """
     rng = rng or random
     text = text.strip()
     if not text:
         return []
     parts = [p.strip() for p in _SPLIT_RE.split(text) if p.strip()]
-    if len(parts) <= 1:
-        return [text]
+    # 短回复或单句：直接一条（软化末尾句号）
+    if len(parts) <= 1 or len(text) < min_split_chars:
+        return [_TRAILING_PERIOD.sub("", text) if rng.random() < 0.9 else text]
+    # 相当概率整条发（不是非得拆）
+    if rng.random() < whole_prob:
+        return [_TRAILING_PERIOD.sub("", text) if rng.random() < 0.9 else text]
 
     # 概率合并相邻分句
     merged: list[str] = [parts[0]]
@@ -47,7 +54,7 @@ def split_reply(
         tail = "，".join(merged[max_segments - 1 :])
         merged = head + [tail]
 
-    # 末尾句号 90% 删除（口语感），其余轻度软化
+    # 末尾句号 90% 删除（口语感）
     out = []
     for seg in merged:
         if rng.random() < 0.9:
