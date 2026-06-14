@@ -47,6 +47,21 @@ def _cmd_core(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_heartbeat(args: argparse.Namespace) -> int:
+    import asyncio
+
+    from astr.bus.core import Bus
+    from astr.router.core import route
+    from astr.soul.heartbeat import tick
+
+    async def _run() -> dict:
+        return await tick(Bus.from_url(), args.soul_name, route)
+
+    rec = asyncio.run(_run())
+    print(f"内心独白：{rec['content'] or '(空)'}  | should_speak={rec['should_speak']}")
+    return 0
+
+
 def _cmd_memory(args: argparse.Namespace) -> int:
     from astr.memory import semantic
 
@@ -87,6 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_mem.add_argument("fact", nargs="?", default="")
     p_mem.add_argument("--soul-name", default="justin")
     p_mem.set_defaults(func=_cmd_memory)
+
+    p_hb = sub.add_parser("heartbeat", help="手动触发一次心跳独白（调试）")
+    p_hb.add_argument("--soul-name", default="justin")
+    p_hb.set_defaults(func=_cmd_heartbeat)
 
     return parser
 

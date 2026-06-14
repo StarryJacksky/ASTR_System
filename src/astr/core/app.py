@@ -46,16 +46,22 @@ class IngestResponse(BaseModel):
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    from astr.router.core import route as route_fn
+    from astr.soul.heartbeat import Heartbeat
+
     bus = Bus.from_url()
     stop = asyncio.Event()
     app.state.bus = bus
     app.state.stop = stop
     app.state.worker = asyncio.create_task(run_worker(bus, stop=stop))
+    app.state.heartbeat = Heartbeat(bus, route_fn, soul_name=get_settings().soul_name)
+    app.state.heartbeat.start()
     log.info("astr_core_started", port=8300)
     try:
         yield
     finally:
         stop.set()
+        app.state.heartbeat.shutdown()
         app.state.worker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await app.state.worker
