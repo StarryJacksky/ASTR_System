@@ -1,0 +1,26 @@
+# P0-T09 基础设施：Redis 事件总线 + SillyTavern（人格卡/世界书/向量记忆的存储与格式标准）。
+# 仅这两个容器 + 未来 Tectonic 走 Docker（02 §1）。数据卷落 D:/ASTR/ops/ 下，不进代码仓库。
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: astr-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    mem_limit: 512m
+    ports:
+      - "6379:6379"
+    volumes:
+      - "D:/ASTR/ops/redis:/data"
+    restart: unless-stopped
+
+  sillytavern:
+    image: ghcr.io/sillytavern/sillytavern:latest
+    container_name: astr-sillytavern
+    ports:
+      - "8000:8000"
+    volumes:
+      - "D:/ASTR/ops/sillytavern/config:/home/node/app/config"
+      - "D:/ASTR/ops/sillytavern/data:/home/node/app/data"
+      - "D:/ASTR/ops/sillytavern/plugins:/home/node/app/plugins"
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
