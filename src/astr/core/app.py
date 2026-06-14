@@ -96,11 +96,14 @@ async def stream() -> StreamingResponse:
 @app.get("/v1/status")
 async def status() -> dict:
     """当前躯壳、当日花费、预算（情绪向量 P1-W4 接入）。"""
+    from astr.soul import emotion
+
     s = get_settings()
+    mood = emotion.decayed(emotion.load(s.soul_name))
     return {
         "soul_name": s.soul_name,
         "local_llm_model": s.local_llm_model,
         "cost_today_usd": round(ledger.today_total_usd(), 6),
         "daily_budget_usd": s.astr_daily_budget_usd,
-        "emotion": None,  # P1-W4
+        "emotion": mood.model_dump(mode="json"),
     }

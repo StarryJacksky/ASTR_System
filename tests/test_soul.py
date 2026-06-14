@@ -78,7 +78,13 @@ class _FakeAdapter:
         return []
 
 
-async def test_orchestrator_respond_writes_cbg(tmp_path) -> None:
+async def test_orchestrator_respond_writes_cbg(tmp_path, monkeypatch) -> None:
+    # 情感读写指向 tmp，避免污染真实灵魂目录
+    from astr.soul import emotion
+
+    monkeypatch.setattr(emotion, "load", lambda *a, **k: emotion.EmotionVector())
+    monkeypatch.setattr(emotion, "save", lambda *a, **k: None)
+
     orch = SoulOrchestrator("justin", adapter=_FakeAdapter(), route_fn=fake_route)
     orch.cbg_path = tmp_path / "decisions.cbg.jsonl"
 

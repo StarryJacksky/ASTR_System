@@ -21,7 +21,7 @@ from astr.contracts.settings import get_settings
 from astr.contracts.soul import Candidate, DecisionTrace
 from astr.memory import episodic_writer
 from astr.router.core import route as _default_route
-from astr.soul import moa
+from astr.soul import emotion, moa
 
 log = structlog.get_logger("astr.soul.orchestrator")
 
@@ -106,9 +106,12 @@ class SoulOrchestrator:
         trace_id = trace_id or new_trace_id()
         report = await moa.analyze(text, trace_id, route_fn=self._route_fn)
         memories = self.adapter.recall(text, k=6)
+        # 情感状态：载入并按时间衰减，注入 system prompt
+        mood = emotion.decayed(emotion.load(self.soul_name))
         context = self._build_context(report, memories, intent)
         messages = [
             {"role": "system", "content": self.handle.system_prompt},
+            {"role": "system", "content": mood.to_prompt_line()},
             {"role": "system", "content": context},
             {"role": "user", "content": text},
         ]
@@ -123,6 +126,11 @@ class SoulOrchestrator:
             )
         )
         reply = sanitize_reply(resp.content)
+        # 情感更新（P1-W4）：按本轮意图/对方情绪给增量并落盘
+        delta = emotion.event_delta(intent=intent, user_emotion=report.get("emotion_estimate"))
+        emotion.save(emotion.apply(mood, delta), self.soul_name)
+        report["emotion_delta"] = delta
+        report["emotion_state"] = mood.model_dump(mode="json")
         dec_id = self._write_decision_trace(text, reply, report, trace_id)
         # 情景记忆写入（P1-W3）：失败不影响回复
         try:

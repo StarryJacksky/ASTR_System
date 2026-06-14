@@ -70,7 +70,12 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         bus,
         event,
         EventType.SOUL_DECISION,
-        SoulDecisionPayload(reply_text=reply, emotion_tag=emotion, intent=intent).model_dump(),
+        SoulDecisionPayload(
+            reply_text=reply,
+            emotion_tag=emotion,
+            intent=intent,
+            emotion_delta=report.get("emotion_delta"),
+        ).model_dump(),
     )
     await _emit(
         bus,
