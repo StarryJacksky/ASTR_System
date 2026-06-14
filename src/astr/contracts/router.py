@@ -21,6 +21,8 @@ class RouteRequest(BaseModel):
     require_local: bool = False  # True = 隐私敏感，禁止出网（如涉及屏幕内容）
     timeout_s: int = 30
     trace_id: str
+    # 透传给 provider 的额外 body（如本地 Qwen3 关思考：{"chat_template_kwargs": {"enable_thinking": False}}）
+    extra_body: dict | None = None
 
 
 class RouteResponse(BaseModel):

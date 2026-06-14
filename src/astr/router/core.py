@@ -97,6 +97,8 @@ def _build_params(model_cfg: dict[str, str], req: RouteRequest) -> dict[str, Any
         "messages": req.messages,
         "timeout": req.timeout_s,
     }
+    if req.extra_body:
+        params["extra_body"] = req.extra_body
     api_base = model_cfg.get("api_base")
     if api_base:
         params["api_base"] = api_base

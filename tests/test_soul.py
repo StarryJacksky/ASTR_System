@@ -6,7 +6,17 @@ from astr.contracts.adapter import InferenceHandle
 from astr.contracts.router import RouteRequest, RouteResponse
 from astr.contracts.soul import DecisionTrace
 from astr.soul import moa
-from astr.soul.orchestrator import SoulOrchestrator
+from astr.soul.orchestrator import SoulOrchestrator, sanitize_reply
+
+
+def test_sanitize_strips_name_prefix_and_roleplay() -> None:
+    assert sanitize_reply("秋秋：你好") == "你好"
+    assert sanitize_reply("露怀秋: 在呢") == "在呢"
+    assert sanitize_reply("*翻白眼* 你是不是脑子进水了") == "你是不是脑子进水了"
+    assert sanitize_reply("秋秋：*挑眉* 哦？") == "哦？"
+    # 正常文本不动
+    assert sanitize_reply("？") == "？"
+
 
 _SEAT_JSON = (
     '{"intent":"测试意图","emotion_estimate":"平淡",'
