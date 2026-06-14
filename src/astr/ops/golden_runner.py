@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -175,4 +176,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    _rc = main()
+    # 跳过 chromadb/onnxruntime 在 Windows 退出清理时的 native 崩溃（报告已落盘）
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_rc)

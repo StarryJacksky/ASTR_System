@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from astr.adapters.prompt_boot import PromptBootAdapter
@@ -58,4 +59,8 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    _rc = asyncio.run(main())
+    # 跳过 chromadb/onnxruntime 在 Windows 退出清理时的 native 崩溃（工作已完成）
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_rc)

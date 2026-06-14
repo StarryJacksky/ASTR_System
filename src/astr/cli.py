@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from importlib.metadata import version
 
@@ -63,8 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    rc = args.func(args)
+    # chromadb/onnxruntime 在 Windows 解释器退出清理阶段会 native 崩溃（0xC0000005）。
+    # 工作已完成（账本已 commit、CBG 已 flush），用 os._exit 跳过有问题的 atexit/native 清理。
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(rc if isinstance(rc, int) else 0)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
