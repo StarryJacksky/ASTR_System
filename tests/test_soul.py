@@ -79,11 +79,12 @@ class _FakeAdapter:
 
 
 async def test_orchestrator_respond_writes_cbg(tmp_path, monkeypatch) -> None:
-    # 情感读写指向 tmp，避免污染真实灵魂目录
+    # 情感/纪要落盘指向 no-op，避免污染真实灵魂目录
     from astr.soul import emotion
 
     monkeypatch.setattr(emotion, "load", lambda *a, **k: emotion.EmotionVector())
     monkeypatch.setattr(emotion, "save", lambda *a, **k: None)
+    monkeypatch.setattr(moa, "save_report", lambda *a, **k: "ref.json")
 
     orch = SoulOrchestrator("justin", adapter=_FakeAdapter(), route_fn=fake_route)
     orch.cbg_path = tmp_path / "decisions.cbg.jsonl"
@@ -98,3 +99,19 @@ async def test_orchestrator_respond_writes_cbg(tmp_path, monkeypatch) -> None:
     assert trace.trace_id == "trc_demo"
     assert trace.chosen == 0
     assert len(trace.candidates) == 1
+    assert trace.moa_report_ref == "ref.json"  # 管家纪要已链上（不再是 None）
+
+
+def test_moa_save_report(tmp_path, monkeypatch) -> None:
+    import astr.soul.moa as moa_mod
+    from astr.contracts.settings import Settings
+
+    monkeypatch.setattr(
+        moa_mod, "get_settings", lambda: Settings(_env_file=None, astr_data_dir=tmp_path)
+    )
+    ref = moa_mod.save_report("justin", "trc_x", {"summary": "[emotion] 安抚", "intent": "chat"})
+    assert ref.startswith("causal_behavior_graph/moa_reports/") and ref.endswith("trc_x.json")
+    import json
+
+    saved = json.loads((tmp_path / "soul_package" / "justin" / ref).read_text(encoding="utf-8"))
+    assert saved["trace_id"] == "trc_x" and saved["intent"] == "chat"

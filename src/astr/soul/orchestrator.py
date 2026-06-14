@@ -83,7 +83,9 @@ class SoulOrchestrator:
             lines += [f"- {m}" for m in memories]
         return "\n".join(lines)
 
-    def _write_decision_trace(self, text: str, reply: str, report: dict, trace_id: str) -> str:
+    def _write_decision_trace(
+        self, text: str, reply: str, report: dict, trace_id: str, moa_report_ref: str | None = None
+    ) -> str:
         trace = DecisionTrace(
             id=f"dec_{ULID()}",
             ts=datetime.now(UTC),
@@ -92,7 +94,7 @@ class SoulOrchestrator:
             candidates=[Candidate(content_digest=_digest(reply))],
             chosen=0,
             reasoning=report.get("suggested_strategy") or "本地灵魂直接作答（P0 单候选）",
-            moa_report_ref=None,
+            moa_report_ref=moa_report_ref,
         )
         self.cbg_path.parent.mkdir(parents=True, exist_ok=True)
         with self.cbg_path.open("a", encoding="utf-8") as f:
@@ -131,7 +133,13 @@ class SoulOrchestrator:
         emotion.save(emotion.apply(mood, delta), self.soul_name)
         report["emotion_delta"] = delta
         report["emotion_state"] = mood.model_dump(mode="json")
-        dec_id = self._write_decision_trace(text, reply, report, trace_id)
+        # 管家纪要回填 SoulPackage（总规 §4：不流失；P4 自训练的原始矿藏，P1 只攒不训）
+        moa_ref: str | None = None
+        try:
+            moa_ref = moa.save_report(self.soul_name, trace_id, report)
+        except Exception:  # noqa: BLE001
+            log.exception("moa_report_save_failed", trace_id=trace_id)
+        dec_id = self._write_decision_trace(text, reply, report, trace_id, moa_report_ref=moa_ref)
         # 情景记忆写入（P1-W3）：失败不影响回复
         try:
             await episodic_writer.write_turn(

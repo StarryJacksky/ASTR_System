@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 import structlog
 from pydantic import BaseModel, ValidationError
@@ -128,6 +129,25 @@ def _merge(seats: list[SeatResult]) -> dict:
         "suggested_strategy": "；".join(strategies),
         "risk_flags": risk_flags,
     }
+
+
+def save_report(soul_name: str, trace_id: str, report: dict) -> str:
+    """把圆桌纪要落盘到 causal_behavior_graph/moa_reports/，返回相对 ref（写进 DecisionTrace.moa_report_ref）。
+
+    总规 §4：管家产出全部回填 SoulPackage、不流失——这是 P4 自训练的原始矿藏。
+    注意：P1 只负责"攒"（持久化），训练本身是 P4 的事。
+    """
+    now = datetime.now(UTC)
+    rel = f"causal_behavior_graph/moa_reports/{now:%Y-%m}/{trace_id}.json"
+    path = get_settings().soul_package_dir / soul_name / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {"trace_id": trace_id, "ts": now.isoformat(), **report}, ensure_ascii=False, indent=2
+        ),
+        encoding="utf-8",
+    )
+    return rel
 
 
 async def analyze(text: str, trace_id: str, *, route_fn: RouteFn | None = None) -> dict:
