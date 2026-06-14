@@ -27,7 +27,7 @@ async def _fake_route(req: RouteRequest) -> RouteResponse:
 class _FakeOrch:
     _route_fn = staticmethod(_fake_route)
 
-    async def respond(self, text: str, trace_id: str | None = None, intent: str | None = None):
+    async def respond(self, text: str, trace_id: str | None = None, intent: str | None = None, **kw):
         return "……行吧，知道了。", {"summary": "[emotion] 安抚", "emotion_estimate": "平淡"}
 
 

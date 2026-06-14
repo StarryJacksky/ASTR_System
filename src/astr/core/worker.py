@@ -55,7 +55,13 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         log.info("utterance_observed_silently", trace_id=event.trace_id)
         return
 
-    reply, report = await orch.respond(text, trace_id=event.trace_id, intent=intent)
+    reply, report = await orch.respond(
+        text,
+        trace_id=event.trace_id,
+        intent=intent,
+        speaker=event.auth.astr_user_id,
+        speaker_level=event.auth.level,
+    )
 
     if report.get("summary"):
         await _emit(

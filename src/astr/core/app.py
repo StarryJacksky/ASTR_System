@@ -110,10 +110,12 @@ def _engagement_decision(req: RespondRequest, settings) -> tuple[bool, str]:
     """选择性回复门控：群里没被点名就按概率决定回不回。返回 (是否回复, session_key)。"""
     import time
 
-    from astr.soul import emotion
-    from astr.soul.engagement import EngagementInput, should_reply
+    from astr.memory import people
+    from astr.soul import emotion, life
+    from astr.soul.engagement import EngagementInput, interest_score, should_reply
 
     is_group = bool(req.group_id)
+    prof = people.load(settings.soul_name, req.user_id)
     session_key = (
         f"{req.platform}:group:{req.group_id}" if is_group else f"{req.platform}:{req.user_id}"
     )
@@ -134,6 +136,10 @@ def _engagement_decision(req: RespondRequest, settings) -> tuple[bool, str]:
             loneliness=mood.loneliness,
             seconds_since_last_reply=since_last,
             recent_replies=len(history),
+            interest=interest_score(req.text),
+            availability=life.availability_now(settings.soul_name),
+            familiarity=float(prof.get("familiarity", 0.05)),
+            affinity=float(prof.get("affinity", 0.0)),
         )
     )
     return ok, session_key

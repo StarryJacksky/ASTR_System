@@ -131,6 +131,26 @@ def _merge(seats: list[SeatResult]) -> dict:
     }
 
 
+def should_analyze(text: str, intent: str | None = None) -> bool:
+    """是否值得动用云端管家团（赶超 #4 成本/速度）。
+
+    琐碎闲聊（短 + 无问号 + 不戳兴趣 + 非情绪/学术/工具）直接跳过 → 本地秒回、零云成本。
+    需要深思的（长/提问/情绪/学术/编程/戳到兴趣）才开会。
+    """
+    from astr.soul.engagement import interest_score
+
+    t = text.strip()
+    if intent in ("emotion", "research", "coding", "tool"):
+        return True
+    if len(t) >= get_settings().moa_short_max_chars:
+        return True
+    if any(q in t for q in "?？"):
+        return True
+    if interest_score(t) > 0:
+        return True
+    return False
+
+
 def save_report(soul_name: str, trace_id: str, report: dict) -> str:
     """把圆桌纪要落盘到 causal_behavior_graph/moa_reports/，返回相对 ref（写进 DecisionTrace.moa_report_ref）。
 

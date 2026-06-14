@@ -19,9 +19,12 @@ from astr.contracts.events import new_trace_id
 from astr.contracts.router import RouteRequest, RouteResponse
 from astr.contracts.settings import get_settings
 from astr.contracts.soul import Candidate, DecisionTrace
-from astr.memory import episodic_writer
+from astr.memory import episodic_writer, experience, people
 from astr.router.core import route as _default_route
-from astr.soul import emotion, moa
+from astr.soul import emotion, life, moa
+
+# 互动可改写她当晚作息的触发词（群友/主人邀约熬夜，她可能选择陪）
+_STAYUP_HINTS = ("熬夜", "通宵", "别睡", "陪我写", "陪我肝", "一起肝", "陪我熬")
 
 log = structlog.get_logger("astr.soul.orchestrator")
 
@@ -102,11 +105,43 @@ class SoulOrchestrator:
         return trace.id
 
     async def respond(
-        self, text: str, trace_id: str | None = None, intent: str | None = None
+        self,
+        text: str,
+        trace_id: str | None = None,
+        intent: str | None = None,
+        *,
+        speaker: str | None = None,
+        speaker_name: str | None = None,
+        speaker_level: int = 0,
     ) -> tuple[str, dict]:
-        """对一句话作答，返回 (回复文本, 圆桌纪要)。intent 由 P1-W2 意图路由传入。"""
+        """对一句话作答，返回 (回复文本, 圆桌纪要)。speaker 是说话人 id（群成员上下文用）。"""
         trace_id = trace_id or new_trace_id()
-        report = await moa.analyze(text, trace_id, route_fn=self._route_fn)
+        # 群成员上下文：记一次互动，取对方画像
+        person_line = ""
+        if speaker:
+            try:
+                prof = people.touch(self.soul_name, speaker, speaker_name, speaker_level)
+                person_line = people.profile_line(prof)
+            except Exception:  # noqa: BLE001
+                log.exception("people_touch_failed", speaker=speaker)
+        # 互动改写作息：被邀约熬夜 → 她选择陪（只在本该睡的时段才真正生效）
+        if any(h in text for h in _STAYUP_HINTS):
+            try:
+                life.override_stay_up(self.soul_name, reason="被拉着熬夜")
+            except Exception:  # noqa: BLE001
+                log.exception("life_override_failed")
+        # 条件式 MoA（赶超 #4）：琐碎闲聊跳过云端管家团，本地秒回、零云成本
+        if moa.should_analyze(text, intent):
+            report = await moa.analyze(text, trace_id, route_fn=self._route_fn)
+        else:
+            report = {
+                "summary": "",
+                "seats": [],
+                "intent": intent,
+                "emotion_estimate": "",
+                "suggested_strategy": "",
+                "risk_flags": [],
+            }
         memories = self.adapter.recall(text, k=6)
         # 情感状态：载入并按时间衰减，注入 system prompt
         mood = emotion.decayed(emotion.load(self.soul_name))
@@ -114,6 +149,24 @@ class SoulOrchestrator:
         messages = [
             {"role": "system", "content": self.handle.system_prompt},
             {"role": "system", "content": mood.to_prompt_line()},
+            {"role": "system", "content": life.to_prompt_line(self.soul_name)},
+        ]
+        if person_line:
+            messages.append({"role": "system", "content": person_line})
+        # 行为学习（检索式）：把"她过去类似情形的应对"作为参考自己的范例注入
+        try:
+            past = experience.behavior_recall(self.soul_name, text, speaker, k=2)
+        except Exception:  # noqa: BLE001
+            past = []
+        if past:
+            ref = "；".join(p[:40] for p in past)
+            messages.append(
+                {
+                    "role": "system",
+                    "content": f"（你过去遇到类似的会这么应对，参考你自己的风格、别照抄）：{ref}",
+                }
+            )
+        messages += [
             {"role": "system", "content": context},
             {"role": "user", "content": text},
         ]
@@ -152,6 +205,14 @@ class SoulOrchestrator:
             )
         except Exception:  # noqa: BLE001
             log.exception("episodic_write_failed", trace_id=trace_id)
+        # 经验联想记忆（统一基座：图谱关系 + 行为学习的源）+ 按互动性质调对方好感
+        try:
+            experience.record(self.soul_name, trace_id, text, speaker, reply)
+            if speaker:
+                risks = report.get("risk_flags") or []
+                people.apply_valence(self.soul_name, speaker, -0.3 if risks else 0.06)
+        except Exception:  # noqa: BLE001
+            log.exception("experience_record_failed", trace_id=trace_id)
         log.info(
             "soul_respond",
             trace_id=trace_id,

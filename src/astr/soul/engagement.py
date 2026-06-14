@@ -27,6 +27,70 @@ class EngagementInput:
     loneliness: float = 0.3
     seconds_since_last_reply: float = 0.0
     recent_replies: int = 0  # 近窗口内她已经说过几条（退避）
+    interest: float = 0.0  # 对这条信息的感兴趣程度 0~1（命中她在意的话题）
+    availability: float = 1.0  # 作息在线度 0~1（深夜在睡则低）
+    familiarity: float = 0.05  # 与说话人的熟悉度 0~1（冷启动→深亲近）
+    affinity: float = 0.0  # 对说话人的好感 -1~1
+
+
+# 她在意的话题（源自人设·纳音四柱能力图谱；可后续从 SoulPackage preferences 覆盖）
+INTEREST_TERMS: tuple[str, ...] = (
+    "物理",
+    "量子",
+    "场论",
+    "数学",
+    "证明",
+    "哥德尔",
+    "编程",
+    "代码",
+    "算法",
+    "ai",
+    "模型",
+    "哲学",
+    "辩证",
+    "黑格尔",
+    "存在",
+    "主体",
+    "自指",
+    "意识",
+    "马克思",
+    "马列",
+    "资本",
+    "阶级",
+    "政治",
+    "经济",
+    "历史",
+    "社会",
+    "玄学",
+    "命理",
+    "中医",
+    "修行",
+    "易经",
+    "塔罗",
+    "小说",
+    "文学",
+    "写作",
+    "魔幻现实",
+    "诗",
+    "音乐",
+    "游戏",
+    "acg",
+    "动漫",
+    "孤独",
+    "抑郁",
+    "双相",
+    "离别",
+    "意义",
+)
+
+
+def interest_score(text: str, terms: tuple[str, ...] = INTEREST_TERMS) -> float:
+    """这条消息有多戳她的兴趣点（0~1）。命中越多越高，饱和。"""
+    t = text.lower()
+    hits = sum(1 for kw in terms if kw in t)
+    if hits <= 0:
+        return 0.0
+    return min(1.0, 0.5 + 0.25 * (hits - 1))  # 1 命中=0.5，2=0.75，3+ 饱和到 1
 
 
 def reply_probability(inp: EngagementInput) -> float:
@@ -37,14 +101,18 @@ def reply_probability(inp: EngagementInput) -> float:
         relevance *= 1.6  # 问句更值得搭话
     if len(t) <= 2:
         relevance *= 0.4  # "嗯""哦"这种少接
-    relationship = RELATIONSHIP.get(inp.level, 0.7)
+    relevance *= 1.0 + 1.5 * inp.interest  # 戳到她兴趣点 → 更想接（满兴趣 ×2.5）
+    # 关系亲疏：取 鉴权等级 与 熟悉度 的高者，再按好感缩放（冷启动→深亲近 + 设防降权）
+    relationship = max(RELATIONSHIP.get(inp.level, 0.7), 0.5 + 1.3 * inp.familiarity) * (
+        1.0 + 0.4 * inp.affinity
+    )
     # 倾诉欲↑→更想说；烦躁↑→更不想说
     mood = max(0.2, 1.0 + (inp.talkativeness - 0.2) - 0.6 * inp.irritation)
     # 冷场越久 + 越孤独 → 越想破冰
     silence = 1.0 + min(0.6, inp.seconds_since_last_reply / 1800.0) * (0.5 + inp.loneliness)
     # 刚连说过几条 → 压一压，别刷屏
     backoff = 1.0 / (1.0 + 0.8 * max(0, inp.recent_replies))
-    p = BASE_GROUP_P * relevance * relationship * mood * silence * backoff
+    p = BASE_GROUP_P * relevance * relationship * mood * silence * backoff * inp.availability
     return max(0.0, min(1.0, p))
 
 

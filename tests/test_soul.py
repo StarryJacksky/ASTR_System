@@ -79,17 +79,23 @@ class _FakeAdapter:
 
 
 async def test_orchestrator_respond_writes_cbg(tmp_path, monkeypatch) -> None:
-    # 情感/纪要落盘指向 no-op，避免污染真实灵魂目录
-    from astr.soul import emotion
+    # 情感/纪要/生活落盘指向 no-op，避免污染真实灵魂目录
+    from astr.soul import emotion, life
 
     monkeypatch.setattr(emotion, "load", lambda *a, **k: emotion.EmotionVector())
     monkeypatch.setattr(emotion, "save", lambda *a, **k: None)
     monkeypatch.setattr(moa, "save_report", lambda *a, **k: "ref.json")
+    monkeypatch.setattr(life, "to_prompt_line", lambda *a, **k: "（作息占位）")
+    from astr.memory import experience
+
+    monkeypatch.setattr(experience, "record", lambda *a, **k: None)
+    monkeypatch.setattr(experience, "behavior_recall", lambda *a, **k: [])
 
     orch = SoulOrchestrator("justin", adapter=_FakeAdapter(), route_fn=fake_route)
     orch.cbg_path = tmp_path / "decisions.cbg.jsonl"
 
-    reply, report = await orch.respond("秋秋在吗", trace_id="trc_demo")
+    # 带问号 → 触发 MoA（条件式 MoA 下短句会跳过）
+    reply, report = await orch.respond("秋秋，你怎么看这事？", trace_id="trc_demo")
     assert reply == "……行吧，知道了。"
     assert report["emotion_estimate"] == "平淡"
 
