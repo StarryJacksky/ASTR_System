@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     # —— 平台 ——
     telegram_bot_token: str = ""
 
+    # —— 语音输入（P1-W7）——
+    voice_asr_model_dir: Path = Path("D:/ASTR/embodiments/asr_models/sense-voice")  # SenseVoice ONNX 目录
+    voice_vad_model: Path = Path("D:/ASTR/embodiments/asr_models/silero_vad.onnx")
+    voice_wake_words: str = "秋秋,露怀秋"  # 逗号分隔；转写命中即唤醒
+    voice_sample_rate: int = 16000
+    voice_input_device: int | None = None  # None = 系统默认麦克风
+    core_ingest_url: str = "http://127.0.0.1:8300/v1/ingest"
+
     # —— 鉴权白名单（P1-W2-b）：owner 恒 L2；逗号分隔的平台 id 映射等级 ——
     astr_owner_id: str = "jacksky"
     astr_l2_user_ids: str = ""  # 额外 L2，如 "telegram:123,qq:456"

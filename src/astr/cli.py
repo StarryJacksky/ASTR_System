@@ -62,6 +62,12 @@ def _cmd_heartbeat(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_voice(args: argparse.Namespace) -> int:
+    from astr.sensors import voice
+
+    return voice.main(["--download"] if args.download else [])
+
+
 def _cmd_platform(args: argparse.Namespace) -> int:
     if args.platform_action == "probe":
         from astr.sensors.platform.caps import caps_path, probe
@@ -123,6 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_plat = sub.add_parser("platform", help="平台能力探测（落 platform_caps.json）")
     p_plat.add_argument("platform_action", choices=["probe"])
     p_plat.set_defaults(func=_cmd_platform)
+
+    p_voice = sub.add_parser("voice", help="语音输入监听（喊唤醒词→转写→ingest）")
+    p_voice.add_argument("--download", action="store_true", help="下载 SenseVoice + silero_vad 模型")
+    p_voice.set_defaults(func=_cmd_voice)
 
     return parser
 
