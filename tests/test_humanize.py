@@ -45,6 +45,18 @@ def test_strip_dashes_collapses_punct() -> None:
     assert humanize.strip_dashes("好的——") == "好的"
 
 
+def test_casualize_punct() -> None:
+    assert "；" not in humanize.casualize_punct("行吧；走了")
+    assert "，" in humanize.casualize_punct("行吧；走了")
+    q = humanize.casualize_punct("他说\u201c好\u201d")  # 去引号
+    assert "\u201c" not in q and "好" in q
+
+
+def test_split_reply_casualizes() -> None:
+    out = humanize.split_reply("这事吧；我觉得行", whole_prob=1.0, rng=random.Random(0))
+    assert "；" not in "".join(out)
+
+
 def test_typing_delay_bounds() -> None:
     assert humanize.typing_delay_s("") >= 0.4
     assert humanize.typing_delay_s("字" * 1000) <= 4.0

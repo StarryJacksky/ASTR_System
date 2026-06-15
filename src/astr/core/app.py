@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections import deque
 from collections.abc import AsyncIterator
 
 import structlog
@@ -91,6 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.heartbeat = Heartbeat(bus, route_fn, soul_name=get_settings().soul_name)
     app.state.heartbeat.start()
     app.state.engagement = {}  # session_key -> [近期回复时间戳]，给选择性回复门控算冷场/退避
+    app.state.ctx = {}  # session_key -> deque["说话人: 内容"]，群聊上下文缓冲（接收能力）
     with contextlib.suppress(Exception):
         from astr.sensors.platform.caps import probe
 
@@ -190,8 +192,13 @@ async def respond(req: RespondRequest) -> RespondResponse:
     settings = get_settings()
     # 选择性回复门控：群里没被点名且掷骰子不中 → 静默（真人不回群里每句话）
     will_reply, session_key = _engagement_decision(req, settings)
+    # 上下文缓冲：无论回不回，这条都"接收"进来（让她跟得上群聊整段语境）
+    speaker_tag = req.user_id.split(":", 1)[-1]
+    buf = app.state.ctx.setdefault(session_key, deque(maxlen=12))
+    buf.append(f"{speaker_tag}: {req.text}")
     if not will_reply:
         return RespondResponse(reply="", segments=[], trace_id="", timed_out=False)
+    recent_ctx = list(buf)[:-1]  # 不含当前这条
 
     bus: Bus = app.state.bus
     trace = new_trace_id()
@@ -203,7 +210,11 @@ async def respond(req: RespondRequest) -> RespondResponse:
         source=f"sensor.{req.platform}",
         type=EventType.USER_UTTERANCE,
         payload=UserUtterancePayload(
-            text=req.text, platform=req.platform, lang=req.lang
+            text=req.text,
+            platform=req.platform,
+            lang=req.lang,
+            is_group=bool(req.group_id),
+            recent=recent_ctx,
         ).model_dump(),
         auth=AuthContext(astr_user_id=req.user_id, level=get_settings().resolve_level(req.user_id)),
         trace_id=trace,

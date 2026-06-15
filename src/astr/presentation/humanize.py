@@ -24,6 +24,17 @@ def strip_dashes(text: str) -> str:
     return text.strip("，")
 
 
+# 中英文引号（聊天里少用），分号同理 → 口语化掉
+_QUOTES = re.compile(r"[\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f]")
+
+
+def casualize_punct(text: str) -> str:
+    """口语化标点：分号→逗号、去引号。真人打字少用书面标点，多用逗号（句号在分句时已处理）。"""
+    text = text.replace("；", "，").replace(";", "，")
+    text = _QUOTES.sub("", text)
+    return re.sub(r"，{2,}", "，", text)
+
+
 def split_reply(
     text: str,
     *,
@@ -39,7 +50,7 @@ def split_reply(
     ③ 其余情况按 merge_prob 概率合并相邻句，最多 max_segments 条。这样有时一句、有时两三句，像真人。
     """
     rng = rng or random
-    text = strip_dashes(text.strip())
+    text = casualize_punct(strip_dashes(text.strip()))
     if not text:
         return []
     parts = [p.strip() for p in _SPLIT_RE.split(text) if p.strip()]

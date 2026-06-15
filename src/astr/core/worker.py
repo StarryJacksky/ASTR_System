@@ -61,6 +61,8 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         intent=intent,
         speaker=event.auth.astr_user_id,
         speaker_level=event.auth.level,
+        is_group=bool(event.payload.get("is_group")),
+        recent=event.payload.get("recent") or None,
     )
 
     if report.get("summary"):
@@ -97,15 +99,35 @@ async def run_worker(
     orch: SoulOrchestrator | None = None,
     *,
     stop: asyncio.Event | None = None,
+    max_concurrency: int = 4,
 ) -> None:
-    """长驻：订阅 user.utterance，逐条交给 orchestrator 处理。"""
+    """长驻：消费 user.utterance，并行交给 orchestrator（多条同时各跑完整 MoA，跟得上群聊快节奏）。
+
+    并发上限 max_concurrency 防止云调用爆量；情绪/关系文件的读改写在 orchestrator 内有锁保护。
+    """
     orch = orch or SoulOrchestrator("justin")
+    sem = asyncio.Semaphore(max_concurrency)
+    await bus.ensure_group(SOUL_GROUP)
+    tasks: set[asyncio.Task] = set()
 
-    async def handler(event: Event) -> None:
-        try:
-            await handle_utterance(bus, orch, event)
-        except Exception:  # noqa: BLE001 —— 单条失败不拖垮消费循环
-            log.exception("utterance_handler_failed", trace_id=event.trace_id)
+    async def _process(msg_id: str, event: Event) -> None:
+        async with sem:
+            try:
+                await handle_utterance(bus, orch, event)
+            except Exception:  # noqa: BLE001 —— 单条失败不拖垮其它并行回复
+                log.exception("utterance_handler_failed", trace_id=event.trace_id)
+            finally:
+                await bus.ack(SOUL_GROUP, msg_id)
 
-    log.info("soul_worker_started", group=SOUL_GROUP)
-    await bus.subscribe(SOUL_GROUP, [EventType.USER_UTTERANCE], handler, stop=stop)
+    log.info("soul_worker_started", group=SOUL_GROUP, max_concurrency=max_concurrency)
+    while stop is None or not stop.is_set():
+        batch = await bus.read_once(SOUL_GROUP, block_ms=1000)
+        for msg_id, event in batch:
+            if event.type != EventType.USER_UTTERANCE:
+                await bus.ack(SOUL_GROUP, msg_id)
+                continue
+            t = asyncio.create_task(_process(msg_id, event))
+            tasks.add(t)
+            t.add_done_callback(tasks.discard)
+    if tasks:  # 收尾：等在途的并行回复跑完
+        await asyncio.gather(*tasks, return_exceptions=True)

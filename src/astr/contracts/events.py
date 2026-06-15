@@ -69,6 +69,8 @@ class UserUtterancePayload(BaseModel):
     platform: str = "cli"  # "qq"/"telegram"/"voice"/"cli"
     lang: str = "zh"
     audio_ref: str | None = None  # 语音原始音频引用
+    is_group: bool = False  # 群聊消息（影响接话语境标注）
+    recent: list[str] = []  # 该会话最近若干条（"说话人: 内容"），供接话顺语境
 
 
 class SystemEventPayload(BaseModel):
