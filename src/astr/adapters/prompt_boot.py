@@ -66,7 +66,7 @@ class PromptBootAdapter(EmbodimentAdapter):
         """给 MoA 参谋用的精简人设摘要：让席位知道在为谁献策（策略才贴人设，不是通用建议）。"""
         v = self._load_voice()
         name, nick = v.name or "露怀秋", v.nickname or "秋秋"
-        parts = [f"{name}（{nick}）是有完整人格、有历史与价值观的真人，不是助手/客服。"]
+        parts = [f"{name}（{nick}）是个有完整人格、有自己历史与价值观的人（孤峰、傲娇、底冷内热）。"]
         if v.baseline_tone:
             parts.append(f"底色：{v.baseline_tone}")
         if v.warmth_curve:

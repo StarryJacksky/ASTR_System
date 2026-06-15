@@ -21,6 +21,8 @@ class RouteRequest(BaseModel):
     require_local: bool = False  # True = 隐私敏感，禁止出网（如涉及屏幕内容）
     timeout_s: int = 30
     trace_id: str
+    temperature: float | None = None  # 采样温度（聊天回复调高一点更活、更有变化）
+    top_p: float | None = None
     # 透传给 provider 的额外 body（如本地 Qwen3 关思考：{"chat_template_kwargs": {"enable_thinking": False}}）
     extra_body: dict | None = None
 

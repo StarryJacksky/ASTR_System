@@ -97,6 +97,10 @@ def _build_params(model_cfg: dict[str, str], req: RouteRequest) -> dict[str, Any
         "messages": req.messages,
         "timeout": req.timeout_s,
     }
+    if req.temperature is not None:
+        params["temperature"] = req.temperature
+    if req.top_p is not None:
+        params["top_p"] = req.top_p
     if req.extra_body:
         params["extra_body"] = req.extra_body
     api_base = model_cfg.get("api_base")
