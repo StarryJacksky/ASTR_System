@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     voice_input_device: int | None = None  # None = 系统默认麦克风
     core_ingest_url: str = "http://127.0.0.1:8300/v1/ingest"
 
+    # —— 语音输出（P1-W8）——
+    tts_enabled: bool = True
+    tts_backend: str = "siliconflow"  # siliconflow(域内可达·CosyVoice) / edge(bing,国内常被墙) / sovits(本地克隆)
+    tts_model: str = "FunAudioLLM/CosyVoice2-0.5B"  # SiliconFlow TTS 模型（带情感/方言）
+    tts_voice: str = "anna"  # 预设音色名（客户可选）；siliconflow 会拼成 模型:音色
+    tts_output_device: int | None = None  # None = 系统默认音箱
+
     # —— 鉴权白名单（P1-W2-b）：owner 恒 L2；逗号分隔的平台 id 映射等级 ——
     astr_owner_id: str = "jacksky"
     astr_l2_user_ids: str = ""  # 额外 L2，如 "telegram:123,qq:456"
