@@ -1,0 +1,7 @@
+name: astrbot_plugin_astr_bridge
+desc: ASTR Core 桥 —— 把平台消息转给露怀秋(ASTR Core)，再把她的回复发回。
+version: 0.1.0
+author: ASTR
+display_name: ASTR Bridge
+support_platforms:
+  - aiocqhttp

@@ -62,6 +62,19 @@ def _cmd_heartbeat(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_platform(args: argparse.Namespace) -> int:
+    if args.platform_action == "probe":
+        from astr.sensors.platform.caps import caps_path, probe
+
+        data = probe()
+        for name, caps in data["platforms"].items():
+            print(f"{name}: {len(caps)} 能力 -> {', '.join(caps)}")
+        print(f"已写入 {caps_path()}")
+        return 0
+    print("用法: astr platform probe", file=sys.stderr)
+    return 2
+
+
 def _cmd_memory(args: argparse.Namespace) -> int:
     from astr.memory import semantic
 
@@ -106,6 +119,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_hb = sub.add_parser("heartbeat", help="手动触发一次心跳独白（调试）")
     p_hb.add_argument("--soul-name", default="justin")
     p_hb.set_defaults(func=_cmd_heartbeat)
+
+    p_plat = sub.add_parser("platform", help="平台能力探测（落 platform_caps.json）")
+    p_plat.add_argument("platform_action", choices=["probe"])
+    p_plat.set_defaults(func=_cmd_platform)
 
     return parser
 
