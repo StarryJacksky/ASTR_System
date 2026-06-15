@@ -40,8 +40,8 @@ class Settings(BaseSettings):
 
     # —— 预算闸与 MoA 策略 ——
     astr_daily_budget_usd: float = 5.0
-    moa_short_max_chars: int = 20
-    moa_long_min_chars: int = 200
+    moa_short_max_chars: int = 10  # < 此当量：短消息→2 席
+    moa_long_min_chars: int = 30  # >= 此当量：长消息→6 席全开；中间→4 席
 
     # —— 平台 ——
     telegram_bot_token: str = ""

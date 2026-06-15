@@ -12,6 +12,16 @@ import re
 # 句内可切分的标点（切分后标点不保留在分句里）
 _SPLIT_RE = re.compile(r"[，。！？；\n、]+")
 _TRAILING_PERIOD = re.compile(r"。$")
+# 破折号是作文腔/AI 腔，真人打字几乎不用——规整成自然停顿（逗号），不丢内容、不强拆长段
+_DASH_RE = re.compile(r"[—–－ー]{1,3}")
+
+
+def strip_dashes(text: str) -> str:
+    """把破折号换成逗号停顿，并清掉因此产生的多余逗号/首尾标点。"""
+    text = _DASH_RE.sub("，", text)
+    text = re.sub(r"，{2,}", "，", text)  # 合并连续逗号
+    text = re.sub(r"，+([。！？；])", r"\1", text)  # 逗号紧贴句末标点 → 去逗号
+    return text.strip("，")
 
 
 def split_reply(
@@ -29,7 +39,7 @@ def split_reply(
     ③ 其余情况按 merge_prob 概率合并相邻句，最多 max_segments 条。这样有时一句、有时两三句，像真人。
     """
     rng = rng or random
-    text = text.strip()
+    text = strip_dashes(text.strip())
     if not text:
         return []
     parts = [p.strip() for p in _SPLIT_RE.split(text) if p.strip()]

@@ -62,6 +62,24 @@ class PromptBootAdapter(EmbodimentAdapter):
         data = json.loads(path.read_text(encoding="utf-8"))
         return VoiceProfile.model_validate(data)
 
+    def persona_brief(self) -> str:
+        """给 MoA 参谋用的精简人设摘要：让席位知道在为谁献策（策略才贴人设，不是通用建议）。"""
+        v = self._load_voice()
+        name, nick = v.name or "露怀秋", v.nickname or "秋秋"
+        parts = [f"{name}（{nick}）是有完整人格、有历史与价值观的真人，不是助手/客服。"]
+        if v.baseline_tone:
+            parts.append(f"底色：{v.baseline_tone}")
+        if v.warmth_curve:
+            parts.append(f"关系曲线：{v.warmth_curve}")
+        if v.tsundere_markers:
+            parts.append("傲娇：" + "；".join(v.tsundere_markers))
+        if v.value_undertone:
+            parts.append(f"价值底色：{v.value_undertone}")
+        moves = "、".join(m.get("desc", "")[:22] for m in v.signature_moves[:3] if m.get("desc"))
+        if moves:
+            parts.append(f"招式：{moves}")
+        return "\n".join(parts)
+
     def render_system_prompt(self, memory_snippets: list[str] | None = None) -> str:
         """把身份资产渲染成完整 system prompt。memory_snippets 可注入检索到的记忆。"""
         voice = self._load_voice()

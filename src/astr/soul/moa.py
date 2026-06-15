@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
@@ -22,13 +23,27 @@ log = structlog.get_logger("astr.soul.moa")
 
 RouteFn = Callable[[RouteRequest], Awaitable[RouteResponse]]
 
-# 席位 → router 任务名（routes.yaml 已配分工）
+SEAT_TIMEOUT_S = 30.0  # 单席位超时：一个慢/挂的供应商不许拖垮整桌圆桌
+
+# 席位 → router 任务名（routes.yaml 已配分工）。六家智囊团各一席。
 SEAT_TASKS: dict[str, str] = {
     "emotion": "emotion_analysis",  # Claude 首席情感
     "logic": "logic_analysis",  # GPT 逻辑
     "retrieval": "retrieval_analysis",  # Gemini 多模态/检索
     "zeitgeist": "zeitgeist_analysis",  # Grok 梗/时事
+    "librarian": "librarian_analysis",  # Qwen(云·硅基流动) 中文检索/事实核对
+    "devil": "devil_analysis",  # DeepSeek 唱反调/红队·风险审计
 }
+
+# 中日韩文字（按字计信息量）；拉丁文按词计、一词约抵 2 个汉字——吃掉跨语言长度差异
+_CJK = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
+_LATIN_WORD = re.compile(r"[A-Za-z]+")
+
+
+def text_units(text: str) -> int:
+    """消息"信息量"当量（汉字≈1，拉丁词≈2）。各语言据此用同一套阈值判断长短。"""
+    t = text.strip()
+    return len(_CJK.findall(t)) + 2 * len(_LATIN_WORD.findall(t))
 
 _JSON_INSTRUCTION = (
     "你是 露怀秋 的{role}。只输出一个 JSON 对象，不要任何多余文字、不要 markdown 代码块，"
@@ -41,7 +56,12 @@ _ROLE_NAMES = {
     "logic": "逻辑分析师",
     "retrieval": "检索与事实核对员",
     "zeitgeist": "时事与网络语境分析师",
+    "librarian": "中文语境与事实核对图书馆员",
+    "devil": "唱反调的红队/风险审计员",
 }
+
+# 让席位先认清要为谁献策——策略才贴秋秋的人设，而不是悬空的通用建议
+_PERSONA_HEADER = "你是 露怀秋（秋秋）的幕后参谋。先认清她是谁，据此献策，策略必须贴合她的人设：\n"
 
 
 class SeatResult(BaseModel):
@@ -53,20 +73,30 @@ class SeatResult(BaseModel):
 
 
 def select_seats(text: str) -> tuple[list[str], CostTier]:
-    """按长度选席位与档位：短→1路省钱，中→2路，长/学术→4路全开。"""
+    """按"信息量当量"选席位：短→2 席，中→4 席，长→6 席全开（多模型圆桌，balanced）。
+
+    真人对话普遍走多模型圆桌：既给秋秋多视角输入、也给 P4 自训练攒厚管家数据；
+    这些都是便宜档，预算闸 $5/天兜底。阈值用 text_units 吃掉跨语言差异。
+    """
     s = get_settings()
-    n = len(text.strip())
+    n = text_units(text)
     if n < s.moa_short_max_chars:
-        return ["emotion"], "cheap"
+        return ["emotion", "logic"], "balanced"
     if n < s.moa_long_min_chars:
-        return ["emotion", "logic"], "cheap"
-    return ["emotion", "logic", "retrieval", "zeitgeist"], "balanced"
+        return ["emotion", "logic", "retrieval", "zeitgeist"], "balanced"
+    return ["emotion", "logic", "retrieval", "zeitgeist", "librarian", "devil"], "balanced"
 
 
-def _build_messages(seat: str, text: str) -> list[dict]:
+def _build_messages(seat: str, text: str, persona: str = "", situation: str = "") -> list[dict]:
     instruction = _JSON_INSTRUCTION.format(role=_ROLE_NAMES[seat])
+    sys_parts: list[str] = []
+    if persona:
+        sys_parts.append(_PERSONA_HEADER + persona)
+    if situation:
+        sys_parts.append("【当前情境】\n" + situation)
+    sys_parts.append(instruction)
     return [
-        {"role": "system", "content": instruction},
+        {"role": "system", "content": "\n\n".join(sys_parts)},
         {"role": "user", "content": text},
     ]
 
@@ -87,20 +117,32 @@ def _parse_seat(seat: str, content: str) -> SeatResult | None:
 
 
 async def _run_seat(
-    seat: str, text: str, tier: CostTier, trace_id: str, route_fn: RouteFn
+    seat: str,
+    text: str,
+    tier: CostTier,
+    trace_id: str,
+    route_fn: RouteFn,
+    persona: str = "",
+    situation: str = "",
 ) -> SeatResult:
     """跑一个席位，强制 JSON + 一次重试，失败给降级结果。"""
     task = SEAT_TASKS[seat]
     for attempt in range(2):
         try:
-            resp = await route_fn(
-                RouteRequest(
-                    task=task,
-                    messages=_build_messages(seat, text),
-                    cost_tier=tier,
-                    trace_id=trace_id,
-                )
+            resp = await asyncio.wait_for(
+                route_fn(
+                    RouteRequest(
+                        task=task,
+                        messages=_build_messages(seat, text, persona, situation),
+                        cost_tier=tier,
+                        trace_id=trace_id,
+                    )
+                ),
+                timeout=SEAT_TIMEOUT_S,
             )
+        except TimeoutError:  # 慢席位直接降级，不重试（重试只会更慢），不拖累整桌
+            log.warning("moa_seat_timeout", seat=seat, timeout_s=SEAT_TIMEOUT_S)
+            return SeatResult(seat=seat, risk_flags=["timeout"])
         except Exception as e:  # noqa: BLE001
             log.warning("moa_seat_route_failed", seat=seat, attempt=attempt, error=str(e))
             continue
@@ -142,7 +184,7 @@ def should_analyze(text: str, intent: str | None = None) -> bool:
     t = text.strip()
     if intent in ("emotion", "research", "coding", "tool"):
         return True
-    if len(t) >= get_settings().moa_short_max_chars:
+    if text_units(t) >= get_settings().moa_short_max_chars:
         return True
     if any(q in t for q in "?？"):
         return True
@@ -170,12 +212,19 @@ def save_report(soul_name: str, trace_id: str, report: dict) -> str:
     return rel
 
 
-async def analyze(text: str, trace_id: str, *, route_fn: RouteFn | None = None) -> dict:
-    """智囊团分析入口：选席位 → 并发跑 → 合并圆桌纪要。"""
+async def analyze(
+    text: str,
+    trace_id: str,
+    *,
+    route_fn: RouteFn | None = None,
+    persona: str = "",
+    situation: str = "",
+) -> dict:
+    """智囊团分析入口：选席位 → 并发跑（带秋秋人设+当前情境）→ 合并圆桌纪要。"""
     route_fn = route_fn or _default_route
     seats, tier = select_seats(text)
     results = await asyncio.gather(
-        *(_run_seat(seat, text, tier, trace_id, route_fn) for seat in seats)
+        *(_run_seat(seat, text, tier, trace_id, route_fn, persona, situation) for seat in seats)
     )
     report = _merge(list(results))
     log.info(

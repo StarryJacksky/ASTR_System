@@ -65,6 +65,10 @@ class SoulOrchestrator:
         self._route_fn = route_fn or _default_route
         soul_dir = get_settings().soul_package_dir / soul_name
         self.cbg_path = soul_dir / "causal_behavior_graph" / "decisions.cbg.jsonl"
+        try:  # 缓存人设摘要，喂给 MoA 席位（让管家团认识秋秋、据此献策）
+            self._persona = self.adapter.persona_brief()
+        except Exception:  # noqa: BLE001
+            self._persona = ""
 
     def _build_context(self, report: dict, memories: list[str], intent: str | None = None) -> str:
         lines = ["【智囊团圆桌纪要 · 供参考，用你自己的话，别照搬】"]
@@ -130,9 +134,19 @@ class SoulOrchestrator:
                 life.override_stay_up(self.soul_name, reason="被拉着熬夜")
             except Exception:  # noqa: BLE001
                 log.exception("life_override_failed")
+        # 情感状态：载入并按时间衰减（MoA 与 system prompt 都要用，先取一次）
+        mood = emotion.decayed(emotion.load(self.soul_name))
         # 条件式 MoA（赶超 #4）：琐碎闲聊跳过云端管家团，本地秒回、零云成本
         if moa.should_analyze(text, intent):
-            report = await moa.analyze(text, trace_id, route_fn=self._route_fn)
+            situation_parts = [person_line] if person_line else []
+            situation_parts.append(mood.to_prompt_line())
+            report = await moa.analyze(
+                text,
+                trace_id,
+                route_fn=self._route_fn,
+                persona=self._persona,
+                situation="\n".join(situation_parts),
+            )
         else:
             report = {
                 "summary": "",
@@ -143,8 +157,6 @@ class SoulOrchestrator:
                 "risk_flags": [],
             }
         memories = self.adapter.recall(text, k=6)
-        # 情感状态：载入并按时间衰减，注入 system prompt
-        mood = emotion.decayed(emotion.load(self.soul_name))
         context = self._build_context(report, memories, intent)
         messages = [
             {"role": "system", "content": self.handle.system_prompt},

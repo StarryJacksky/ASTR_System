@@ -30,6 +30,21 @@ def test_can_send_whole() -> None:
     assert len(segs) == 1
 
 
+def test_dashes_removed() -> None:
+    # 破折号是作文腔，要被规整掉，但内容不丢
+    out = humanize.split_reply(
+        "那群得先通过我的审核——毕竟我可不会随便跟陌生人混", whole_prob=1.0, rng=random.Random(0)
+    )
+    joined = "".join(out)
+    assert "—" not in joined and "–" not in joined
+    assert "审核" in joined and "陌生人混" in joined
+
+
+def test_strip_dashes_collapses_punct() -> None:
+    assert "—" not in humanize.strip_dashes("行——好")
+    assert humanize.strip_dashes("好的——") == "好的"
+
+
 def test_typing_delay_bounds() -> None:
     assert humanize.typing_delay_s("") >= 0.4
     assert humanize.typing_delay_s("字" * 1000) <= 4.0

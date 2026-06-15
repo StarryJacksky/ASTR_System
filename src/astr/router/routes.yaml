@@ -21,6 +21,8 @@ tasks:
   logic_analysis:     { cheap: deepseek-chat, balanced: gpt-mini,     max: gpt-flagship }     # 逻辑     = GPT
   retrieval_analysis: { cheap: gemini-flash,  balanced: gemini-flash, max: gemini-pro }       # 多模态联网 = Gemini
   zeitgeist_analysis: { cheap: grok,          balanced: grok,         max: grok }              # 梗/时事  = Grok
+  librarian_analysis: { cheap: qwen-sf,       balanced: qwen-sf,      max: qwen-sf }           # 中文检索/事实核对 = Qwen(硅基流动)
+  devil_analysis:     { cheap: deepseek-chat, balanced: deepseek-chat, max: claude-haiku }    # 唱反调/红队·风险审计 = DeepSeek
   chinese_writing:    { cheap: qwen-sf,       balanced: qwen-sf,      max: qwen-sf }           # 中文写作 = Qwen(硅基流动)
 
   # —— 学术圆桌席位（总规 §2.5.2）——
@@ -38,14 +40,14 @@ models:   # 唯一允许出现具体模型 ID 的地方
   claude-sonnet:  { litellm: "anthropic/claude-sonnet-4-6" }
   claude-haiku:   { litellm: "anthropic/claude-haiku-4-5" }
   claude-opus:    { litellm: "anthropic/claude-opus-4-8" }     # 备用：max 档情感/物理可升 opus
-  gpt-flagship:   { litellm: "openai/gpt-5.1" }                # ← 核对最新
-  gpt-mini:       { litellm: "openai/gpt-5.1-mini" }           # ← 核对最新
-  gemini-pro:     { litellm: "gemini/gemini-3-pro" }           # ← 核对最新
-  gemini-flash:   { litellm: "gemini/gemini-3-flash" }         # ← 核对最新
+  gpt-flagship:   { litellm: "openai/gpt-5.5" }               # 核对 2026-06：现役旗舰
+  gpt-mini:       { litellm: "openai/gpt-5.4-mini" }           # 核对 2026-06：现役 mini
+  gemini-pro:     { litellm: "gemini/gemini-2.5-pro" }         # 核对 2026-06：现役稳定 pro
+  gemini-flash:   { litellm: "gemini/gemini-3.5-flash" }       # 核对 2026-06：现役稳定 flash(GA)
   grok:           { litellm: "xai/grok-4" }                    # ← 核对最新
   deepseek-chat:  { litellm: "deepseek/deepseek-chat" }
   # 云 Qwen 走硅基流动（OpenAI 兼容：openai/ 前缀 + api_base + SILICONFLOW_API_KEY），区别于本地 qwen3-8b
-  qwen-sf:        { litellm: "openai/Qwen/Qwen3-235B-A22B-Instruct-2507", api_base: "https://api.siliconflow.cn/v1", api_key_env: "SILICONFLOW_API_KEY" }   # ← 按你 SiliconFlow 账号开通的模型核对
+  qwen-sf:        { litellm: "openai/Qwen/Qwen3-30B-A3B-Instruct-2507", api_base: "https://api.siliconflow.cn/v1", api_key_env: "SILICONFLOW_API_KEY" }   # 核对 2026-06：现役 Instruct(无思考·A3B 快)
 
 # 降级链（03 §4 规则 4）：任一 max/balanced 调用失败 → 依次回退到更便宜档 → 全失败落 local 并标 degraded=true
 fallback:

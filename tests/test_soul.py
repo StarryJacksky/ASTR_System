@@ -50,14 +50,34 @@ _MEDIUM_TEXT = (
 
 
 def test_select_seats_by_length() -> None:
-    assert moa.select_seats("在吗")[0] == ["emotion"]
-    assert moa.select_seats(_MEDIUM_TEXT)[0] == ["emotion", "logic"]
-    long_text = "请详细分析" + "啊" * 300
-    assert moa.select_seats(long_text)[0] == ["emotion", "logic", "retrieval", "zeitgeist"]
+    # 短→2 席，中→4 席，长→6 席（按 text_units 当量；默认阈值 10/30）
+    assert moa.select_seats("在吗")[0] == ["emotion", "logic"]
+    medium = "这个方案到底靠不靠谱你说说看"  # 14 当量 → 中
+    assert moa.select_seats(medium)[0] == ["emotion", "logic", "retrieval", "zeitgeist"]
+    long_text = "请详细分析" + "啊" * 50
+    assert moa.select_seats(long_text)[0] == [
+        "emotion",
+        "logic",
+        "retrieval",
+        "zeitgeist",
+        "librarian",
+        "devil",
+    ]
+
+
+def test_text_units_language_scaling() -> None:
+    assert moa.text_units("你好世界") == 4  # 汉字各 1
+    assert moa.text_units("hello world") == 4  # 拉丁词各 2
+
+
+def test_build_messages_injects_persona() -> None:
+    msgs = moa._build_messages("emotion", "在吗", persona="秋秋是孤峰", situation="对方是生人")
+    sys = msgs[0]["content"]
+    assert "秋秋是孤峰" in sys and "对方是生人" in sys
 
 
 async def test_moa_merge() -> None:
-    report = await moa.analyze(_MEDIUM_TEXT, "trc_t", route_fn=fake_route)
+    report = await moa.analyze("在吗", "trc_t", route_fn=fake_route)  # 短→2 席
     assert report["emotion_estimate"] == "平淡"
     assert report["intent"] == "测试意图"
     assert report["risk_flags"] == []
