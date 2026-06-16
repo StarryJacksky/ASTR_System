@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* 用 next/font 注入的真实字体族覆盖 tokens 里的字面名
+   （next/font 家族名是随机化的，只经 CSS 变量 --font-geist-* 暴露）*/
+:root {
+  --font-sans: var(--font-geist-sans), "HarmonyOS Sans SC", "Source Han Sans SC", system-ui,
+    sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* 把锁定的设计 token 映射成 Tailwind 工具类（bg-surface / text-ink / border-hairline …）。
+   inline=运行时解析 var()，主题切换（data-theme）时自动跟随。*/
+@theme inline {
+  --color-canvas: var(--astr-bg);
+  --color-surface: var(--astr-surface);
+  --color-surface-2: var(--astr-surface-2);
+  --color-ink: var(--astr-text);
+  --color-ink-2: var(--astr-text-2);
+  --color-ink-3: var(--astr-text-3);
+  --color-accent: var(--astr-accent);
+  --color-accent-2: var(--astr-accent-2);
+  --color-hairline: var(--astr-hairline);
+  --color-success: var(--astr-success);
+  --color-warning: var(--astr-warning);
+  --color-danger: var(--astr-danger);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--astr-bg);
+  color: var(--astr-text);
+  font-family: var(--font-sans);
+  line-height: var(--leading-body);
+  /* 主题切换时颜色平滑过渡（04 §3.1）*/
+  transition:
+    background-color var(--dur-base) var(--ease-inout),
+    color var(--dur-base) var(--ease-inout);
+}
+
+/* 焦点环（04 §7 可访问性硬要求，不可移除）*/
+:focus-visible {
+  outline: 2px solid var(--astr-accent);
+  outline-offset: 2px;
+}

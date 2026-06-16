@@ -1,0 +1,104 @@
+/* ASTR 设计系统 · Design Tokens（单一真相源）
+ * 规范：04_DESIGN_SYSTEM.md §2/§3。组件内禁止硬编码色值，只用 var(--astr-*) 或 Tailwind 映射类。
+ * 任何修改都要同步回 04 号文档，否则以本文件为准并视为文档 bug。
+ */
+
+:root {
+  /* —— 夜空底色（暗色主题，默认）—— */
+  --astr-bg:              #0A0B0F;   /* 最底层背景，近黑带蓝 */
+  --astr-surface:         #12141C;   /* 卡片/面板 */
+  --astr-surface-2:       #1A1D28;   /* 抬升面板（hover/active 容器）*/
+  --astr-hairline:        rgba(255, 255, 255, 0.08);  /* 1px 描边/分隔 */
+  --astr-hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* —— 文本 —— */
+  --astr-text:   #ECEDF2;   /* 主文本 */
+  --astr-text-2: #9BA0B0;   /* 次要文本 */
+  --astr-text-3: #5C6173;   /* 占位/禁用 */
+
+  /* —— 星枢强调色（唯一强调色，渐变辉光）—— */
+  --astr-accent:      #7C5CFF;   /* 紫 */
+  --astr-accent-2:    #38E1FF;   /* 青 */
+  --astr-accent-grad: linear-gradient(135deg, #7C5CFF 0%, #38E1FF 100%);
+  --astr-accent-glow: 0 0 24px rgba(124, 92, 255, 0.45);
+
+  /* —— 语义色（克制使用）—— */
+  --astr-success: #34D399;
+  --astr-warning: #FBBF24;
+  --astr-danger:  #F25555;
+
+  /* —— 情绪辉光通道（§3.2 由 emotion.ts 在四锚点间插值，写入 --astr-emotion-glow）—— */
+  --emo-lonely:   #4C6FFF;   /* 孤独：冷蓝 */
+  --emo-excited:  #FF7A59;   /* 兴奋：暖橙 */
+  --emo-tsundere: #FF5CA8;   /* 傲娇：品红 */
+  --emo-calm:     #2DD4BF;   /* 平静：青绿 */
+  --astr-emotion-glow: var(--emo-calm);
+
+  /* —— 字体 —— */
+  --font-sans: "Geist", "Inter", "HarmonyOS Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  /* 字号阶梯（rem，基准 16px）*/
+  --text-xs:   0.75rem;   /* 12 — 元信息/时间戳 */
+  --text-sm:   0.875rem;  /* 14 — 次要文本 */
+  --text-base: 1rem;      /* 16 — 正文 */
+  --text-lg:   1.25rem;   /* 20 — 小标题 */
+  --text-xl:   1.75rem;   /* 28 — 区块标题 */
+  --text-2xl:  2.5rem;    /* 40 — 页面主标题 */
+  --text-3xl:  4rem;      /* 64 — 营销页 hero */
+  --leading-body: 1.6;
+  --leading-head: 1.2;
+
+  /* 间距：8pt 网格 */
+  --space-1: 4px;  --space-2: 8px;   --space-3: 12px; --space-4: 16px;
+  --space-6: 24px; --space-8: 32px;  --space-12: 48px; --space-16: 64px; --space-24: 96px;
+
+  /* 圆角 */
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 9999px;
+
+  /* 阴影（分层 elevation）+ 辉光（仅"她"的元素）*/
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --glow-her: var(--astr-accent-glow);   /* 只有 Live2D 卡 / 她的气泡可用 */
+
+  /* z-index 层级（锁定，禁止随手 9999）*/
+  --z-base: 0; --z-panel: 10; --z-live2d: 20; --z-overlay: 100; --z-toast: 200; --z-modal: 300;
+
+  /* —— 动效 token —— */
+  --dur-fast:   120ms;   /* 微反馈：hover、按下 */
+  --dur-base:   200ms;   /* 常规状态转移 */
+  --dur-slow:   320ms;   /* 面板进出、布局变化（上限）*/
+  --dur-breath: 4000ms;  /* 呼吸循环 */
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);    /* expo-out，进场 */
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);   /* 对称过渡 */
+}
+
+/* —— 亮色主题（白天工作场景，备选）：data-theme="light" 挂在 <html> —— */
+[data-theme="light"] {
+  --astr-bg:              #F7F8FB;
+  --astr-surface:         #FFFFFF;
+  --astr-surface-2:       #EEF0F5;
+  --astr-hairline:        rgba(10, 11, 15, 0.08);
+  --astr-hairline-strong: rgba(10, 11, 15, 0.14);
+  --astr-text:   #15171E;
+  --astr-text-2: #4A4F5E;
+  --astr-text-3: #8A8F9E;
+  /* 强调色与情绪通道沿用，辉光降透明度 */
+  --astr-accent-glow: 0 0 20px rgba(124, 92, 255, 0.28);
+}
+
+/* 呼吸动画（"会呼吸"准则）：用于情绪光/心跳点/idle 元素 */
+@keyframes astr-breath {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.02); }
+}
+
+/* 可访问性：尊重 prefers-reduced-motion（04 §6 硬要求） */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
