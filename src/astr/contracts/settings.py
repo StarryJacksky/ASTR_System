@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     watchdog_interval_s: int = 30  # 每轮巡检间隔
     watchdog_napcat_container: str = "napcat"  # NapCat 容器名（掉线检测扫其日志）
     watchdog_pending_alert: int = 200  # Redis 消费组 pending 堆积告警阈值
+    watchdog_disk_alert_gb: float = 2.0  # 磁盘剩余低于此（GB）才告警；按当前盘况校准，避免长期噪音
     watchdog_toast: bool = True  # 桌面弹窗告警（best-effort，走 msg.exe）
 
     def _csv(self, raw: str) -> set[str]:

@@ -36,12 +36,20 @@ def _utf8() -> None:
 
 
 def load_golden(path: Path) -> list[dict]:
+    """读金标集；跳过注释行与未填 prompt 的占位行（如待补的记忆场景），避免对空 prompt 浪费生成。"""
     items: list[dict] = []
+    skipped = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("//") or line.startswith("#"):
             continue
-        items.append(json.loads(line))
+        row = json.loads(line)
+        if not str(row.get("prompt", "")).strip():
+            skipped += 1
+            continue
+        items.append(row)
+    if skipped:
+        print(f"（跳过 {skipped} 条未填 prompt 的占位行）", file=sys.stderr)
     return items
 
 

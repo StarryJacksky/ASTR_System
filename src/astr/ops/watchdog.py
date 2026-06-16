@@ -125,7 +125,8 @@ def _check_disk(s: Settings) -> Check:
     try:
         root = Path(s.astr_data_dir).anchor or "D:/"
         free_gb = shutil.disk_usage(root).free / 2**30
-        return Check("disk", free_gb > 5.0, f"{free_gb:.1f} GB free", value=round(free_gb, 1))
+        ok = free_gb > s.watchdog_disk_alert_gb
+        return Check("disk", ok, f"{free_gb:.1f} GB free", value=round(free_gb, 1))
     except Exception as e:  # noqa: BLE001
         return Check("disk", True, f"skip ({type(e).__name__})")
 

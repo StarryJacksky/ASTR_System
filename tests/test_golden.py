@@ -34,6 +34,24 @@ async def test_generate_report_shape(tmp_path) -> None:
     assert rows[0]["scenario_tag"] == "日常闲聊"
 
 
+def test_load_golden_skips_empty_prompt(tmp_path) -> None:
+    golden = tmp_path / "golden.jsonl"
+    golden.write_text(
+        "\n".join(
+            [
+                '// 注释行应跳过',
+                '{"id": "v1", "prompt": "在吗", "scenario_tag": "语音场景"}',
+                '{"id": "m1", "prompt": "", "scenario_tag": "记忆场景"}',  # 占位，应跳过
+                '{"id": "m2", "prompt": "   ", "scenario_tag": "记忆场景"}',  # 仅空白，应跳过
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items = golden_runner.load_golden(golden)
+    assert [r["id"] for r in items] == ["v1"]
+
+
 def test_to_html_self_contained(tmp_path) -> None:
     report = tmp_path / "golden_report.jsonl"
     report.write_text(
