@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Mic, Send } from "lucide-react";
+import { Mic, Send, Settings, X } from "lucide-react";
 import { Panel } from "@/components/astr/Panel";
+import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
 import { Live2DStage } from "@/components/astr/Live2DStage";
 import { ThoughtStream } from "@/components/astr/ThoughtStream";
 import { MessageTimeline } from "@/components/astr/MessageTimeline";
@@ -27,6 +28,7 @@ export default function Cockpit() {
   const { events } = useEventStream(["agent.thought", "soul.decision"]);
   const [userMsgs, setUserMsgs] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
 
   // 情绪 → 环境光（04 §3.2）：她的真实情绪向量驱动整页背光，缓慢变化。
   const glow = soulToGlow(status?.emotion);
@@ -70,7 +72,7 @@ export default function Cockpit() {
   };
 
   return (
-    <div className="flex h-screen flex-col gap-3 p-3">
+    <div className="relative flex h-screen flex-col gap-3 p-3">
       {/* 顶栏 */}
       <header className="flex items-center justify-between rounded-2xl border border-hairline bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2">
@@ -87,8 +89,36 @@ export default function Cockpit() {
           budget={status?.daily_budget_usd ?? null}
           connected={connected}
         />
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="设置"
+            onClick={() => setShowSettings((v) => !v)}
+            className="grid h-8 w-8 place-items-center rounded-lg border border-hairline text-ink-2 transition-colors hover:bg-surface-2"
+          >
+            <Settings size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
       </header>
+
+      {/* 设置浮层：声纹录入（W10-f）*/}
+      {showSettings && (
+        <div className="absolute right-3 top-16 z-[var(--z-overlay)] w-80 rounded-2xl border border-hairline bg-surface p-4 shadow-[var(--shadow-3)]">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-ink">设置 · 声纹</h3>
+            <button
+              type="button"
+              aria-label="关闭"
+              onClick={() => setShowSettings(false)}
+              className="text-ink-3 hover:text-ink"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <VoiceprintPanel />
+        </div>
+      )}
 
       {/* 主区：左聊天，右栏 Live2D / 当前任务·思考 / 圆桌 */}
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_380px]">

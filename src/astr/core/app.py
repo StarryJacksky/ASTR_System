@@ -79,6 +79,10 @@ class EventRequest(BaseModel):
     groups: list[dict] = []
 
 
+class VoiceprintEnrollRequest(BaseModel):
+    clips_wav_b64: list[str]  # 浏览器录的 16-bit mono WAV，base64（W10-f）
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from astr.router.core import route as route_fn
@@ -319,6 +323,57 @@ async def social_self() -> dict:
     from astr.soul import social
 
     return social.load_social(get_settings().soul_name)
+
+
+@app.get("/v1/voiceprint/status")
+async def voiceprint_status() -> dict:
+    """声纹注册状态（W10-f 设置页用）。"""
+    from astr.sensors import voiceprint
+
+    s = get_settings()
+    return {
+        "enrolled": voiceprint.is_enrolled(s.astr_owner_id, s),
+        "model_available": voiceprint.model_available(s),
+        "threshold": s.voiceprint_threshold,
+        "require": s.voice_require_voiceprint,
+    }
+
+
+@app.post("/v1/voiceprint/enroll")
+async def voiceprint_enroll(req: VoiceprintEnrollRequest) -> dict:
+    """从网页录的若干 WAV 片段注册主人声纹（W10-f）。base64 解码→嵌入→存模板。"""
+    import base64
+    import os
+    import tempfile
+
+    from astr.sensors import voiceprint
+
+    s = get_settings()
+    if not voiceprint.model_available(s):
+        return {"ok": False, "error": "声纹模型未就位（先 astr voiceprint download）"}
+    vecs = []
+    for b64 in req.clips_wav_b64:
+        path = None
+        try:
+            raw = base64.b64decode(b64)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp.write(raw)
+                path = tmp.name
+            samples, sr = voiceprint.read_wave(path)
+            vecs.append(voiceprint.embed(samples, sr, s))
+        except Exception as e:  # noqa: BLE001
+            log.warning("voiceprint_clip_failed", error=repr(e))
+        finally:
+            if path and os.path.exists(path):
+                os.unlink(path)
+    if not vecs:
+        return {"ok": False, "error": "没有可用录音（每段说满 3–5 秒、别太轻）"}
+    rc = voiceprint._save_template(s.astr_owner_id, vecs, s, "web")
+    return {
+        "ok": rc == 0,
+        "clips": len(vecs),
+        "enrolled": voiceprint.is_enrolled(s.astr_owner_id, s),
+    }
 
 
 @app.get("/v1/stream")

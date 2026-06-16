@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Live2D 资产（Cubism Core 许可证 + 二进制体积）：不提交，用 scripts/fetch-live2d.mjs 重获取
+/public/live2d/
