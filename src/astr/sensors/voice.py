@@ -90,12 +90,12 @@ class VoiceListener:
         self._recognizer.decode_stream(stream)
         return (stream.result.text or "").strip()
 
-    def _ingest(self, text: str) -> None:
+    def _ingest(self, text: str, user_id: str) -> None:
         try:
             with httpx.Client(timeout=10.0, trust_env=False) as c:
                 c.post(
                     self.s.core_ingest_url,
-                    json={"text": text, "platform": "voice", "user_id": self.s.astr_owner_id},
+                    json={"text": text, "platform": "voice", "user_id": user_id},
                 )
         except Exception as e:  # noqa: BLE001
             log.warning("voice_ingest_failed", error=repr(e))
@@ -124,8 +124,14 @@ class VoiceListener:
                         hit, cmd = _strip_wake(text, self.wake_words)
                         log.info("voice_segment", text=text, wake=hit)
                         if hit and cmd:
-                            print(f"[唤醒] {cmd}")
-                            self._ingest(cmd)
+                            # P1-W9 声纹门：只有匹配主人才以 owner(L2) ingest，否则降级访客(L0)
+                            from astr.sensors import voiceprint
+
+                            user_id, verified_by, score = voiceprint.resolve_speaker(seg, self.sr)
+                            who = "主人" if user_id == self.s.astr_owner_id else "访客(声纹不符)"
+                            print(f"[唤醒|{who}|sim={score:.2f}] {cmd}")
+                            log.info("voice_speaker", user_id=user_id, verified_by=verified_by, score=score)
+                            self._ingest(cmd, user_id)
                         elif hit:
                             print("[唤醒] （只听到名字，说完整点）")
         except KeyboardInterrupt:

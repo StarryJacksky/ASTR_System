@@ -66,6 +66,21 @@ class Settings(BaseSettings):
     astr_l2_user_ids: str = ""  # 额外 L2，如 "telegram:123,qq:456"
     astr_l1_user_ids: str = ""  # L1（半信任）
 
+    # —— 声纹鉴权（P1-W9）：语音入口只有声纹匹配 owner 才升 L2 ——
+    voiceprint_model: Path = Path(
+        "D:/ASTR/embodiments/asr_models/voiceprint/3dspeaker_campplus_sv_zh.onnx"
+    )  # sherpa-onnx 说话人嵌入模型（CAM++ zh，CPU），缺失则降级
+    voiceprint_template_dir: Path = Path("D:/ASTR/ops/voiceprint")  # 注册模板 .npy（访问控制资产，非灵魂）
+    voiceprint_threshold: float = 0.62  # 余弦相似度阈值，>= 判为本人
+    voice_require_voiceprint: bool = False  # True=强制（未注册则拒绝语音）；默认：已注册自动强制、未注册告警放行
+
+    # —— 看门狗 / 浸泡监控（P1-W9）——
+    redis_url: str = "redis://127.0.0.1:6379"
+    watchdog_interval_s: int = 30  # 每轮巡检间隔
+    watchdog_napcat_container: str = "napcat"  # NapCat 容器名（掉线检测扫其日志）
+    watchdog_pending_alert: int = 200  # Redis 消费组 pending 堆积告警阈值
+    watchdog_toast: bool = True  # 桌面弹窗告警（best-effort，走 msg.exe）
+
     def _csv(self, raw: str) -> set[str]:
         return {x.strip() for x in raw.split(",") if x.strip()}
 
@@ -105,6 +120,18 @@ class Settings(BaseSettings):
     @property
     def logs_dir(self) -> Path:
         return self.ops_dir / "logs"
+
+    @property
+    def health_dir(self) -> Path:
+        return self.logs_dir / "health"  # 浸泡 CSV 快照（P1-W9）
+
+    @property
+    def core_status_url(self) -> str:
+        return self.core_ingest_url.replace("/v1/ingest", "/v1/status")
+
+    @property
+    def llama_models_url(self) -> str:
+        return self.local_llm_base.rstrip("/") + "/models"
 
     @property
     def ledger_db(self) -> Path:

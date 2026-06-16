@@ -74,6 +74,47 @@ def _cmd_tts(_: argparse.Namespace) -> int:
     return tts.main()
 
 
+def _cmd_watch(args: argparse.Namespace) -> int:
+    from astr.ops import watchdog
+
+    argv = []
+    if args.interval is not None:
+        argv += ["--interval", str(args.interval)]
+    if args.once:
+        argv += ["--once"]
+    return watchdog.main(argv)
+
+
+def _cmd_voiceprint(args: argparse.Namespace) -> int:
+    from astr.sensors import voiceprint
+
+    if args.vp_action == "download":
+        from astr.sensors.voice_models import download_speaker_model
+
+        return download_speaker_model()
+    if args.vp_action == "enroll":
+        if not args.wavs:
+            print("用法: astr voiceprint enroll <你的录音1.wav> [录音2.wav ...]", file=sys.stderr)
+            return 2
+        name = args.name or voiceprint.get_settings().astr_owner_id
+        return voiceprint.enroll(name, args.wavs)
+    if args.vp_action == "enroll-mic":
+        name = args.name or voiceprint.get_settings().astr_owner_id
+        return voiceprint.enroll_mic(name, n=args.samples, seconds=args.seconds)
+    if args.vp_action == "verify":
+        if not args.wavs:
+            print("用法: astr voiceprint verify <录音.wav>", file=sys.stderr)
+            return 2
+        samples, sr = voiceprint.read_wave(args.wavs[0])
+        matched, score = voiceprint.verify(samples, sr, args.name)
+        print(
+            f"匹配={'是' if matched else '否'}  相似度={score:.3f}  阈值={voiceprint.get_settings().voiceprint_threshold}"
+        )
+        return 0 if matched else 1
+    print("用法: astr voiceprint download|enroll|verify", file=sys.stderr)
+    return 2
+
+
 def _cmd_platform(args: argparse.Namespace) -> int:
     if args.platform_action == "probe":
         from astr.sensors.platform.caps import caps_path, probe
@@ -137,11 +178,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_plat.set_defaults(func=_cmd_platform)
 
     p_voice = sub.add_parser("voice", help="语音输入监听（喊唤醒词→转写→ingest）")
-    p_voice.add_argument("--download", action="store_true", help="下载 SenseVoice + silero_vad 模型")
+    p_voice.add_argument(
+        "--download", action="store_true", help="下载 SenseVoice + silero_vad 模型"
+    )
     p_voice.set_defaults(func=_cmd_voice)
 
     p_tts = sub.add_parser("tts", help="语音输出（订阅 presentation.tts → 合成播放）")
     p_tts.set_defaults(func=_cmd_tts)
+
+    p_watch = sub.add_parser("watch", help="全栈看门狗/浸泡监控（健康巡检 + 掉线告警）")
+    p_watch.add_argument("--interval", type=int, default=None, help="巡检间隔秒")
+    p_watch.add_argument("--once", action="store_true", help="只巡检一轮、打印、退出")
+    p_watch.set_defaults(func=_cmd_watch)
+
+    p_vp = sub.add_parser("voiceprint", help="声纹鉴权（注册主人，语音入口升 L2）")
+    p_vp.add_argument("vp_action", choices=["download", "enroll", "enroll-mic", "verify"])
+    p_vp.add_argument("wavs", nargs="*", help="录音 wav 路径（enroll 可多段，verify 取第一段）")
+    p_vp.add_argument("--name", default=None, help="声纹归属（默认 owner_id）")
+    p_vp.add_argument("--samples", type=int, default=5, help="enroll-mic 录几段（默认5）")
+    p_vp.add_argument("--seconds", type=float, default=4.0, help="enroll-mic 每段秒数（默认4）")
+    p_vp.set_defaults(func=_cmd_voiceprint)
 
     return parser
 
