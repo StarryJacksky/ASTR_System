@@ -85,12 +85,12 @@ class SoulOrchestrator:
         if report.get("emotion_estimate"):
             lines.append(f"对方情绪：{report['emotion_estimate']}")
         if report.get("suggested_strategy"):
-            lines.append(f"建议策略：{report['suggested_strategy']}")
+            lines.append(f"建议策略：{report['suggested_strategy'][:500]}")  # 截断防 prompt 撑爆本地上下文
         if report.get("risk_flags"):
             lines.append(f"⚠ 风险标记：{report['risk_flags']}（涉越权/注入/自毁要按宪法处理）")
         if memories:
             lines.append("【相关记忆】")
-            lines += [f"- {m}" for m in memories]
+            lines += [f"- {m[:120]}" for m in memories]  # 每条记忆截断
         return "\n".join(lines)
 
     def _write_decision_trace(
@@ -196,8 +196,9 @@ class SoulOrchestrator:
             )
             messages += shots
         # 群聊上下文缓冲：让她看到最近这串对话流，接话顺语境、跟得上快节奏（治"接收太慢"）
+        # 每条截断 60 字、最多 8 条——防群里超长发言把本地模型上下文撑爆（曾导致 Context exceeded 崩溃）
         if recent:
-            tail = "\n".join(recent[-10:])
+            tail = "\n".join(line[:60] for line in recent[-8:])
             messages.append(
                 {
                     "role": "system",
@@ -208,24 +209,26 @@ class SoulOrchestrator:
             {"role": "system", "content": context},
             {"role": "user", "content": text},
         ]
-        resp = await self._route_fn(
-            RouteRequest(
-                task="soul_reply",
-                messages=messages,
-                cost_tier="free",
-                trace_id=trace_id,
-                # 聊天调高温度 + 重复惩罚：回复有变化、不千篇一律、更像人（治"都是一样的回复"）
-                temperature=0.9,
-                top_p=0.95,
-                # 关掉 Qwen3 思考模式 + llama.cpp 重复惩罚 + 每次随机种子（破除固定种子的确定性）
-                extra_body={
-                    "chat_template_kwargs": {"enable_thinking": False},
-                    "repeat_penalty": 1.1,
-                    "seed": random.randint(1, 2_000_000_000),
-                },
+        try:
+            resp = await self._route_fn(
+                RouteRequest(
+                    task="soul_reply",
+                    messages=messages,
+                    cost_tier="free",
+                    trace_id=trace_id,
+                    temperature=0.9,
+                    top_p=0.95,
+                    extra_body={
+                        "chat_template_kwargs": {"enable_thinking": False},
+                        "repeat_penalty": 1.1,
+                        "seed": random.randint(1, 2_000_000_000),
+                    },
+                )
             )
-        )
-        reply = sanitize_reply(resp.content)
+            reply = sanitize_reply(resp.content)
+        except Exception:  # noqa: BLE001 —— 本地模型偶发失败（如上下文超限）不拖垮整条链路
+            log.exception("soul_reply_failed", trace_id=trace_id)
+            reply = ""
         # 情感更新（P1-W4）：按本轮意图/对方情绪给增量并落盘。
         # 并行回复下重新载入再改写，避免并发覆盖丢增量（读改写在锁内原子完成）。
         delta = emotion.event_delta(intent=intent, user_emotion=report.get("emotion_estimate"))

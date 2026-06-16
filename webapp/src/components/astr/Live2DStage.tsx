@@ -74,7 +74,7 @@ export function Live2DStage({ emotionLabel }: { emotionLabel?: string }) {
         await loadCubismCore();
         const PIXI = await import("pixi.js");
         (window as unknown as { PIXI?: unknown }).PIXI = PIXI; // pixi-live2d-display 需能找到 pixi
-        const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+        const { Live2DModel } = await import("pixi-live2d-display-lipsyncpatch/cubism4");
         // pixi-live2d-display 自带一套 @pixi/* 类型，与本项目 pixi v7 类型树不同源，
         // 运行时兼容但 TS 视为不同类型——在两处跨树边界做窄转换。
         type TickerArg = Parameters<typeof Live2DModel.registerTicker>[0];

@@ -4,7 +4,7 @@
 
 param(
     [string]$Model = "D:\ASTR\embodiments\base_models\Qwen3-8B-Q4_K_M.gguf",
-    [int]$Ctx = 8192,
+    [int]$Ctx = 16384,   # 16k：给 MoA纪要+群上下文+few-shot+记忆留余量，防 Context exceeded（Qwen3-8B 原生支持更长）
     [int]$Port = 8080,
     [int]$NGL = 99   # 全部层进 GPU；若显存不足把这个调小
 )
