@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     moa_short_max_chars: int = 10  # < 此当量：短消息→2 席
     moa_long_min_chars: int = 30  # >= 此当量：长消息→6 席全开；中间→4 席
 
+    # —— 后台教学圆桌（她下场→管家教她→她修订，产 P4 学习数据）——
+    teaching_enabled: bool = True  # 实质消息回完后，后台跑"草稿→批评→修订"教学环（不卡回复）
+    teaching_critics: int = 3  # 参与批评的管家席位数（cheap 档，背景数据用）
+
     # —— 平台 ——
     telegram_bot_token: str = ""
 

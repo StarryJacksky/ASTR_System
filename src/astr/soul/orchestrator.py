@@ -72,6 +72,7 @@ class SoulOrchestrator:
         except Exception:  # noqa: BLE001
             self._persona = ""
         self._state_lock = asyncio.Lock()  # 并行回复时保护情绪/关系文件的读改写（防竞争）
+        self._bg_tasks: set[asyncio.Task] = set()  # 后台教学任务句柄（防被 GC）
 
     def _build_context(
         self,
@@ -290,6 +291,9 @@ class SoulOrchestrator:
                 people.apply_valence(self.soul_name, speaker, -0.3 if risks else 0.06)
         except Exception:  # noqa: BLE001
             log.exception("experience_record_failed", trace_id=trace_id)
+        # 后台教学圆桌：实质消息（MoA 开过会）回完后，后台跑"批评→修订"产 P4 学习数据，不卡回复
+        if get_settings().teaching_enabled and reply and report.get("seats"):
+            self._spawn_teaching(text, reply, report, trace_id)
         log.info(
             "soul_respond",
             trace_id=trace_id,
@@ -298,6 +302,18 @@ class SoulOrchestrator:
             model_key=resp.model_key,
         )
         return reply, report
+
+    def _spawn_teaching(self, text: str, reply: str, report: dict, trace_id: str) -> None:
+        """把教学环丢到后台跑（不 await），句柄存集合防 GC，完成即移除。"""
+        from astr.soul import teaching
+
+        task = asyncio.create_task(
+            teaching.teach(
+                self.soul_name, text, reply, report, route_fn=self._route_fn, trace_id=trace_id
+            )
+        )
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
 
     @property
     def cbg_file(self) -> Path:
