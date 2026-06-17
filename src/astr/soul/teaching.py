@@ -115,7 +115,11 @@ async def teach(
 ) -> dict:
     """后台教学一轮：批评草稿 → 修订 → 落学习数据。返回 {revision, changed, critiques}。"""
     s = get_settings()
-    critics = _CRITIC_ORDER[: max(1, s.teaching_critics)]
+    # 批评 = 同一桌圆桌：让②里给过开局理解的那帮管家来看她的草稿（而非另挑一批）。
+    seat_names = [
+        str(x.get("seat")) for x in (report.get("seats") or []) if x.get("seat") in SEAT_TASKS
+    ]
+    critics = (seat_names or _CRITIC_ORDER)[: max(1, s.teaching_critics)]
     openings = report.get("summary", "")
     results = await asyncio.gather(
         *(_critique(seat, user_text, draft, openings, route_fn, trace_id) for seat in critics)

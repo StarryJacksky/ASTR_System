@@ -30,13 +30,17 @@ async def _fake_route(req: RouteRequest) -> RouteResponse:
 async def test_teach_writes_learning_data(tmp_path, monkeypatch) -> None:
     s = _settings(tmp_path)
     monkeypatch.setattr(teaching, "get_settings", lambda: s)
-    report = {"summary": "[emotion] 安抚 | [logic] 点破", "seats": [{"seat": "emotion"}]}
+    # 开局两席 → 批评应由同一桌（emotion+logic）来，而非另挑一批
+    report = {
+        "summary": "[emotion] 安抚 | [logic] 点破",
+        "seats": [{"seat": "emotion"}, {"seat": "logic"}],
+    }
 
     out = await teaching.teach(
         "justin", "我好累啊", "草稿回复", report, route_fn=_fake_route, trace_id="t1"
     )
     assert out["changed"] is True
-    assert len(out["critiques"]) == 2  # teaching_critics=2
+    assert len(out["critiques"]) == 2  # 同桌两席（teaching_critics=2 上限内）
 
     base = tmp_path / "soul_package" / "justin"
     tj = base / "behavior_capsules" / "teaching.jsonl"
