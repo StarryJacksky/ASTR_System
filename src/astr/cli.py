@@ -137,7 +137,19 @@ def _cmd_memory(args: argparse.Namespace) -> int:
         semantic.add_pending(args.soul_name, args.fact)
         print(f"已加入待批：{args.fact}")
         return 0
-    print("用法: astr memory review | astr memory add <事实>", file=sys.stderr)
+    if args.memory_action == "graph":
+        from astr.memory import graph
+
+        path = graph.build_graphml(args.soul_name)
+        print(f"图记忆已重建：{path}")
+        return 0
+    if args.memory_action == "lorebook":
+        from astr.memory import lorebook
+
+        n = lorebook.sync_from_semantic(args.soul_name)
+        print(f"世界书已从语义事实同步 {n} 条：{lorebook.lorebook_path(args.soul_name)}")
+        return 0
+    print("用法: astr memory review|add <事实>|graph|lorebook", file=sys.stderr)
     return 2
 
 
@@ -164,7 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_core.set_defaults(func=_cmd_core)
 
     p_mem = sub.add_parser("memory", help="语义记忆（待批队列）")
-    p_mem.add_argument("memory_action", choices=["review", "add"])
+    p_mem.add_argument("memory_action", choices=["review", "add", "graph", "lorebook"])
     p_mem.add_argument("fact", nargs="?", default="")
     p_mem.add_argument("--soul-name", default="justin")
     p_mem.set_defaults(func=_cmd_memory)

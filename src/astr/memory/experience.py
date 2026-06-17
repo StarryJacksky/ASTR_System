@@ -24,6 +24,8 @@ from astr.soul.engagement import INTEREST_TERMS
 
 log = structlog.get_logger("astr.memory.experience")
 
+_graph_counter = 0  # 每 8 条经验重建一次图记忆（relations.graphml），不在每轮回复路径上空耗
+
 
 def _log_path(soul_name: str):
     return get_settings().soul_package_dir / soul_name / "behavior_capsules" / "experience.jsonl"
@@ -61,6 +63,16 @@ def record(
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    # 节流重建图记忆（实体共现 → relations.graphml），失败不影响主链路
+    global _graph_counter
+    _graph_counter += 1
+    if _graph_counter % 8 == 0:
+        try:
+            from astr.memory import graph
+
+            graph.build_graphml(soul_name)
+        except Exception:  # noqa: BLE001
+            log.warning("graphml_build_failed")
 
 
 def _read(soul_name: str, limit: int = 2000) -> list[dict]:

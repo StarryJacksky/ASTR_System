@@ -15,9 +15,12 @@ interface PixiModel {
   x: number;
   y: number;
   destroy: () => void;
+  expression: (index: number | string) => void;
+  internalModel: { coreModel: { setParameterValueById: (id: string, v: number) => void } };
 }
 interface PixiApp {
   screen: { width: number; height: number };
+  ticker: { add: (fn: () => void) => void };
   destroy: (removeView: boolean) => void;
 }
 
@@ -73,10 +76,21 @@ function FallbackOrb({ emotionLabel }: { emotionLabel?: string }) {
 
 /** Live2D 舞台（04 §5）：自托管 Haru 模型 + 情绪背光。取景（缩放/偏移）由 useLive2D 实时驱动，
  *  设置面板可拖动调整并存 localStorage。加载失败优雅降级到呼吸占位。 */
-export function Live2DStage({ emotionLabel }: { emotionLabel?: string }) {
+export function Live2DStage({
+  emotionLabel,
+  expressionIndex,
+  speakSignal,
+  speakMs,
+}: {
+  emotionLabel?: string;
+  expressionIndex?: number; // 情绪 → 表情切换（Haru F01–F08）
+  speakSignal?: number; // 每次她开口变一次（触发嘴动）
+  speakMs?: number; // 这次说话的估计时长
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const modelRef = useRef<PixiModel | null>(null);
   const appRef = useRef<PixiApp | null>(null);
+  const speakingUntilRef = useRef(0);
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const scale = useLive2D((s) => s.scale);
@@ -130,6 +144,20 @@ export function Live2DStage({ emotionLabel }: { emotionLabel?: string }) {
         applyTransform();
         setReady(true);
 
+        // 嘴动：每帧（模型自身更新之后）覆盖 ParamMouthOpenY；说话窗口内一开一合，否则归零。
+        app.ticker.add(() => {
+          const m = modelRef.current;
+          if (!m) return;
+          const now = performance.now();
+          const open =
+            now < speakingUntilRef.current ? 0.45 + 0.45 * Math.abs(Math.sin(now / 55)) : 0;
+          try {
+            m.internalModel.coreModel.setParameterValueById("ParamMouthOpenY", open);
+          } catch {
+            /* 该模型无此参数则忽略 */
+          }
+        });
+
         const ro = new ResizeObserver(() => applyTransform());
         if (canvas.parentElement) ro.observe(canvas.parentElement);
         cleanup = () => {
@@ -156,6 +184,22 @@ export function Live2DStage({ emotionLabel }: { emotionLabel?: string }) {
     applyTransform();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale, x, y, ready]);
+
+  // 情绪 → 表情切换。
+  useEffect(() => {
+    if (!ready || expressionIndex == null) return;
+    try {
+      modelRef.current?.expression(expressionIndex);
+    } catch {
+      /* 表情不可用忽略 */
+    }
+  }, [expressionIndex, ready]);
+
+  // 她开口 → 开启一段嘴动窗口。
+  useEffect(() => {
+    if (!speakSignal) return;
+    speakingUntilRef.current = performance.now() + (speakMs ?? 1500);
+  }, [speakSignal, speakMs]);
 
   if (failed) return <FallbackOrb emotionLabel={emotionLabel} />;
 

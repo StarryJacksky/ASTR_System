@@ -24,12 +24,16 @@ const EMO_LABEL: Record<string, string> = {
   calm: "平静",
 };
 
+// 情绪 → Haru 表情下标（F01–F08，切换可见即可）。
+const EXPR_INDEX: Record<string, number> = { calm: 0, excited: 1, tsundere: 2, lonely: 3 };
+
 export default function Cockpit() {
   const { status, connected } = useStatus();
   const { events } = useEventStream(["agent.thought", "soul.decision"]);
   const [userMsgs, setUserMsgs] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [speak, setSpeak] = useState<{ sig: number; ms: number }>({ sig: 0, ms: 0 });
 
   // 情绪 → 环境光（04 §3.2）：她的真实情绪向量驱动整页背光，缓慢变化。
   const glow = soulToGlow(status?.emotion);
@@ -37,11 +41,12 @@ export default function Cockpit() {
     applyEmotionGlow(glow);
   }, [glow]);
 
-  const emotionLabel = useMemo(() => {
+  const dominant = useMemo(() => {
     const entries = Object.entries(glow) as [keyof typeof glow, number][];
-    const top = entries.sort((a, b) => b[1] - a[1])[0];
-    return top ? EMO_LABEL[top[0]] : undefined;
+    return entries.sort((a, b) => b[1] - a[1])[0]?.[0];
   }, [glow]);
+  const emotionLabel = dominant ? EMO_LABEL[dominant] : undefined;
+  const expressionIndex = dominant ? EXPR_INDEX[dominant] : 0;
 
   // 她的回复来自 SSE 的 soul.decision；用户消息本地乐观追加，按时间合并。
   const messages = useMemo<ChatMessage[]>(() => {
@@ -55,6 +60,19 @@ export default function Cockpit() {
       }));
     return [...userMsgs, ...her].sort((a, b) => a.ts - b.ts);
   }, [events, userMsgs]);
+
+  // 她最新一条回复变化时 → 触发一段嘴动（时长按字数估）。
+  const lastHerId = useMemo(() => {
+    const her = messages.filter((m) => m.role === "qiuqiu");
+    return her[her.length - 1]?.id;
+  }, [messages]);
+  useEffect(() => {
+    if (!lastHerId) return;
+    const her = messages.filter((m) => m.role === "qiuqiu");
+    const text = her[her.length - 1]?.text ?? "";
+    setSpeak({ sig: Date.now(), ms: Math.min(6000, Math.max(900, text.length * 130)) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastHerId]);
 
   const send = async () => {
     const text = draft.trim();
@@ -132,7 +150,12 @@ export default function Cockpit() {
 
         <div className="flex min-h-0 flex-col gap-3">
           <Panel glow className="shrink-0">
-            <Live2DStage emotionLabel={emotionLabel} />
+            <Live2DStage
+              emotionLabel={emotionLabel}
+              expressionIndex={expressionIndex}
+              speakSignal={speak.sig}
+              speakMs={speak.ms}
+            />
             <div className="mt-3">
               <EmotionGauge emotion={status?.emotion ?? null} />
             </div>
