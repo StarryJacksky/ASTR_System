@@ -15,6 +15,7 @@ from astr.contracts.events import (
     AgentThoughtPayload,
     Event,
     EventType,
+    MoaReportPayload,
     PresentationTtsPayload,
     SoulDecisionPayload,
 )
@@ -71,6 +72,20 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
             event,
             EventType.AGENT_THOUGHT,
             AgentThoughtPayload(text=report["summary"], stage="moa").model_dump(),
+        )
+    if report.get("seats"):  # 管家团各席发言 → 网页圆桌面板
+        await _emit(
+            bus,
+            event,
+            EventType.MOA_REPORT,
+            MoaReportPayload(
+                summary=report.get("summary", ""),
+                seats=report.get("seats", []),
+                intent=report.get("intent"),
+                emotion_estimate=report.get("emotion_estimate"),
+                suggested_strategy=report.get("suggested_strategy", ""),
+                risk_flags=report.get("risk_flags", []),
+            ).model_dump(),
         )
 
     emotion = report.get("emotion_estimate")

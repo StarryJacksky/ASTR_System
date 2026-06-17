@@ -30,7 +30,12 @@ from astr.ops import ledger
 
 log = structlog.get_logger("astr.core")
 
-SSE_TYPES = [EventType.AGENT_THOUGHT, EventType.SOUL_DECISION, EventType.PRESENTATION_EXPRESS]
+SSE_TYPES = [
+    EventType.AGENT_THOUGHT,
+    EventType.SOUL_DECISION,
+    EventType.PRESENTATION_EXPRESS,
+    EventType.MOA_REPORT,
+]
 
 
 class IngestRequest(BaseModel):
@@ -117,6 +122,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="ASTR Core", version="0.1.0", lifespan=lifespan)
+
+# 允许网页（本地 dev 端口）跨源直连——SSE 经 Next 代理会被缓冲、事件到不了浏览器，故让网页直连本接口。
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3100",
+        "http://127.0.0.1:3100",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/v1/ingest", response_model=IngestResponse)

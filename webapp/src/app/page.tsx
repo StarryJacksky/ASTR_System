@@ -16,7 +16,7 @@ import { StatusBar } from "@/components/astr/StatusBar";
 import { ThemeToggle } from "@/components/astr/ThemeToggle";
 import { useEventStream, useStatus } from "@/lib/useCore";
 import { applyEmotionGlow } from "@/lib/emotion";
-import { soulToGlow, type ChatMessage } from "@/lib/types";
+import { soulToGlow, type ChatMessage, type RoundtableTurn } from "@/lib/types";
 
 const EMO_LABEL: Record<string, string> = {
   lonely: "孤独",
@@ -28,9 +28,19 @@ const EMO_LABEL: Record<string, string> = {
 // 情绪 → Haru 表情下标（F01–F08，切换可见即可）。
 const EXPR_INDEX: Record<string, number> = { calm: 0, excited: 1, tsundere: 2, lonely: 3 };
 
+// 管家席位 → 圆桌可读名（哪家模型）。
+const SEAT_LABEL: Record<string, string> = {
+  emotion: "情感·Claude",
+  logic: "逻辑·GPT",
+  retrieval: "检索·Gemini",
+  zeitgeist: "时事·Grok",
+  librarian: "图书馆·Qwen",
+  devil: "红队·DeepSeek",
+};
+
 export default function Cockpit() {
   const { status, connected } = useStatus();
-  const { events } = useEventStream(["agent.thought", "soul.decision"]);
+  const { events } = useEventStream(["agent.thought", "soul.decision", "moa.report"]);
   const [userMsgs, setUserMsgs] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -64,6 +74,17 @@ export default function Cockpit() {
       }));
     return [...userMsgs, ...her].sort((a, b) => a.ts - b.ts);
   }, [events, userMsgs]);
+
+  // 智囊团圆桌：取最近一份 moa.report 的各席发言 → 圆桌面板。
+  const roundtable = useMemo<RoundtableTurn[]>(() => {
+    const last = [...events].reverse().find((e) => e.type === "moa.report");
+    if (!last) return [];
+    const seats = (last.payload.seats as Array<Record<string, unknown>>) || [];
+    return seats.map((s) => ({
+      seat: SEAT_LABEL[String(s.seat)] ?? String(s.seat),
+      content: String(s.suggested_strategy || s.intent || ""),
+    }));
+  }, [events]);
 
   // 她最新一条回复变化时 → 触发一段嘴动（时长按字数估）。
   const lastHerId = useMemo(() => {
@@ -200,7 +221,7 @@ export default function Cockpit() {
             <ThoughtStream events={events} />
           </Panel>
           <Panel title="智囊团圆桌" className="hidden min-h-0 flex-1 lg:flex">
-            <RoundtableFeed turns={[]} />
+            <RoundtableFeed turns={roundtable} />
           </Panel>
         </div>
       </main>

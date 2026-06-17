@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { AstrEvent, CoreStatus } from "./types";
 
-// 经 next.config 代理到 Core :8300（同源，免 CORS）。Core 不在线时各 hook 优雅降级。
+// 普通 fetch 经 next.config 代理到 Core :8300（同源，免 CORS）。Core 不在线时各 hook 优雅降级。
 const CORE = "/api/core";
+// SSE 必须直连 Core：经 Next 代理流式会被缓冲、事件到不了浏览器（Core 已开 CORS）。
+const SSE_BASE = process.env.NEXT_PUBLIC_ASTR_CORE ?? "http://127.0.0.1:8300";
 
 /** 轮询 /v1/status：躯壳/成本/情绪向量。connected=false 表示 Core 未连上。 */
 export function useStatus(intervalMs = 4000) {
@@ -59,7 +61,7 @@ export function useEventStream(types: string[], max = 60) {
     };
 
     const connect = () => {
-      es = new EventSource(`${CORE}/v1/stream`);
+      es = new EventSource(`${SSE_BASE}/v1/stream`);
       es.onopen = () => setLive(true);
       // Core 用具名事件（event: agent.thought 等），逐类监听
       for (const t of typesRef.current) es.addEventListener(t, onMsg as EventListener);
