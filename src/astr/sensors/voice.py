@@ -139,6 +139,62 @@ class VoiceListener:
         return 0
 
 
+_asr_recognizer = None  # 网页语音输入复用的离线识别器（懒加载、进程内复用）
+
+
+def asr_available() -> bool:
+    s = get_settings()
+    return (s.voice_asr_model_dir / "model.int8.onnx").exists() and (
+        s.voice_asr_model_dir / "tokens.txt"
+    ).exists()
+
+
+def _get_asr_recognizer():
+    global _asr_recognizer
+    if _asr_recognizer is None:
+        import sherpa_onnx
+
+        s = get_settings()
+        _asr_recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+            model=str(s.voice_asr_model_dir / "model.int8.onnx"),
+            tokens=str(s.voice_asr_model_dir / "tokens.txt"),
+            use_itn=True,
+            num_threads=2,
+        )
+    return _asr_recognizer
+
+
+def transcribe_wav_b64(wav_b64: str) -> str:
+    """base64 WAV → 文本（SenseVoice，本地 CPU）。网页语音按钮用。模型缺失/失败返回空串。"""
+    if not asr_available():
+        log.warning("asr_model_missing")
+        return ""
+    import base64
+    import os
+    import tempfile
+
+    from astr.sensors import voiceprint
+
+    path = None
+    try:
+        raw = base64.b64decode(wav_b64)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp.write(raw)
+            path = tmp.name
+        samples, sr = voiceprint.read_wave(path)
+        rec = _get_asr_recognizer()
+        stream = rec.create_stream()
+        stream.accept_waveform(sr, samples)
+        rec.decode_stream(stream)
+        return (stream.result.text or "").strip()
+    except Exception as e:  # noqa: BLE001
+        log.warning("transcribe_failed", error=repr(e))
+        return ""
+    finally:
+        if path and os.path.exists(path):
+            os.unlink(path)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     if "--download" in args:

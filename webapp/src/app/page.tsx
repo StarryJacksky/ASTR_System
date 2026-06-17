@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Send, Settings, X } from "lucide-react";
+import { startRecorder, type MicRecorder } from "@/lib/wav";
 import { Panel } from "@/components/astr/Panel";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
 import { Live2DControls } from "@/components/astr/Live2DControls";
@@ -34,6 +35,9 @@ export default function Cockpit() {
   const [draft, setDraft] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [speak, setSpeak] = useState<{ sig: number; ms: number }>({ sig: 0, ms: 0 });
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const recorderRef = useRef<MicRecorder | null>(null);
 
   // 情绪 → 环境光（04 §3.2）：她的真实情绪向量驱动整页背光，缓慢变化。
   const glow = soulToGlow(status?.emotion);
@@ -74,8 +78,8 @@ export default function Cockpit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastHerId]);
 
-  const send = async () => {
-    const text = draft.trim();
+  const send = async (textArg?: string) => {
+    const text = (textArg ?? draft).trim();
     if (!text) return;
     setUserMsgs((m) => [...m, { id: `u-${Date.now()}`, role: "user", text, ts: Date.now() }]);
     setDraft("");
@@ -87,6 +91,38 @@ export default function Cockpit() {
       });
     } catch {
       /* Core 离线：消息已在本地显示，发送静默失败 */
+    }
+  };
+
+  // 麦克风按钮：按一下开始录、再按停止 → 本地 SenseVoice 转写 → 直接发出。
+  const toggleMic = async () => {
+    if (recording) {
+      const rec = recorderRef.current;
+      recorderRef.current = null;
+      setRecording(false);
+      if (!rec) return;
+      setTranscribing(true);
+      try {
+        const wav = await rec.stop();
+        const r = await fetch("/api/core/v1/voice/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wav_b64: wav }),
+        });
+        const data = (await r.json()) as { text?: string };
+        if (data.text?.trim()) await send(data.text.trim());
+      } catch {
+        /* 转写失败/Core 离线：忽略 */
+      } finally {
+        setTranscribing(false);
+      }
+    } else {
+      try {
+        recorderRef.current = await startRecorder(16000);
+        setRecording(true);
+      } catch {
+        /* 麦克风权限被拒：忽略 */
+      }
     }
   };
 
@@ -176,20 +212,34 @@ export default function Cockpit() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder={connected ? "和秋秋说点什么…" : "Core 离线 —— 消息只在本地显示"}
+          placeholder={
+            recording
+              ? "录音中…再点一下麦克风停止"
+              : transcribing
+                ? "转写中…"
+                : connected
+                  ? "和秋秋说点什么…"
+                  : "Core 离线 —— 消息只在本地显示"
+          }
           className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
         />
         <button
           type="button"
-          aria-label="语音"
-          className="grid h-9 w-9 place-items-center rounded-xl border border-hairline text-ink-2 transition-colors hover:bg-surface-2"
+          aria-label={recording ? "停止录音" : "语音输入"}
+          onClick={toggleMic}
+          disabled={transcribing}
+          className={`grid h-9 w-9 place-items-center rounded-xl border transition-colors disabled:opacity-50 ${
+            recording
+              ? "animate-pulse border-danger text-danger"
+              : "border-hairline text-ink-2 hover:bg-surface-2"
+          }`}
         >
           <Mic size={16} />
         </button>
         <button
           type="button"
           aria-label="发送"
-          onClick={send}
+          onClick={() => send()}
           className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-ink transition-transform hover:scale-[1.03]"
         >
           <Send size={16} />

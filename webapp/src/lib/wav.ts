@@ -1,33 +1,49 @@
 "use client";
 
-/** 录一段麦克风音频，返回 base64 的 16-bit mono WAV（送 Core /v1/voiceprint/enroll）。
- *  采样率用浏览器实际值，Core 侧 sherpa 会重采样到模型需要的频率，无需前端强制 16k。 */
-export async function recordWavBase64(seconds: number): Promise<string> {
+/** 麦克风录音 → 16-bit mono WAV（base64）。声纹注册与网页语音输入共用。
+ *  采样率默认 16k（SenseVoice / 声纹模型的目标频率）。 */
+
+export interface MicRecorder {
+  stop: () => Promise<string>; // 停止并返回 base64 WAV
+}
+
+/** 开始录音，返回可 stop() 的句柄（按下开始、再按停止用）。 */
+export async function startRecorder(sampleRate = 16000): Promise<MicRecorder> {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
   });
-  const ctx = new AudioContext();
+  const ctx = new AudioContext({ sampleRate });
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(4096, 1, 1);
   const chunks: Float32Array[] = [];
   proc.onaudioprocess = (e) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
   src.connect(proc);
   proc.connect(ctx.destination);
-  await new Promise((r) => setTimeout(r, Math.round(seconds * 1000)));
-  proc.disconnect();
-  src.disconnect();
-  stream.getTracks().forEach((t) => t.stop());
-  const sampleRate = ctx.sampleRate;
-  await ctx.close();
 
-  const total = chunks.reduce((s, c) => s + c.length, 0);
-  const pcm = new Float32Array(total);
-  let off = 0;
-  for (const c of chunks) {
-    pcm.set(c, off);
-    off += c.length;
-  }
-  return wavBase64(pcm, sampleRate);
+  return {
+    async stop() {
+      proc.disconnect();
+      src.disconnect();
+      stream.getTracks().forEach((t) => t.stop());
+      const sr = ctx.sampleRate;
+      await ctx.close();
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      const pcm = new Float32Array(total);
+      let off = 0;
+      for (const c of chunks) {
+        pcm.set(c, off);
+        off += c.length;
+      }
+      return wavBase64(pcm, sr);
+    },
+  };
+}
+
+/** 录固定时长（声纹注册用）。 */
+export async function recordWavBase64(seconds: number, sampleRate = 16000): Promise<string> {
+  const rec = await startRecorder(sampleRate);
+  await new Promise((r) => setTimeout(r, Math.round(seconds * 1000)));
+  return rec.stop();
 }
 
 function wavBase64(pcm: Float32Array, sampleRate: number): string {

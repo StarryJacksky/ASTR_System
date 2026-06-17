@@ -83,6 +83,10 @@ class VoiceprintEnrollRequest(BaseModel):
     clips_wav_b64: list[str]  # 浏览器录的 16-bit mono WAV，base64（W10-f）
 
 
+class TranscribeRequest(BaseModel):
+    wav_b64: str  # 网页语音按钮录的 16k WAV，base64
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from astr.router.core import route as route_fn
@@ -323,6 +327,15 @@ async def social_self() -> dict:
     from astr.soul import social
 
     return social.load_social(get_settings().soul_name)
+
+
+@app.post("/v1/voice/transcribe")
+async def voice_transcribe(req: TranscribeRequest) -> dict:
+    """网页语音按钮：base64 WAV → 本地 SenseVoice 转写文本。CPU 阻塞，丢线程池。"""
+    from astr.sensors.voice import transcribe_wav_b64
+
+    text = await asyncio.to_thread(transcribe_wav_b64, req.wav_b64)
+    return {"text": text}
 
 
 @app.get("/v1/voiceprint/status")
