@@ -114,21 +114,28 @@ class PromptBootAdapter(EmbodimentAdapter):
         )
         return handle
 
+    def _ensure_collection(self):
+        if self._collection is None:
+            self._collection = chunks_loader.build_collection(
+                self.soul_name, embedder=self._embedder
+            )
+        return self._collection
+
     def recall(self, query: str, k: int = 6) -> list[str]:
         """检索相关记忆原文，供 soul 层拼上下文。"""
-        if self._collection is None:
-            self._collection = chunks_loader.build_collection(
-                self.soul_name, embedder=self._embedder
-            )
-        return chunks_loader.recall(self._collection, query, k=k, embedder=self._embedder)
+        return chunks_loader.recall(self._ensure_collection(), query, k=k, embedder=self._embedder)
 
-    def add_memory(self, text: str, doc_id: str) -> None:
+    def recall_meta(self, query: str, k: int = 6) -> list[tuple[str, dict[str, str]]]:
+        """检索 (记忆原文, 出处)，供 soul 层在群里给私密记忆打谨慎标记。"""
+        return chunks_loader.recall_meta(
+            self._ensure_collection(), query, k=k, embedder=self._embedder
+        )
+
+    def add_memory(self, text: str, doc_id: str, metadata: dict[str, str] | None = None) -> None:
         """把一条新记忆增量写入向量库（episodic_writer 用），下次 recall 即可命中。"""
-        if self._collection is None:
-            self._collection = chunks_loader.build_collection(
-                self.soul_name, embedder=self._embedder
-            )
-        chunks_loader.add_chunk(self._collection, doc_id, text, embedder=self._embedder)
+        chunks_loader.add_chunk(
+            self._ensure_collection(), doc_id, text, embedder=self._embedder, metadata=metadata
+        )
 
     def derive_weights(self) -> str:
         raise NotImplementedError(

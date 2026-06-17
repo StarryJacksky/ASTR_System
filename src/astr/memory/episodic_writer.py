@@ -41,8 +41,14 @@ async def _summarize(user_text: str, reply: str, trace_id: str, route_fn: RouteF
         return user_text[:100]
 
 
-def _chunk_text(summary: str, user_text: str, reply: str, ts: datetime) -> str:
-    return f"<!-- ts={ts.isoformat()} -->\n摘要：{summary}\n\n用户：{user_text}\n露怀秋：{reply}\n"
+def _chunk_text(
+    summary: str, user_text: str, reply: str, ts: datetime, visibility: str, origin: str
+) -> str:
+    # 出处写进 chunk 首部注释（真身），向量库重建据此还原（chunks_loader.parse_provenance）
+    prov = f"ts={ts.isoformat()} visibility={visibility}"
+    if origin:
+        prov += f" origin={origin}"
+    return f"<!-- {prov} -->\n摘要：{summary}\n\n用户：{user_text}\n露怀秋：{reply}\n"
 
 
 async def write_turn(
@@ -53,8 +59,12 @@ async def write_turn(
     *,
     route_fn: RouteFn,
     adapter=None,
+    visibility: str = "private",
+    origin: str = "",
 ) -> str:
-    """记一轮对话：摘要 + 落 chunk 文件 + 增量入向量库。返回 chunk 路径。"""
+    """记一轮对话：摘要 + 落 chunk 文件 + 增量入向量库。返回 chunk 路径。
+    visibility: private（私聊/主人/网页）/ group（群里）——群里检索到 private 记忆会被提示谨慎。
+    origin: 出处标识（平台:群/人），供日后主体性板块判断分寸。"""
     ts = datetime.now(UTC)
     summary = await _summarize(user_text, reply, trace_id, route_fn)
 
@@ -63,12 +73,21 @@ async def write_turn(
     month_dir.mkdir(parents=True, exist_ok=True)
     doc_id = f"{soul_name}:episodic:{trace_id}"
     path = month_dir / f"{trace_id}.md"
-    text = _chunk_text(summary, user_text, reply, ts)
+    text = _chunk_text(summary, user_text, reply, ts, visibility, origin)
     path.write_text(text, encoding="utf-8")
 
     if adapter is not None:
+        meta = {"visibility": visibility, "ts": ts.isoformat()}
+        if origin:
+            meta["origin"] = origin
         # 摘要+原文一起入库，检索时短查询也能命中
-        adapter.add_memory(f"{summary}。{user_text} {reply}", doc_id)
+        adapter.add_memory(f"{summary}。{user_text} {reply}", doc_id, metadata=meta)
 
-    log.info("episodic_written", trace_id=trace_id, summary=summary[:40], path=str(path))
+    log.info(
+        "episodic_written",
+        trace_id=trace_id,
+        summary=summary[:40],
+        visibility=visibility,
+        path=str(path),
+    )
     return str(path)

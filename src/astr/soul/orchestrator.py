@@ -73,7 +73,14 @@ class SoulOrchestrator:
             self._persona = ""
         self._state_lock = asyncio.Lock()  # 并行回复时保护情绪/关系文件的读改写（防竞争）
 
-    def _build_context(self, report: dict, memories: list[str], intent: str | None = None) -> str:
+    def _build_context(
+        self,
+        report: dict,
+        memories: list[str],
+        intent: str | None = None,
+        *,
+        private_in_group: bool = False,
+    ) -> str:
         lines = ["【智囊团圆桌纪要 · 供参考，用你自己的话，别照搬】"]
         if intent in ("tool", "research", "coding"):
             lines.append(
@@ -91,6 +98,11 @@ class SoulOrchestrator:
         if memories:
             lines.append("【相关记忆】")
             lines += [f"- {m[:120]}" for m in memories]  # 每条记忆截断
+            if private_in_group:
+                lines.append(
+                    "⚠ 带〔私下/别处〕标记的记忆来自和主人的私聊或别的地方，现在是在群里——"
+                    "除非确有必要且不会伤到主人，否则别主动抖出来；具体分寸你自己把握。"
+                )
         return "\n".join(lines)
 
     def _write_decision_trace(
@@ -162,8 +174,20 @@ class SoulOrchestrator:
                 "suggested_strategy": "",
                 "risk_flags": [],
             }
-        memories = self.adapter.recall(text, k=6)
-        context = self._build_context(report, memories, intent)
+        # 记忆检索带出处：群里被检索到的私密记忆打〔私下/别处〕标记 + 谨慎提示（软，不硬封）
+        if hasattr(self.adapter, "recall_meta"):
+            mem_pairs = self.adapter.recall_meta(text, k=6)
+        else:
+            mem_pairs = [(d, {}) for d in self.adapter.recall(text, k=6)]
+        memories: list[str] = []
+        private_in_group = False
+        for doc, meta in mem_pairs:
+            if is_group and (meta or {}).get("visibility", "private") == "private":
+                memories.append(f"〔私下/别处〕{doc}")
+                private_in_group = True
+            else:
+                memories.append(doc)
+        context = self._build_context(report, memories, intent, private_in_group=private_in_group)
         messages = [
             {"role": "system", "content": self.handle.system_prompt},
             {"role": "system", "content": mood.to_prompt_line()},
@@ -253,6 +277,8 @@ class SoulOrchestrator:
                 trace_id,
                 route_fn=self._route_fn,
                 adapter=self.adapter,
+                visibility="group" if is_group else "private",
+                origin=speaker or "",
             )
         except Exception:  # noqa: BLE001
             log.exception("episodic_write_failed", trace_id=trace_id)
