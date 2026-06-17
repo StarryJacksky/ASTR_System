@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Mic, Send, Settings, X } from "lucide-react";
 import { Panel } from "@/components/astr/Panel";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
+import { Live2DControls } from "@/components/astr/Live2DControls";
 import { Live2DStage } from "@/components/astr/Live2DStage";
 import { ThoughtStream } from "@/components/astr/ThoughtStream";
 import { MessageTimeline } from "@/components/astr/MessageTimeline";
@@ -104,7 +105,7 @@ export default function Cockpit() {
 
       {/* 设置浮层：声纹录入（W10-f）*/}
       {showSettings && (
-        <div className="absolute right-3 top-16 z-[var(--z-overlay)] w-80 rounded-2xl border border-hairline bg-surface p-4 shadow-[var(--shadow-3)]">
+        <div className="absolute left-3 top-16 z-[var(--z-overlay)] max-h-[82vh] w-80 overflow-auto rounded-2xl border border-hairline bg-surface p-4 shadow-[var(--shadow-3)]">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-medium text-ink">设置 · 声纹</h3>
             <button
@@ -117,6 +118,9 @@ export default function Cockpit() {
             </button>
           </div>
           <VoiceprintPanel />
+          <div className="my-4 border-t border-hairline" />
+          <h3 className="mb-3 text-sm font-medium text-ink">看板娘取景</h3>
+          <Live2DControls />
         </div>
       )}
 
