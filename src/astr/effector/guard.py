@@ -30,6 +30,38 @@ _POLICY_PATH = Path(__file__).with_name("guard_policy.yaml")
 Decision = Literal["allow", "confirm", "deny"]
 Track = Literal["headless", "visual", "mcp", "browser"]
 
+# 铁律 3 的延伸裁定：后台可以往危险名单里"加"，永远不能"减"到这条底线以下——
+# 若 UI 能把 payment 从危险类别勾掉，"任何档位不豁免"就成了空话。与 guard_policy.yaml 默认值对齐。
+CORE_DANGEROUS_CATEGORIES = frozenset(
+    {
+        "file_delete",
+        "send_message",
+        "send_email",
+        "payment",
+        "install_uninstall",
+        "system_settings",
+        "credential_access",
+        "external_upload",
+    }
+)
+CORE_DANGEROUS_KEYWORDS = frozenset(
+    {
+        "删除",
+        "卸载",
+        "格式化",
+        "转账",
+        "付款",
+        "汇款",
+        "发送邮件",
+        "rm",
+        "del",
+        "format",
+        "sudo",
+        "regedit",
+        "shutdown",
+    }
+)
+
 # 零宽与不可见字符（注入者常用来拆散关键词）
 _ZERO_WIDTH = re.compile(r"[​-‏⁠﻿­]")
 
@@ -88,10 +120,44 @@ class GuardPolicy(BaseModel):
     max_steps_per_task: int = 25
 
     @classmethod
-    def load(cls, path: Path | None = None) -> GuardPolicy:
+    def load(cls, path: Path | None = None, overlay: Path | None = None) -> GuardPolicy:
+        """基线 yaml（入库、带注释）+ 本地覆盖层（后台 UI 写回目标，见 default_overlay_path）。
+
+        覆盖层是"文件为真身"原则（07 §4）下机器写回的落点：基线文件保持人手可读可版本控制，
+        UI 改的旋钮只进覆盖层，两者合并成有效策略。
+        """
         p = path or _POLICY_PATH
         data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        ov_path = overlay if overlay is not None else default_overlay_path()
+        if ov_path.exists():
+            ov = yaml.safe_load(ov_path.read_text(encoding="utf-8")) or {}
+            data = merge_policy(data, ov)
         return cls.model_validate(data)
+
+
+def default_overlay_path() -> Path:
+    """后台写回的覆盖层落点（数据目录，不进代码仓）。"""
+    from astr.contracts.settings import get_settings
+
+    return get_settings().astr_data_dir / "effector" / "guard_policy.local.yaml"
+
+
+def merge_policy(base: dict, overlay: dict) -> dict:
+    """覆盖层合并：顶层字段整体替换，dict 字段（dangerous_actions/audit）逐键合并。"""
+    out = dict(base)
+    for k, v in overlay.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = {**out[k], **v}
+        else:
+            out[k] = v
+    return out
+
+
+def enforce_floor(dangerous: dict[str, list[str]]) -> dict[str, list[str]]:
+    """危险名单只增不减的底线执法：任何写入都并回核心类别/关键词。"""
+    cats = set(dangerous.get("categories", [])) | CORE_DANGEROUS_CATEGORIES
+    kws = set(dangerous.get("keyword_blacklist", [])) | CORE_DANGEROUS_KEYWORDS
+    return {"categories": sorted(cats), "keyword_blacklist": sorted(kws)}
 
 
 class Guard:
@@ -105,6 +171,19 @@ class Guard:
         self._kw_norm = [
             normalize(k) for k in self.policy.dangerous_actions.get("keyword_blacklist", [])
         ]
+
+    def reload(self, policy: GuardPolicy | None = None) -> None:
+        """热重载策略（后台改完即生效）。持有本 Guard 的 Toolkit/Headless 无需重建。"""
+        self.policy = policy or GuardPolicy.load()
+        self.log_dir = Path(str(self.policy.audit.get("log_dir", self.log_dir)))
+        self._kw_norm = [
+            normalize(k) for k in self.policy.dangerous_actions.get("keyword_blacklist", [])
+        ]
+        log.info(
+            "guard_policy_reloaded",
+            approval_mode=self.policy.approval_mode,
+            headless_scope=self.policy.headless_scope,
+        )
 
     # ---------- 危险判定 ----------
 
@@ -237,11 +316,16 @@ class Guard:
 
 
 __all__ = [
+    "CORE_DANGEROUS_CATEGORIES",
+    "CORE_DANGEROUS_KEYWORDS",
     "UNTRUSTED_PREAMBLE",
     "ActionRequest",
     "Guard",
     "GuardPolicy",
     "GuardVerdict",
+    "default_overlay_path",
+    "enforce_floor",
+    "merge_policy",
     "normalize",
     "wrap_untrusted",
 ]

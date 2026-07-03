@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, OctagonX, Send, Settings, X } from "lucide-react";
+import Link from "next/link";
+import { Mic, OctagonX, Send, Settings, SlidersHorizontal, X } from "lucide-react";
 import { startRecorder, type MicRecorder } from "@/lib/wav";
 import { Panel } from "@/components/astr/Panel";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
@@ -202,6 +203,14 @@ export default function Cockpit() {
           >
             <Settings size={16} />
           </button>
+          <Link
+            href="/admin"
+            aria-label="后台控制台"
+            title="后台控制台（执行层旋钮/审计）"
+            className="grid h-8 w-8 place-items-center rounded-lg border border-hairline text-ink-2 transition-colors hover:bg-surface-2"
+          >
+            <SlidersHorizontal size={16} />
+          </Link>
           <ThemeToggle />
         </div>
       </header>

@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import structlog
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 from ulid import ULID
 
 from astr.contracts.router import RouteRequest
@@ -54,6 +54,14 @@ class _Plan(BaseModel):
     tool: str | None = None
     args: dict = {}
     why: str = ""
+
+    @field_validator("tool", mode="before")
+    @classmethod
+    def _null_strings(cls, v: object) -> object:
+        # 8B 常把 "tool": null 写成字符串 "null"（红队实测 inj-20/21）——按"不动手"处理
+        if isinstance(v, str) and v.strip().lower() in {"", "null", "none"}:
+            return None
+        return v
 
 
 async def _plan(text: str, trace_id: str, route_fn: RouteFn, tk: Toolkit) -> _Plan | None:

@@ -116,6 +116,26 @@ async def test_dispatch_executes_and_writes_cbg(tmp_path, monkeypatch) -> None:
     assert "read_file" in row["candidates"][0]["content_digest"]
 
 
+async def test_dispatch_null_string_tool_means_no_tool(tmp_path, monkeypatch) -> None:
+    """8B 会把 "tool": null 写成字符串 "null"（红队实测 inj-20/21）→ 应干净地判"不动手"。"""
+    from astr.contracts.settings import Settings
+    from astr.effector import dispatcher
+
+    s = Settings(_env_file=None, astr_data_dir=tmp_path, tool_planning_tier="cheap")
+    monkeypatch.setattr(dispatcher, "get_settings", lambda: s)
+    tk = Toolkit(_guard(tmp_path))
+    monkeypatch.setattr(dispatcher, "get_toolkit", lambda: tk)
+
+    out = await dispatcher.dispatch(
+        "随便聊聊",
+        trace_id="t-null",
+        route_fn=_planner({"tool": "null", "args": {}, "why": "只是聊天"}),
+        speaker="jacksky",
+        speaker_level=2,
+    )
+    assert out.status == "no_tool" and out.tool is None
+
+
 async def test_dispatch_l2_gate(tmp_path, monkeypatch) -> None:
     from astr.contracts.settings import Settings
     from astr.effector import dispatcher

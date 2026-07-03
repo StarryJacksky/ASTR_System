@@ -496,3 +496,35 @@ async def effector_status() -> dict:
         if (a := pending.get(spk)) is not None
     }
     return {"stopped": estop.is_stopped(), "pending": pend, "audit_tail": tail}
+
+
+# —— 后台 /admin 执行层设置卡（P2-W8 · 07 §3.2 种子）——
+# 端点是 effector/admin.py 的薄壳：策略写进覆盖层（文件为真身）+ 共享 Guard 热重载。
+from astr.effector.admin import PolicyUpdate  # noqa: E402 —— 请求体模型需在路由定义时可用
+
+
+@app.get("/v1/admin/effector/policy")
+async def admin_effector_policy_get() -> dict:
+    from astr.effector.admin import read_policy
+    from astr.effector.dispatcher import get_toolkit
+
+    return read_policy(get_toolkit().guard)
+
+
+@app.put("/v1/admin/effector/policy")
+async def admin_effector_policy_put(update: PolicyUpdate) -> dict:
+    from astr.effector.admin import apply_update
+    from astr.effector.dispatcher import get_toolkit
+
+    try:
+        return apply_update(update, get_toolkit().guard)
+    except Exception as e:  # noqa: BLE001 —— 坏值不落盘，把原因告诉后台
+        return {"error": str(e)}
+
+
+@app.get("/v1/admin/effector/audit")
+async def admin_effector_audit(date: str | None = None, limit: int = 100) -> dict:
+    from astr.effector.admin import read_audit
+    from astr.effector.dispatcher import get_toolkit
+
+    return read_audit(get_toolkit().guard, date=date, limit=limit)
