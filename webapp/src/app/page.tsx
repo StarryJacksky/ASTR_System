@@ -7,16 +7,15 @@ import { Panel } from "@/components/astr/Panel";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
 import { Live2DControls } from "@/components/astr/Live2DControls";
 import { Live2DStage } from "@/components/astr/Live2DStage";
-import { ThoughtStream } from "@/components/astr/ThoughtStream";
+import { LifeArea } from "@/components/astr/LifeArea";
 import { MessageTimeline } from "@/components/astr/MessageTimeline";
-import { RoundtableFeed } from "@/components/astr/RoundtableFeed";
 import { EmotionGauge } from "@/components/astr/EmotionGauge";
 import { VoiceVisualizer } from "@/components/astr/VoiceVisualizer";
 import { StatusBar } from "@/components/astr/StatusBar";
 import { ThemeToggle } from "@/components/astr/ThemeToggle";
-import { useEventStream, useStatus } from "@/lib/useCore";
+import { useEventStream, useReplyStream, useStatus } from "@/lib/useCore";
 import { applyEmotionGlow } from "@/lib/emotion";
-import { soulToGlow, type ChatMessage, type RoundtableTurn } from "@/lib/types";
+import { soulToGlow, type ChatMessage } from "@/lib/types";
 
 const EMO_LABEL: Record<string, string> = {
   lonely: "孤独",
@@ -28,26 +27,19 @@ const EMO_LABEL: Record<string, string> = {
 // 情绪 → Haru 表情下标（F01–F08，切换可见即可）。
 const EXPR_INDEX: Record<string, number> = { calm: 0, excited: 1, tsundere: 2, lonely: 3 };
 
-// 管家席位 → 圆桌可读名（哪家模型）。
-const SEAT_LABEL: Record<string, string> = {
-  emotion: "情感·Claude",
-  logic: "逻辑·GPT",
-  retrieval: "检索·Gemini",
-  zeitgeist: "时事·Grok",
-  librarian: "图书馆·Qwen",
-  devil: "红队·DeepSeek",
-};
-
 export default function Cockpit() {
   const { status, connected } = useStatus();
   const { events } = useEventStream(["agent.thought", "soul.decision", "moa.report"]);
+  const { text: streamText, active: streamActive } = useReplyStream();
   const [userMsgs, setUserMsgs] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [lifeExpanded, setLifeExpanded] = useState(false);
   const [speak, setSpeak] = useState<{ sig: number; ms: number }>({ sig: 0, ms: 0 });
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const recorderRef = useRef<MicRecorder | null>(null);
+  const lastFlapRef = useRef(0);
 
   // 情绪 → 环境光（04 §3.2）：她的真实情绪向量驱动整页背光，缓慢变化。
   const glow = soulToGlow(status?.emotion);
@@ -63,6 +55,7 @@ export default function Cockpit() {
   const expressionIndex = dominant ? EXPR_INDEX[dominant] : 0;
 
   // 她的回复来自 SSE 的 soul.decision；用户消息本地乐观追加，按时间合并。
+  // 正在流式生成的那句以临时气泡追加在末尾（99 #19①），soul.decision 终稿到达即替换。
   const messages = useMemo<ChatMessage[]>(() => {
     const her: ChatMessage[] = events
       .filter((e) => e.type === "soul.decision" && e.payload.reply_text)
@@ -72,28 +65,38 @@ export default function Cockpit() {
         text: String(e.payload.reply_text ?? ""),
         ts: new Date(e.ts).getTime(),
       }));
-    return [...userMsgs, ...her].sort((a, b) => a.ts - b.ts);
-  }, [events, userMsgs]);
+    const merged = [...userMsgs, ...her].sort((a, b) => a.ts - b.ts);
+    if (streamText) {
+      merged.push({
+        id: "streaming",
+        role: "qiuqiu",
+        text: streamText + (streamActive ? " ▍" : ""),
+        ts: Number.MAX_SAFE_INTEGER,
+      });
+    }
+    return merged;
+  }, [events, userMsgs, streamText, streamActive]);
 
-  // 智囊团圆桌：取最近一份 moa.report 的各席发言 → 圆桌面板。
-  const roundtable = useMemo<RoundtableTurn[]>(() => {
-    const last = [...events].reverse().find((e) => e.type === "moa.report");
-    if (!last) return [];
-    const seats = (last.payload.seats as Array<Record<string, unknown>>) || [];
-    return seats.map((s) => ({
-      seat: SEAT_LABEL[String(s.seat)] ?? String(s.seat),
-      content: String(s.suggested_strategy || s.intent || ""),
-    }));
-  }, [events]);
+  // 嘴型随流动（99 #19①）：流帧到达即触发短促嘴动（节流 350ms，避免每帧重启动画）。
+  useEffect(() => {
+    if (!streamActive || !streamText) return;
+    const now = Date.now();
+    if (now - lastFlapRef.current > 350) {
+      lastFlapRef.current = now;
+      setSpeak({ sig: now, ms: 550 });
+    }
+  }, [streamText, streamActive]);
 
-  // 她最新一条回复变化时 → 触发一段嘴动（时长按字数估）。
+  // 整段到达（未走流式/QQ 等场景）：她最新一条回复变化时 → 按字数估一段嘴动。
   const lastHerId = useMemo(() => {
-    const her = messages.filter((m) => m.role === "qiuqiu");
+    const her = messages.filter((m) => m.role === "qiuqiu" && m.id !== "streaming");
     return her[her.length - 1]?.id;
   }, [messages]);
   useEffect(() => {
     if (!lastHerId) return;
-    const her = messages.filter((m) => m.role === "qiuqiu");
+    // 刚流完的句子嘴已经动过了，不再补一段长嘴动
+    if (Date.now() - lastFlapRef.current < 1500) return;
+    const her = messages.filter((m) => m.role === "qiuqiu" && m.id !== "streaming");
     const text = her[her.length - 1]?.text ?? "";
     setSpeak({ sig: Date.now(), ms: Math.min(6000, Math.max(900, text.length * 130)) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,11 +220,16 @@ export default function Cockpit() {
               <EmotionGauge emotion={status?.emotion ?? null} />
             </div>
           </Panel>
-          <Panel title="当前任务 · 思考流" className="min-h-0 flex-1">
-            <ThoughtStream events={events} />
-          </Panel>
-          <Panel title="智囊团圆桌" className="hidden min-h-0 flex-1 lg:flex">
-            <RoundtableFeed turns={roundtable} />
+          <Panel
+            title="生活区"
+            className={`min-h-0 ${lifeExpanded ? "flex-[3]" : "flex-1"}`}
+          >
+            <LifeArea
+              events={events}
+              activity={status?.activity}
+              expanded={lifeExpanded}
+              onToggle={() => setLifeExpanded((v) => !v)}
+            />
           </Panel>
         </div>
       </main>

@@ -22,6 +22,7 @@ class EventType(StrEnum):
     AGENT_THOUGHT = "agent.thought"  # 思考过程片段（给网页 SSE）
     MOA_REPORT = "moa.report"  # 智囊团结构化分析
     SOUL_DECISION = "soul.decision"  # 灵魂层最终决断（要说/要做什么）
+    SOUL_STREAM = "soul.stream"  # 回复的逐字增量帧（99 #19①：驾驶舱流式输出）
     EFFECTOR_ACTION = "effector.action"  # 执行层动作意图
     EFFECTOR_RESULT = "effector.result"  # 动作结果 + 截图引用
     PRESENTATION_TTS = "presentation.tts"  # 待合成语音文本 + emotion_tag
@@ -84,7 +85,19 @@ class AgentThoughtPayload(BaseModel):
     """type == agent.thought：给网页 SSE 的思考片段。"""
 
     text: str
-    stage: str | None = None  # "moa"/"recall"/"compose"...
+    stage: str | None = None  # "moa"/"recall"/"compose"/"discussion"...
+    seat: str | None = None  # stage=="discussion" 时的发言者（管家席位名或"秋秋"）
+
+
+class SoulStreamPayload(BaseModel):
+    """type == soul.stream：回复文本的增量帧。done=True 的终帧不含文本。
+
+    终稿仍以 soul.decision 为准（流帧是未 sanitize 的原始增量，QQ 桥等只认 decision）。
+    """
+
+    delta: str = ""
+    seq: int = 0
+    done: bool = False
 
 
 class MoaReportPayload(BaseModel):
@@ -194,6 +207,7 @@ PAYLOAD_MODELS: dict[EventType, type[BaseModel]] = {
     EventType.AGENT_THOUGHT: AgentThoughtPayload,
     EventType.MOA_REPORT: MoaReportPayload,
     EventType.SOUL_DECISION: SoulDecisionPayload,
+    EventType.SOUL_STREAM: SoulStreamPayload,
     EventType.EFFECTOR_ACTION: EffectorActionPayload,
     EventType.EFFECTOR_RESULT: EffectorResultPayload,
     EventType.PRESENTATION_TTS: PresentationTtsPayload,

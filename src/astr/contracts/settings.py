@@ -43,9 +43,12 @@ class Settings(BaseSettings):
     moa_short_max_chars: int = 10  # < 此当量：短消息→2 席
     moa_long_min_chars: int = 30  # >= 此当量：长消息→6 席全开；中间→4 席
 
-    # —— 后台教学圆桌（她下场→管家教她→她修订，产 P4 学习数据）——
-    teaching_enabled: bool = True  # 实质消息回完后，后台跑"草稿→批评→修订"教学环（不卡回复）
+    # —— L2 研讨（08 §3：线索批评→她答辩→修订，产 P4 学习数据；后台跑不卡回复）——
+    teaching_enabled: bool = True  # 实质消息回完后，后台跑 L2 研讨
     teaching_critics: int = 3  # 参与批评的管家席位数（cheap 档，背景数据用）
+    advisor_memory_enabled: bool = True  # 师承档案（08 §3）：管家对她的持久记忆，注入席位 prompt
+    advisor_distill_threshold: int = 12  # 交手条目攒够此数 → 本地蒸馏进画像（滚动压缩）
+    stream_enabled: bool = True  # 回复逐字流（soul.stream 增量帧，99 #19①）；失败自动回退整段
 
     # —— 平台 ——
     telegram_bot_token: str = ""

@@ -33,6 +33,7 @@ log = structlog.get_logger("astr.core")
 SSE_TYPES = [
     EventType.AGENT_THOUGHT,
     EventType.SOUL_DECISION,
+    EventType.SOUL_STREAM,
     EventType.PRESENTATION_EXPRESS,
     EventType.MOA_REPORT,
 ]
@@ -426,15 +427,20 @@ async def stream() -> StreamingResponse:
 
 @app.get("/v1/status")
 async def status() -> dict:
-    """当前躯壳、当日花费、预算（情绪向量 P1-W4 接入）。"""
-    from astr.soul import emotion
+    """当前躯壳、当日花费、预算、情绪向量、她此刻的生活状态（生活区数据源）。"""
+    from astr.soul import emotion, life
 
     s = get_settings()
     mood = emotion.decayed(emotion.load(s.soul_name))
+    try:
+        activity = life.to_prompt_line(s.soul_name)
+    except Exception:  # noqa: BLE001 —— 生活状态读取失败不拦状态接口
+        activity = ""
     return {
         "soul_name": s.soul_name,
         "local_llm_model": s.local_llm_model,
         "cost_today_usd": round(ledger.today_total_usd(), 6),
         "daily_budget_usd": s.astr_daily_budget_usd,
         "emotion": mood.model_dump(mode="json"),
+        "activity": activity,
     }

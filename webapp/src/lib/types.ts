@@ -8,6 +8,8 @@ export interface CoreStatus {
   cost_today_usd: number;
   daily_budget_usd: number;
   emotion: SoulEmotion;
+  /** 她此刻的生活状态一句话（life.py，生活区显示） */
+  activity?: string;
 }
 
 /** soul/emotion.py 的情绪向量（P1-W4）。各分量 0..1。 */
@@ -57,4 +59,15 @@ export interface RoundtableTurn {
   seat: string;
   content: string;
   isHost?: boolean;
+}
+
+/** 生活区一条动态（LifeArea：思考/开局观点/研讨发言/独白 的统一时间线）。 */
+export interface LifeItem {
+  id: string;
+  ts: number;
+  /** thought=思考流 | moa=开局观点 | discussion=幕僚房研讨 | intent=意图 */
+  kind: "thought" | "moa" | "discussion" | "intent";
+  /** discussion 时的发言者（席位名或「秋秋」） */
+  seat?: string;
+  text: string;
 }

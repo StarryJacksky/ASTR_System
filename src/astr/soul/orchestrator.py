@@ -135,8 +135,14 @@ class SoulOrchestrator:
         speaker_level: int = 0,
         is_group: bool = False,
         recent: list[str] | None = None,
+        stream_sink: Callable[[str], Awaitable[None]] | None = None,
+        discussion_emit: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> tuple[str, dict]:
-        """对一句话作答，返回 (回复文本, 圆桌纪要)。speaker 是说话人 id；recent 是群里最近几条（接话语境）。"""
+        """对一句话作答，返回 (回复文本, 圆桌纪要)。speaker 是说话人 id；recent 是群里最近几条（接话语境）。
+
+        stream_sink：给到则本地作答走流式，每段增量回调一次（99 #19①）；失败自动回退整段。
+        discussion_emit：给到则后台 L2 研讨的每条发言实时外发（生活区绷字）。
+        """
         trace_id = trace_id or new_trace_id()
         # 群成员上下文：记一次互动，取对方画像
         person_line = ""
@@ -165,6 +171,7 @@ class SoulOrchestrator:
                 route_fn=self._route_fn,
                 persona=self._persona,
                 situation="\n".join(situation_parts),
+                soul_name=self.soul_name,  # 师承档案注入席位（08 §3）
             )
         else:
             report = {
@@ -234,26 +241,41 @@ class SoulOrchestrator:
             {"role": "system", "content": context},
             {"role": "user", "content": text},
         ]
-        try:
-            resp = await self._route_fn(
-                RouteRequest(
-                    task="soul_reply",
-                    messages=messages,
-                    cost_tier="free",
-                    trace_id=trace_id,
-                    temperature=0.9,
-                    top_p=0.95,
-                    extra_body={
-                        "chat_template_kwargs": {"enable_thinking": False},
-                        "repeat_penalty": 1.1,
-                        "seed": random.randint(1, 2_000_000_000),
-                    },
-                )
-            )
-            reply = sanitize_reply(resp.content)
-        except Exception:  # noqa: BLE001 —— 本地模型偶发失败（如上下文超限）不拖垮整条链路
-            log.exception("soul_reply_failed", trace_id=trace_id)
-            reply = ""
+        reply_req = RouteRequest(
+            task="soul_reply",
+            messages=messages,
+            cost_tier="free",
+            trace_id=trace_id,
+            temperature=0.9,
+            top_p=0.95,
+            extra_body={
+                "chat_template_kwargs": {"enable_thinking": False},
+                "repeat_penalty": 1.1,
+                "seed": random.randint(1, 2_000_000_000),
+            },
+        )
+        reply = ""
+        resp: RouteResponse | None = None
+        # 流式优先（99 #19①）：增量帧边生成边回调；流帧是原始文本，终稿以 sanitize 后为准
+        if stream_sink is not None and get_settings().stream_enabled:
+            try:
+                from astr.router.core import route_stream
+
+                parts: list[str] = []
+                async for delta in route_stream(reply_req):
+                    parts.append(delta)
+                    await stream_sink(delta)
+                reply = sanitize_reply("".join(parts))
+            except Exception:  # noqa: BLE001 —— 流式失败回退整段，不牺牲可靠性
+                log.warning("soul_reply_stream_failed_fallback", trace_id=trace_id)
+                reply = ""
+        if not reply:
+            try:
+                resp = await self._route_fn(reply_req)
+                reply = sanitize_reply(resp.content)
+            except Exception:  # noqa: BLE001 —— 本地模型偶发失败（如上下文超限）不拖垮整条链路
+                log.exception("soul_reply_failed", trace_id=trace_id)
+                reply = ""
         # 情感更新（P1-W4）：按本轮意图/对方情绪给增量并落盘。
         # 并行回复下重新载入再改写，避免并发覆盖丢增量（读改写在锁内原子完成）。
         delta = emotion.event_delta(intent=intent, user_emotion=report.get("emotion_estimate"))
@@ -291,25 +313,39 @@ class SoulOrchestrator:
                 people.apply_valence(self.soul_name, speaker, -0.3 if risks else 0.06)
         except Exception:  # noqa: BLE001
             log.exception("experience_record_failed", trace_id=trace_id)
-        # 后台教学圆桌：实质消息（MoA 开过会）回完后，后台跑"批评→修订"产 P4 学习数据，不卡回复
+        # 后台 L2 研讨（08 §3）：实质消息回完后，线索批评→她答辩→修订，产 P4 学习数据，不卡回复
         if get_settings().teaching_enabled and reply and report.get("seats"):
-            self._spawn_teaching(text, reply, report, trace_id)
+            self._spawn_discussion(text, reply, report, trace_id, emit=discussion_emit)
         log.info(
             "soul_respond",
             trace_id=trace_id,
             decision=dec_id,
-            degraded=resp.degraded,
-            model_key=resp.model_key,
+            degraded=resp.degraded if resp is not None else False,
+            model_key=resp.model_key if resp is not None else "local-stream",
         )
         return reply, report
 
-    def _spawn_teaching(self, text: str, reply: str, report: dict, trace_id: str) -> None:
-        """把教学环丢到后台跑（不 await），句柄存集合防 GC，完成即移除。"""
-        from astr.soul import teaching
+    def _spawn_discussion(
+        self,
+        text: str,
+        reply: str,
+        report: dict,
+        trace_id: str,
+        *,
+        emit: Callable[[str, str], Awaitable[None]] | None = None,
+    ) -> None:
+        """把 L2 研讨丢到后台跑（不 await），句柄存集合防 GC，完成即移除。"""
+        from astr.soul import discussion
 
         task = asyncio.create_task(
-            teaching.teach(
-                self.soul_name, text, reply, report, route_fn=self._route_fn, trace_id=trace_id
+            discussion.discuss(
+                self.soul_name,
+                text,
+                reply,
+                report,
+                route_fn=self._route_fn,
+                trace_id=trace_id,
+                emit=emit,
             )
         )
         self._bg_tasks.add(task)

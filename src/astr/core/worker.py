@@ -18,6 +18,7 @@ from astr.contracts.events import (
     MoaReportPayload,
     PresentationTtsPayload,
     SoulDecisionPayload,
+    SoulStreamPayload,
 )
 from astr.soul.intent import classify_intent
 from astr.soul.orchestrator import SoulOrchestrator
@@ -56,6 +57,25 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         log.info("utterance_observed_silently", trace_id=event.trace_id)
         return
 
+    # 流式增量帧（99 #19①）：网页气泡逐字生长、Live2D 嘴型随流动；终稿仍以 soul.decision 为准
+    seq = 0
+
+    async def _stream_sink(delta: str) -> None:
+        nonlocal seq
+        seq += 1
+        await _emit(
+            bus, event, EventType.SOUL_STREAM, SoulStreamPayload(delta=delta, seq=seq).model_dump()
+        )
+
+    # L2 研讨实时外发（08 §3）：管家与她的每条讨论发言流进生活区
+    async def _discussion_emit(seat: str, text_: str) -> None:
+        await _emit(
+            bus,
+            event,
+            EventType.AGENT_THOUGHT,
+            AgentThoughtPayload(text=text_, stage="discussion", seat=seat).model_dump(),
+        )
+
     reply, report = await orch.respond(
         text,
         trace_id=event.trace_id,
@@ -64,7 +84,13 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
         speaker_level=event.auth.level,
         is_group=bool(event.payload.get("is_group")),
         recent=event.payload.get("recent") or None,
+        stream_sink=_stream_sink,
+        discussion_emit=_discussion_emit,
     )
+    if seq:  # 发过流帧才补终帧（告诉前端"这句说完了"）
+        await _emit(
+            bus, event, EventType.SOUL_STREAM, SoulStreamPayload(seq=seq + 1, done=True).model_dump()
+        )
 
     if report.get("summary"):
         await _emit(

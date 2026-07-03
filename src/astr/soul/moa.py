@@ -60,6 +60,16 @@ _ROLE_NAMES = {
     "devil": "唱反调的红队/风险审计员",
 }
 
+# 席位气质签名（08 §3）：不同气质产生不同角度的批评，生活区里读起来像幕僚房不像会议纪要。
+SEAT_STYLE = {
+    "emotion": "细腻但不肉麻，最先察觉她话里藏的情绪，说话温和、句尾常带体贴的余地",
+    "logic": "咬文嚼字的老学究，容不得半点逻辑跳跃，说话短促、爱用'第一/第二'",
+    "retrieval": "较真的档案员，只信查得到的东西，口头禅是'出处呢'",
+    "zeitgeist": "满嘴梗的冲浪选手，嗅觉灵，说话跳脱但一针见血",
+    "librarian": "温吞的老图书馆员，中文语感极好，纠错时慢条斯理但不留情面",
+    "devil": "毒舌但心软的红队佬，专挑最疼的地方戳，戳完会补一句怎么改",
+}
+
 # 让席位先认清要为谁献策——策略才贴秋秋的人设，而不是悬空的通用建议
 _PERSONA_HEADER = "你是 露怀秋（秋秋）的幕后参谋。先认清她是谁，据此献策，策略必须贴合她的人设：\n"
 
@@ -87,11 +97,18 @@ def select_seats(text: str) -> tuple[list[str], CostTier]:
     return ["emotion", "logic", "retrieval", "zeitgeist", "librarian", "devil"], "balanced"
 
 
-def _build_messages(seat: str, text: str, persona: str = "", situation: str = "") -> list[dict]:
+def _build_messages(
+    seat: str, text: str, persona: str = "", situation: str = "", advisor_note: str = ""
+) -> list[dict]:
     instruction = _JSON_INSTRUCTION.format(role=_ROLE_NAMES[seat])
     sys_parts: list[str] = []
     if persona:
         sys_parts.append(_PERSONA_HEADER + persona)
+    style = SEAT_STYLE.get(seat)
+    if style:
+        sys_parts.append(f"你的气质：{style}。")
+    if advisor_note:  # 师承档案（08 §3）：你不是第一次见她
+        sys_parts.append("【你与她的师承】\n" + advisor_note)
     if situation:
         sys_parts.append("【当前情境】\n" + situation)
     sys_parts.append(instruction)
@@ -124,6 +141,7 @@ async def _run_seat(
     route_fn: RouteFn,
     persona: str = "",
     situation: str = "",
+    advisor_note: str = "",
 ) -> SeatResult:
     """跑一个席位，强制 JSON + 一次重试，失败给降级结果。"""
     task = SEAT_TASKS[seat]
@@ -133,7 +151,7 @@ async def _run_seat(
                 route_fn(
                     RouteRequest(
                         task=task,
-                        messages=_build_messages(seat, text, persona, situation),
+                        messages=_build_messages(seat, text, persona, situation, advisor_note),
                         cost_tier=tier,
                         trace_id=trace_id,
                     )
@@ -219,12 +237,27 @@ async def analyze(
     route_fn: RouteFn | None = None,
     persona: str = "",
     situation: str = "",
+    soul_name: str = "",
 ) -> dict:
-    """智囊团分析入口：选席位 → 并发跑（带秋秋人设+当前情境）→ 合并圆桌纪要。"""
+    """智囊团分析入口：选席位 → 并发跑（带秋秋人设+当前情境+师承记忆）→ 合并圆桌纪要。"""
     route_fn = route_fn or _default_route
     seats, tier = select_seats(text)
+    notes: dict[str, str] = {}
+    if soul_name and get_settings().advisor_memory_enabled:
+        from astr.soul import advisors  # 延迟导入避免环
+
+        for seat in seats:
+            try:
+                notes[seat] = advisors.memory_line(soul_name, seat)
+            except Exception:  # noqa: BLE001 —— 档案读取失败不拦圆桌
+                notes[seat] = ""
     results = await asyncio.gather(
-        *(_run_seat(seat, text, tier, trace_id, route_fn, persona, situation) for seat in seats)
+        *(
+            _run_seat(
+                seat, text, tier, trace_id, route_fn, persona, situation, notes.get(seat, "")
+            )
+            for seat in seats
+        )
     )
     report = _merge(list(results))
     log.info(

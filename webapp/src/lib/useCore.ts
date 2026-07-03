@@ -82,3 +82,57 @@ export function useEventStream(types: string[], max = 60) {
 
   return { events, live };
 }
+
+/** 订阅 soul.stream 增量帧（99 #19①）：当前正在生成的回复逐字生长。
+ *  终帧（done）或 soul.decision 到达即结束；流帧频率高，单独连一路 SSE，
+ *  不挤占 useEventStream 的事件缓冲。返回 {text, active}——active 供嘴型驱动。 */
+export function useReplyStream() {
+  const [text, setText] = useState("");
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    let es: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let buf = "";
+
+    const onStream = (e: MessageEvent) => {
+      try {
+        const evt = JSON.parse(e.data) as AstrEvent;
+        const p = evt.payload as { delta?: string; seq?: number; done?: boolean };
+        if (p.done) {
+          setActive(false);
+          return; // 文本留着，等 soul.decision 的终稿把气泡接管
+        }
+        if (p.seq === 1) buf = ""; // 新一句开始
+        buf += p.delta ?? "";
+        setText(buf);
+        setActive(true);
+      } catch {
+        /* 忽略坏帧 */
+      }
+    };
+    const onDecision = () => {
+      buf = "";
+      setText("");
+      setActive(false);
+    };
+
+    const connect = () => {
+      es = new EventSource(`${SSE_BASE}/v1/stream`);
+      es.addEventListener("soul.stream", onStream as EventListener);
+      es.addEventListener("soul.decision", onDecision as EventListener);
+      es.onerror = () => {
+        es?.close();
+        retry = setTimeout(connect, 3000);
+      };
+    };
+    connect();
+
+    return () => {
+      if (retry) clearTimeout(retry);
+      es?.close();
+    };
+  }, []);
+
+  return { text, active };
+}

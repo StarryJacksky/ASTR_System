@@ -205,6 +205,39 @@ async def route(req: RouteRequest, *, routes_path: str | None = None) -> RouteRe
     return await _attempt_local(cfg, req, degraded=True)
 
 
+async def route_stream(req: RouteRequest, *, routes_path: str | None = None):
+    """流式路由（99 #19①，本地免费档专用）：逐段 yield 文本增量，结束自动入账（本地 0 成本）。
+
+    只走 LOCAL_MODEL_KEY——soul_reply 的逐字蹦场景；云端任务不走这里。
+    任何失败直接上抛，调用方回退非流式 route()。
+    """
+    cfg = load_routes(routes_path)
+    model_cfg = cfg.models.get(LOCAL_MODEL_KEY)
+    if not model_cfg:
+        raise RuntimeError(f"routes.yaml 缺少本地模型 {LOCAL_MODEL_KEY}")
+    params = _build_params(model_cfg, req)
+    params["stream"] = True
+    resp = await litellm.acompletion(**params)
+    n_chunks = 0
+    async for chunk in resp:
+        try:
+            delta = chunk.choices[0].delta.content
+        except (AttributeError, IndexError):
+            delta = None
+        if delta:
+            n_chunks += 1
+            yield delta
+    ledger.record(
+        trace_id=req.trace_id,
+        task=req.task,
+        model=model_cfg["litellm"],
+        tokens_in=0,  # 流式 usage 不可靠，本地 0 成本，不影响预算闸
+        tokens_out=n_chunks,
+        cost_usd=0.0,
+        degraded=False,
+    )
+
+
 async def _attempt_local(cfg: RoutesConfig, req: RouteRequest, *, degraded: bool) -> RouteResponse:
     model_cfg = cfg.models.get(LOCAL_MODEL_KEY)
     if not model_cfg:
