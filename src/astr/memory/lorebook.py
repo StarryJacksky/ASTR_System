@@ -55,7 +55,9 @@ def _keywords(text: str, n: int = 4) -> list[str]:
     return seen
 
 
-def upsert_entry(soul_name: str, uid: str, keys: list[str], content: str, comment: str = "") -> None:
+def upsert_entry(
+    soul_name: str, uid: str, keys: list[str], content: str, comment: str = ""
+) -> None:
     """新增/更新一条世界书条目（ST World Info 兼容字段）。"""
     book = load(soul_name)
     book.setdefault("entries", {})[uid] = {

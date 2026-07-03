@@ -18,7 +18,8 @@ def test_reaction_restrained_for_stranger() -> None:
     hits = sum(
         1
         for i in range(200)
-        if pick_reaction("高燃", familiarity=0.05, talkativeness=0.2, rng=random.Random(i)) is not None
+        if pick_reaction("高燃", familiarity=0.05, talkativeness=0.2, rng=random.Random(i))
+        is not None
     )
     assert hits < 100  # 克制：不到一半
 

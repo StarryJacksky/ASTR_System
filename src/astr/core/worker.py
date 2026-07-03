@@ -89,7 +89,10 @@ async def handle_utterance(bus: Bus, orch: SoulOrchestrator, event: Event) -> No
     )
     if seq:  # 发过流帧才补终帧（告诉前端"这句说完了"）
         await _emit(
-            bus, event, EventType.SOUL_STREAM, SoulStreamPayload(seq=seq + 1, done=True).model_dump()
+            bus,
+            event,
+            EventType.SOUL_STREAM,
+            SoulStreamPayload(seq=seq + 1, done=True).model_dump(),
         )
 
     if report.get("summary"):

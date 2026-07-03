@@ -29,7 +29,20 @@ NOTICE_REACTIONS: dict[str, dict] = {
 
 
 # ????????????????????????QQ emoji/face id ????
-REACTION_POSITIVE: set[str] = {"76", "66", "63", "144", "319", "320", "21", "4", "14", "13", "28", "99"}
+REACTION_POSITIVE: set[str] = {
+    "76",
+    "66",
+    "63",
+    "144",
+    "319",
+    "320",
+    "21",
+    "4",
+    "14",
+    "13",
+    "28",
+    "99",
+}
 REACTION_NEGATIVE: set[str] = {"77", "79", "8", "9", "106", "111"}
 
 

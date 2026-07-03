@@ -45,6 +45,7 @@ def text_units(text: str) -> int:
     t = text.strip()
     return len(_CJK.findall(t)) + 2 * len(_LATIN_WORD.findall(t))
 
+
 _JSON_INSTRUCTION = (
     "你是 露怀秋 的{role}。只输出一个 JSON 对象，不要任何多余文字、不要 markdown 代码块，"
     '字段固定为：{{"intent": "用户真实意图一句话", "emotion_estimate": "情绪标签", '
@@ -253,9 +254,7 @@ async def analyze(
                 notes[seat] = ""
     results = await asyncio.gather(
         *(
-            _run_seat(
-                seat, text, tier, trace_id, route_fn, persona, situation, notes.get(seat, "")
-            )
+            _run_seat(seat, text, tier, trace_id, route_fn, persona, situation, notes.get(seat, ""))
             for seat in seats
         )
     )

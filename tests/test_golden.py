@@ -39,7 +39,7 @@ def test_load_golden_skips_empty_prompt(tmp_path) -> None:
     golden.write_text(
         "\n".join(
             [
-                '// 注释行应跳过',
+                "// 注释行应跳过",
                 '{"id": "v1", "prompt": "在吗", "scenario_tag": "语音场景"}',
                 '{"id": "m1", "prompt": "", "scenario_tag": "记忆场景"}',  # 占位，应跳过
                 '{"id": "m2", "prompt": "   ", "scenario_tag": "记忆场景"}',  # 仅空白，应跳过

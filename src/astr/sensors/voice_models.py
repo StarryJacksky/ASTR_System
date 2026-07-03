@@ -17,9 +17,7 @@ _SENSE_VOICE_TAR = (
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/"
     "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2"
 )
-_SILERO_VAD = (
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
-)
+_SILERO_VAD = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
 # 说话人嵌入模型（CAM++ zh，CPU，~28MB）——P1-W9 声纹鉴权
 _SPEAKER_MODEL = (
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
@@ -30,9 +28,7 @@ _SPEAKER_MODEL = (
 def _curl(url: str, dst: Path) -> bool:
     dst.parent.mkdir(parents=True, exist_ok=True)
     print(f"下载 {url}\n  -> {dst}")
-    rc = subprocess.call(
-        ["curl.exe", "-L", "--ssl-no-revoke", "--fail", "-o", str(dst), url]
-    )
+    rc = subprocess.call(["curl.exe", "-L", "--ssl-no-revoke", "--fail", "-o", str(dst), url])
     return rc == 0 and dst.exists() and dst.stat().st_size > 0
 
 
@@ -46,8 +42,7 @@ def download_speaker_model() -> int:
         print(f"声纹模型就位：{dst}\n下一步：astr voiceprint enroll <你的录音.wav> ...")
         return 0
     print(
-        "声纹模型下载失败（网络/SSL）。手动放置后重试：\n"
-        f"  {_SPEAKER_MODEL}\n  -> {dst}",
+        f"声纹模型下载失败（网络/SSL）。手动放置后重试：\n  {_SPEAKER_MODEL}\n  -> {dst}",
         file=sys.stderr,
     )
     return 1

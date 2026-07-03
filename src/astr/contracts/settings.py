@@ -55,14 +55,18 @@ class Settings(BaseSettings):
     tool_planning_tier: str = "balanced"  # 工具决策档位（P2 方案：决策走强模型，参数本地兜底）
     mcp_servers: str = ""  # JSON 数组：[{"name":"fs","command":"npx","args":["-y","@mcp/..."]}]
     estop_hotkey: str = "ctrl+alt+space"  # 全局急停热键（<500ms 停手，不依赖她占用的鼠标）
-    llama_start_script: Path = Path("D:/ASTR_System/astr/scripts/start_llm.ps1")  # vram_broker 重启用
+    llama_start_script: Path = Path(
+        "D:/ASTR_System/astr/scripts/start_llm.ps1"
+    )  # vram_broker 重启用
     llama_process_name: str = "llama-server.exe"  # vram_broker 停用
 
     # —— 平台 ——
     telegram_bot_token: str = ""
 
     # —— 语音输入（P1-W7）——
-    voice_asr_model_dir: Path = Path("D:/ASTR/embodiments/asr_models/sense-voice")  # SenseVoice ONNX 目录
+    voice_asr_model_dir: Path = Path(
+        "D:/ASTR/embodiments/asr_models/sense-voice"
+    )  # SenseVoice ONNX 目录
     voice_vad_model: Path = Path("D:/ASTR/embodiments/asr_models/silero_vad.onnx")
     voice_wake_words: str = "秋秋,露怀秋"  # 逗号分隔；转写命中即唤醒
     voice_sample_rate: int = 16000
@@ -71,7 +75,9 @@ class Settings(BaseSettings):
 
     # —— 语音输出（P1-W8）——
     tts_enabled: bool = True
-    tts_backend: str = "siliconflow"  # siliconflow(域内可达·CosyVoice) / edge(bing,国内常被墙) / sovits(本地克隆)
+    tts_backend: str = (
+        "siliconflow"  # siliconflow(域内可达·CosyVoice) / edge(bing,国内常被墙) / sovits(本地克隆)
+    )
     tts_model: str = "FunAudioLLM/CosyVoice2-0.5B"  # SiliconFlow TTS 模型（带情感/方言）
     tts_voice: str = "anna"  # 预设音色名（客户可选）；siliconflow 会拼成 模型:音色
     tts_output_device: int | None = None  # None = 系统默认音箱
@@ -85,9 +91,13 @@ class Settings(BaseSettings):
     voiceprint_model: Path = Path(
         "D:/ASTR/embodiments/asr_models/voiceprint/3dspeaker_campplus_sv_zh.onnx"
     )  # sherpa-onnx 说话人嵌入模型（CAM++ zh，CPU），缺失则降级
-    voiceprint_template_dir: Path = Path("D:/ASTR/ops/voiceprint")  # 注册模板 .npy（访问控制资产，非灵魂）
+    voiceprint_template_dir: Path = Path(
+        "D:/ASTR/ops/voiceprint"
+    )  # 注册模板 .npy（访问控制资产，非灵魂）
     voiceprint_threshold: float = 0.62  # 余弦相似度阈值，>= 判为本人
-    voice_require_voiceprint: bool = False  # True=强制（未注册则拒绝语音）；默认：已注册自动强制、未注册告警放行
+    voice_require_voiceprint: bool = (
+        False  # True=强制（未注册则拒绝语音）；默认：已注册自动强制、未注册告警放行
+    )
 
     # —— 看门狗 / 浸泡监控（P1-W9）——
     redis_url: str = "redis://127.0.0.1:6379"

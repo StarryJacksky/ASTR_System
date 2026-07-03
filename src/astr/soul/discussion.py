@@ -132,11 +132,20 @@ def _append_jsonl(soul_name: str, rel: str, row: dict) -> None:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def _write_cbg(soul_name: str, trace_id: str, user_text: str, draft: str, revision: str, dissent: str, changed: bool) -> None:
+def _write_cbg(
+    soul_name: str,
+    trace_id: str,
+    user_text: str,
+    draft: str,
+    revision: str,
+    dissent: str,
+    changed: bool,
+) -> None:
     """研讨补充决策：candidates=[草稿,修订]、chosen 反映她最终留了哪版、reasoning=答辩。
 
     这行是 CBG 里最贵的一类数据——"我为什么（不）听你的"。
     """
+
     def _d(t: str, n: int = 120) -> str:
         t = t.strip().replace("\n", " ")
         return t[:n] + ("…" if len(t) > n else "")
@@ -146,11 +155,19 @@ def _write_cbg(soul_name: str, trace_id: str, user_text: str, draft: str, revisi
         ts=datetime.now(UTC),
         trace_id=trace_id,
         context_digest=_d(f"研讨：{user_text}"),
-        candidates=[Candidate(content_digest=_d(draft)), Candidate(content_digest=_d(revision or draft))],
+        candidates=[
+            Candidate(content_digest=_d(draft)),
+            Candidate(content_digest=_d(revision or draft)),
+        ],
         chosen=1 if changed else 0,
         reasoning=f"答辩：{_d(dissent, 200)}",
     )
-    p = get_settings().soul_package_dir / soul_name / "causal_behavior_graph" / "decisions.cbg.jsonl"
+    p = (
+        get_settings().soul_package_dir
+        / soul_name
+        / "causal_behavior_graph"
+        / "decisions.cbg.jsonl"
+    )
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("a", encoding="utf-8") as f:
         f.write(trace.model_dump_json() + "\n")
@@ -188,12 +205,8 @@ async def discuss(
     # ① 线索式批评（串行可见——真讨论的最小结构）
     thread: list[tuple[str, str]] = []
     for seat in critics:
-        note = (
-            advisors.memory_line(soul_name, seat) if s.advisor_memory_enabled else ""
-        )
-        c = await _critique_seat(
-            seat, user_text, draft, openings, thread, route_fn, trace_id, note
-        )
+        note = advisors.memory_line(soul_name, seat) if s.advisor_memory_enabled else ""
+        c = await _critique_seat(seat, user_text, draft, openings, thread, route_fn, trace_id, note)
         if c:
             thread.append((seat, c))
             await _say(seat, c)
@@ -248,7 +261,8 @@ async def discuss(
                 "prompt": user_text,
                 "chosen": revision,
                 "rejected": draft,
-                "reason": "；".join(critiques) + (f"；她的取舍：{dissent[:200]}" if dissent else ""),
+                "reason": "；".join(critiques)
+                + (f"；她的取舍：{dissent[:200]}" if dissent else ""),
                 "source": "discussion",
             },
         )
@@ -262,7 +276,9 @@ async def discuss(
         for seat, text in thread:
             try:
                 advisors.record(
-                    soul_name, seat, f"我点评「{text[:50]}」；她答辩「{(dissent or '未表态')[:50]}」"
+                    soul_name,
+                    seat,
+                    f"我点评「{text[:50]}」；她答辩「{(dissent or '未表态')[:50]}」",
                 )
                 await advisors.distill_if_needed(soul_name, seat, route_fn, trace_id)
             except Exception:  # noqa: BLE001

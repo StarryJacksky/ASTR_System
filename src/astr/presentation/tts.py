@@ -67,7 +67,11 @@ class TtsPlayer:
         return await self._synth_siliconflow(text, emotion_tag)
 
     async def _synth_siliconflow(self, text: str, emotion_tag: str | None) -> bytes:
-        voice = self.s.tts_voice if ":" in self.s.tts_voice else f"{self.s.tts_model}:{self.s.tts_voice}"
+        voice = (
+            self.s.tts_voice
+            if ":" in self.s.tts_voice
+            else f"{self.s.tts_model}:{self.s.tts_voice}"
+        )
         instr = _emo_prompt(emotion_tag)
         payload = {
             "model": self.s.tts_model,

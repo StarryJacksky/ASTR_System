@@ -130,7 +130,12 @@ class VoiceListener:
                             user_id, verified_by, score = voiceprint.resolve_speaker(seg, self.sr)
                             who = "主人" if user_id == self.s.astr_owner_id else "访客(声纹不符)"
                             print(f"[唤醒|{who}|sim={score:.2f}] {cmd}")
-                            log.info("voice_speaker", user_id=user_id, verified_by=verified_by, score=score)
+                            log.info(
+                                "voice_speaker",
+                                user_id=user_id,
+                                verified_by=verified_by,
+                                score=score,
+                            )
                             self._ingest(cmd, user_id)
                         elif hit:
                             print("[唤醒] （只听到名字，说完整点）")

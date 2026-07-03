@@ -21,9 +21,7 @@ async def teach(
     trace_id: str,
 ) -> dict:
     """兼容入口：委托 L2 研讨。返回 {revision, changed, critiques, dissent}。"""
-    return await discuss(
-        soul_name, user_text, draft, report, route_fn=route_fn, trace_id=trace_id
-    )
+    return await discuss(soul_name, user_text, draft, report, route_fn=route_fn, trace_id=trace_id)
 
 
 __all__ = ["teach"]
