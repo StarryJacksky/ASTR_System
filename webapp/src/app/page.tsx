@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, Send, Settings, X } from "lucide-react";
+import { Mic, OctagonX, Send, Settings, X } from "lucide-react";
 import { startRecorder, type MicRecorder } from "@/lib/wav";
 import { Panel } from "@/components/astr/Panel";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
@@ -38,8 +38,20 @@ export default function Cockpit() {
   const [speak, setSpeak] = useState<{ sig: number; ms: number }>({ sig: 0, ms: 0 });
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [estopped, setEstopped] = useState(false);
   const recorderRef = useRef<MicRecorder | null>(null);
   const lastFlapRef = useRef(0);
+
+  // 急停（P2-W8）：红钮 <500ms 停手；再点一次复位。热键 Ctrl+Alt+Space 同效（Core 侧）。
+  const toggleEstop = async () => {
+    const path = estopped ? "/api/core/v1/effector/estop/reset" : "/api/core/v1/effector/estop";
+    try {
+      await fetch(path, { method: "POST" });
+      setEstopped((v) => !v);
+    } catch {
+      /* Core 离线 */
+    }
+  };
 
   // 情绪 → 环境光（04 §3.2）：她的真实情绪向量驱动整页背光，缓慢变化。
   const glow = soulToGlow(status?.emotion);
@@ -169,6 +181,19 @@ export default function Cockpit() {
           connected={connected}
         />
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label={estopped ? "复位急停" : "急停"}
+            title={estopped ? "急停已触发——点击复位" : "急停（她立刻停手）"}
+            onClick={toggleEstop}
+            className={`grid h-8 w-8 place-items-center rounded-lg border transition-colors ${
+              estopped
+                ? "animate-pulse border-danger bg-danger/20 text-danger"
+                : "border-hairline text-danger/70 hover:bg-surface-2"
+            }`}
+          >
+            <OctagonX size={16} />
+          </button>
           <button
             type="button"
             aria-label="设置"

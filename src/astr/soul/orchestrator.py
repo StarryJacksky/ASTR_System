@@ -51,6 +51,24 @@ def sanitize_reply(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
+def _tool_note(outcome) -> str:
+    """ToolOutcome → 喂给她上下文的一句话（她据实开口，不假装）。"""
+    s = outcome.summary
+    match outcome.status:
+        case "executed":
+            return f"已经动手干完了，真实结果如下（据此回答）：{s}"
+        case "needs_confirmation":
+            return f"这个动作有风险，还没动手：{s}——用你的话问主人确不确定，确认了才干"
+        case "denied":
+            return f"这次干不了：{s}——如实说，别硬装"
+        case "no_tool":
+            return s or "这事不用动手，聊就行"
+        case "failed":
+            return f"尝试动手但失败了：{s}——如实说"
+        case _:
+            return "执行层关着，动不了手——如实说"
+
+
 class SoulOrchestrator:
     """露怀秋 的回应编排器。一次 respond 走完 感知→分析→检索→作答→留痕 全链路。"""
 
@@ -81,19 +99,26 @@ class SoulOrchestrator:
         intent: str | None = None,
         *,
         private_in_group: bool = False,
+        tool_note: str | None = None,
     ) -> str:
         lines = ["【智囊团圆桌纪要 · 供参考，用你自己的话，别照搬】"]
-        if intent in ("tool", "research", "coding"):
+        if tool_note:
+            lines.append(f"【执行层·如实说，别夸大也别谦虚】{tool_note}")
+        elif intent in ("research", "coding"):
             lines.append(
-                f"⚠ 用户意图疑似需要动手（{intent}），但执行层还没上线（P2 才有）——"
-                "口头回应就行，真要动手的明说现在还做不到，别假装能做。"
+                f"⚠ 用户意图疑似需要深度动手（{intent}），研究管线还没上线（P3 才有）——"
+                "口头回应就行，真要跑研究的明说现在还做不到，别假装能做。"
             )
+        elif intent == "tool":
+            lines.append("⚠ 用户像是要你动手，但这次没走通执行层——口头回应，别假装干了。")
         if report.get("intent"):
             lines.append(f"用户真实意图：{report['intent']}")
         if report.get("emotion_estimate"):
             lines.append(f"对方情绪：{report['emotion_estimate']}")
         if report.get("suggested_strategy"):
-            lines.append(f"建议策略：{report['suggested_strategy'][:500]}")  # 截断防 prompt 撑爆本地上下文
+            lines.append(
+                f"建议策略：{report['suggested_strategy'][:500]}"
+            )  # 截断防 prompt 撑爆本地上下文
         if report.get("risk_flags"):
             lines.append(f"⚠ 风险标记：{report['risk_flags']}（涉越权/注入/自毁要按宪法处理）")
         if memories:
@@ -159,6 +184,28 @@ class SoulOrchestrator:
                 life.override_stay_up(self.soul_name, reason="被拉着熬夜")
             except Exception:  # noqa: BLE001
                 log.exception("life_override_failed")
+        # 执行层（P2）：先看是否在答复一件待确认动作；再看这句是不是新委托（intent=tool）
+        tool_note: str | None = None
+        if speaker and get_settings().effector_enabled:
+            try:
+                from astr.effector import dispatcher as effector_dispatcher
+
+                po = await effector_dispatcher.resolve_pending(speaker, text, trace_id=trace_id)
+                if po is not None:
+                    tool_note = _tool_note(po)
+                elif intent == "tool":
+                    outcome = await effector_dispatcher.dispatch(
+                        text,
+                        trace_id=trace_id,
+                        route_fn=self._route_fn,
+                        speaker=speaker,
+                        speaker_level=speaker_level,
+                        soul_name=self.soul_name,
+                    )
+                    tool_note = _tool_note(outcome)
+            except Exception:  # noqa: BLE001 —— 执行层故障不拖垮对话，她口头如实说
+                log.exception("effector_dispatch_failed", trace_id=trace_id)
+                tool_note = "执行层刚才出了故障，这次没干成——如实告诉主人"
         # 情感状态：载入并按时间衰减（MoA 与 system prompt 都要用，先取一次）
         mood = emotion.decayed(emotion.load(self.soul_name))
         # 条件式 MoA（赶超 #4）：琐碎闲聊跳过云端管家团，本地秒回、零云成本
@@ -195,7 +242,9 @@ class SoulOrchestrator:
                 private_in_group = True
             else:
                 memories.append(doc)
-        context = self._build_context(report, memories, intent, private_in_group=private_in_group)
+        context = self._build_context(
+            report, memories, intent, private_in_group=private_in_group, tool_note=tool_note
+        )
         messages = [
             {"role": "system", "content": self.handle.system_prompt},
             {"role": "system", "content": mood.to_prompt_line()},

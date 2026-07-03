@@ -32,6 +32,9 @@ tasks:
   roundtable_engineer:      { balanced: grok,         max: grok }
   roundtable_librarian:     { cheap: qwen-sf,         balanced: deepseek-chat }   # 检索 / 事实核对
 
+  # —— 执行层工具决策（P2：决策走强模型、参数留本地兜底；8B 工具调用弱）——
+  tool_planning: { free: local-qwen3-8b, cheap: deepseek-chat, balanced: gpt-mini, max: gpt-flagship }
+
   # —— 凌晨批量评分（judge 必须与被评模型异家，99 #11；本地灵魂是 qwen 系，评分故用非 qwen）——
   scoring:      { cheap: deepseek-chat, balanced: claude-haiku }
 

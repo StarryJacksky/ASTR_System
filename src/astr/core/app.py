@@ -111,6 +111,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from astr.sensors.platform.caps import probe
 
         probe()  # 启动时落 platform_caps.json（W6-d）
+    with contextlib.suppress(Exception):  # 急停全局热键（P2-W8）：注册失败不拦启动，网页钮兜底
+        from astr.effector import estop as _estop
+
+        _estop.start_hotkey_listener()
+    with contextlib.suppress(Exception):  # MCP 外部工具（P2-W2）：未配置/失败都不拦
+        from astr.effector.dispatcher import get_toolkit
+        from astr.effector.mcp_host import McpHost
+
+        app.state.mcp = McpHost(get_toolkit())
+        await app.state.mcp.start()
     log.info("astr_core_started", port=8300)
     try:
         yield
@@ -444,3 +454,45 @@ async def status() -> dict:
         "emotion": mood.model_dump(mode="json"),
         "activity": activity,
     }
+
+
+# —— 执行层（P2-W8）：急停 / 待确认 / 审计尾巴 ——
+
+
+@app.post("/v1/effector/estop")
+async def effector_estop() -> dict:
+    """网页红钮：<500ms 停手（热键 Ctrl+Alt+Space 同效）。"""
+    from astr.effector import estop
+
+    estop.trigger("web")
+    return {"stopped": True}
+
+
+@app.post("/v1/effector/estop/reset")
+async def effector_estop_reset() -> dict:
+    from astr.effector import estop
+
+    estop.reset()
+    return {"stopped": False}
+
+
+@app.get("/v1/effector/status")
+async def effector_status() -> dict:
+    """急停状态 + 各会话待确认动作 + 今日审计尾巴（当前任务面板数据源）。"""
+    import json as _json
+
+    from astr.effector import estop, pending
+    from astr.effector.dispatcher import get_toolkit
+
+    tail: list[dict] = []
+    with contextlib.suppress(Exception):
+        tk = get_toolkit()
+        p = tk.guard._audit_path()
+        if p.exists():
+            tail = [_json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()[-10:]]
+    pend = {
+        spk: {"summary": a.summary, "tool": a.call.tool}
+        for spk in list(pending._pending)
+        if (a := pending.get(spk)) is not None
+    }
+    return {"stopped": estop.is_stopped(), "pending": pend, "audit_tail": tail}

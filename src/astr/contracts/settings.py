@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     advisor_distill_threshold: int = 12  # 交手条目攒够此数 → 本地蒸馏进画像（滚动压缩）
     stream_enabled: bool = True  # 回复逐字流（soul.stream 增量帧，99 #19①）；失败自动回退整段
 
+    # —— 执行层（P2）——
+    effector_enabled: bool = True  # 总开关：关了则回到"口头承认做不到"
+    tool_planning_tier: str = "balanced"  # 工具决策档位（P2 方案：决策走强模型，参数本地兜底）
+    mcp_servers: str = ""  # JSON 数组：[{"name":"fs","command":"npx","args":["-y","@mcp/..."]}]
+    estop_hotkey: str = "ctrl+alt+space"  # 全局急停热键（<500ms 停手，不依赖她占用的鼠标）
+    llama_start_script: Path = Path("D:/ASTR_System/astr/scripts/start_llm.ps1")  # vram_broker 重启用
+    llama_process_name: str = "llama-server.exe"  # vram_broker 停用
+
     # —— 平台 ——
     telegram_bot_token: str = ""
 
