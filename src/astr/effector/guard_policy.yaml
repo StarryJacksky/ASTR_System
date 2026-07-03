@@ -3,8 +3,21 @@
 # 规范：总规 §2.4.5、P2-W1、05 §7、06。安全是 P2 的一等需求，不是附加项。
 # 【你本人要填】的字段已标 TODO——这些是只有你能定的现实世界边界，开 P2 前先填好。
 
-# —— ① 应用白名单：Computer Use 只能操作前台是这些进程的窗口（pygetwindow 校验）——
-# 留空 = 拒绝一切 CU 操作（默认最安全）。TODO 按你愿意让她碰的程序填。
+# —— ⓪ 审批三档（取经 Codex；后台 /admin 可切）——
+# ask     = 请求档：每个动作先问你
+# audited = 自审核档：白名单内自动执行 + 全审计 + 红队席抽查，名单外仍问
+# auto    = 全自动档：白名单内免问，名单外直接拒
+# 铁律：危险动作（②）在任何档位都强制二次确认，永不豁免。
+approval_mode: ask
+
+# —— ⓪b headless 范围三档（无视觉轨的地盘；后台可切）——
+# cwd = 只许动"当前文件夹"；folders = 只许动下面白名单目录；full = 全电脑（慎开）
+headless_scope: cwd
+headless_cwd: "D:/ASTR/effector/sandbox"   # cwd 档的"当前文件夹"（默认=沙箱，最安全）
+headless_folders: []         # TODO folders 档白名单，例：["D:/ASTR/ops", "D:/Downloads"]
+
+# —— ① 应用白名单：视觉轨只能操作前台是这些进程的窗口（pygetwindow 校验）——
+# 留空 = 拒绝一切视觉 CU 操作（默认最安全）。TODO 按你愿意让她碰的程序填。
 app_whitelist: []            # TODO 例：["explorer.exe", "Code.exe", "chrome.exe", "WeChat.exe"]
 
 # —— ② 危险动作 → 强制 L3 二次确认（声纹 + 屏幕弹窗，P5 起加声纹）——
