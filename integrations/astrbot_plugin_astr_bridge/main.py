@@ -15,7 +15,6 @@ import asyncio
 import os
 
 import httpx
-
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.event.filter import CustomFilter, EventMessageType, PlatformAdapterType

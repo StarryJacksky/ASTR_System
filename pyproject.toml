@@ -38,12 +38,35 @@ dependencies = [
     "mcp>=1.28.1",
 ]
 
+[project.optional-dependencies]
+# 视觉感知件（P2-W6）：OmniParser-v2 推理栈。重依赖（torch CUDA ~3GB），刻意不进主依赖——
+# 无 GPU / CI 环境不背；OmniPerceiver 懒加载，缺件时给指引。装法：uv sync --extra vision
+vision = [
+    "torch>=2.6",
+    "torchvision",
+    "ultralytics>=8.3.70",
+    "transformers>=4.50",
+    "timm",
+    "einops",
+    "accelerate",
+    "rapidocr-onnxruntime",
+]
+
 [project.scripts]
 astr = "astr.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", extra = "vision" }]
+torchvision = [{ index = "pytorch-cu126", extra = "vision" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [dependency-groups]
 dev = [
