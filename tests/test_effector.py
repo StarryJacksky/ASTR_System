@@ -409,6 +409,33 @@ async def test_cu_engine_title_fence_blocks_and_fails(tmp_path, monkeypatch) -> 
     assert report.steps_taken == 7  # 6 次返航 + 第 7 步判死
 
 
+async def test_cu_engine_title_fence_ignores_untitled_popups(tmp_path, monkeypatch) -> None:
+    """空标题不算越界：右键菜单/重命名编辑框都是无题窗口——run7-10 实测围栏见空
+    标题就返航，把她自己弹的菜单一次次关掉（进程白名单已挡住真正的外来户）。"""
+    from astr.contracts.settings import Settings
+    from astr.effector import cu_engine as cu_mod
+
+    s = Settings(_env_file=None, astr_data_dir=tmp_path, tool_planning_tier="cheap")
+    monkeypatch.setattr(cu_mod, "get_settings", lambda: s)
+    backend = FakeBackend()
+    backend.active_window_title = lambda: ""  # type: ignore[method-assign] —— 菜单弹着
+    eng = CuEngine(
+        backend,
+        FakePerceiver(),
+        guard=_guard(tmp_path, app_whitelist=["explorer.exe"]),
+        route_fn=_cu_route(
+            [
+                {"action": "click", "target": "发送按钮", "reason": "点菜单项"},
+                {"action": "done", "reason": "完事"},
+            ]
+        ),
+    )
+    report = await eng.run_task(
+        "干活", trace_id="t-fence2", confirmed=True, title_fence=("sandbox",)
+    )
+    assert report.ok and backend.clicks == [(100, 200)]  # 菜单场景正常执行，不被围栏误杀
+
+
 def test_parse_ui_tars_right_click() -> None:
     from astr.effector.cu_engine import _parse_ui_tars
 

@@ -435,6 +435,7 @@ class CuEngine:
                         )
                     time.sleep(0.5)
                 if _refocus():
+                    last_action_mono = time.monotonic()  # 回切的 ALT 空击是注入输入，非主人
                     time.sleep(0.3)
             # 白名单：前台窗口必须在册（每步都查——窗口可能中途切换）
             req = ActionRequest(
@@ -450,6 +451,7 @@ class CuEngine:
                 for _ in range(3):
                     if _refocus():
                         refocus_left -= 1
+                        last_action_mono = time.monotonic()  # 同上：ALT 空击非主人输入
                         time.sleep(0.6)
                         transcript.append(f"↻ 前台被 {req.app or '未知'} 抢走，已切回目标窗口")
                         req = req.model_copy(update={"app": self.backend.active_window()})
@@ -470,9 +472,12 @@ class CuEngine:
                 )
             if home_handle is None:  # 第一步过白名单的窗口=这个任务的"家"
                 home_handle = self.backend.foreground_handle()
-            # 地盘围栏：不在申报的位置上就不执行任何动作，先返航（见 docstring）
+            # 地盘围栏：不在申报的位置上就不执行任何动作，先返航（见 docstring）。
+            # 空标题不算越界：弹出菜单/重命名编辑框都是无题窗口（run7-10 实测围栏
+            # 见空标题就返航，把她自己右键出来的菜单一次次关掉——菜单是位置中性的，
+            # 进程白名单已在上面查过）
             title = self.backend.active_window_title()
-            if title_fence and not any(f in title for f in title_fence):
+            if title_fence and title and not any(f in title for f in title_fence):
                 fence_breaches += 1
                 if fence_breaches > 6:
                     return CuReport(
@@ -486,6 +491,7 @@ class CuEngine:
                 _refocus()  # 可能只是别的窗口挡在前面
                 # 交替两种返航键：alt+left 治误导航，enter 关模态弹窗（按默认钮）
                 self.backend.key("alt+left" if fence_breaches % 2 else "enter")
+                last_action_mono = time.monotonic()  # 返航键是我们注入的，别喂给礼让当主人输入
                 time.sleep(1.0)
                 continue
             fence_breaches = 0
