@@ -238,6 +238,12 @@ async def respond(req: RespondRequest) -> RespondResponse:
     buf = app.state.ctx.setdefault(session_key, deque(maxlen=12))
     buf.append(f"{speaker_tag}: {req.text}")
     if not will_reply:
+        # 旁听入库（99 #24）：没接话的消息不再只活在 12 条易失滑窗——全量落 observed.jsonl，
+        # 图谱共现即时受益，P4 蒸馏语料从今天开始攒。回话轮次由 orchestrator 的 record 落库。
+        with contextlib.suppress(Exception):
+            from astr.memory import experience
+
+            experience.observe(settings.soul_name, req.text, req.user_id, session=session_key)
         return RespondResponse(reply="", segments=[], trace_id="", timed_out=False)
     recent_ctx = list(buf)[:-1]  # 不含当前这条
 

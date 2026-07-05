@@ -20,8 +20,8 @@ from astr.contracts.settings import get_settings
 log = structlog.get_logger("astr.memory.graph")
 
 
-def _exp_path(soul_name: str) -> Path:
-    return get_settings().soul_package_dir / soul_name / "behavior_capsules" / "experience.jsonl"
+def _capsule_dir(soul_name: str) -> Path:
+    return get_settings().soul_package_dir / soul_name / "behavior_capsules"
 
 
 def graphml_path(soul_name: str = "justin") -> Path:
@@ -29,11 +29,15 @@ def graphml_path(soul_name: str = "justin") -> Path:
 
 
 def _read_rows(soul_name: str, limit: int = 5000) -> list[dict]:
-    p = _exp_path(soul_name)
-    if not p.exists():
-        return []
-    lines = p.read_text(encoding="utf-8").splitlines()[-limit:]
-    return [json.loads(line) for line in lines if line.strip()]
+    """经验（她回话的轮次）+ 旁听（observed.jsonl，99 #24）合并——群里的共现也进图。"""
+    rows: list[dict] = []
+    for name in ("experience.jsonl", "observed.jsonl"):
+        p = _capsule_dir(soul_name) / name
+        if not p.exists():
+            continue
+        lines = p.read_text(encoding="utf-8").splitlines()[-limit:]
+        rows += [json.loads(line) for line in lines if line.strip()]
+    return rows
 
 
 def build_graphml(soul_name: str = "justin") -> Path:
