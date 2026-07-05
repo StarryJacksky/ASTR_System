@@ -334,6 +334,42 @@ async def test_cu_engine_stub_perceiver_hint(tmp_path, monkeypatch) -> None:
     assert not report.ok and "OmniParser" in (report.error or "")
 
 
+# ---------- UI-TARS 方言解析（P2.5 本地 grounding）----------
+
+
+def test_parse_ui_tars_click_coords_to_thousandths() -> None:
+    from astr.effector.cu_engine import _parse_ui_tars
+
+    raw = (
+        "Thought: 点新建文件夹按钮。\nAction: click(start_box='<|box_start|>(560,308)<|box_end|>')"
+    )
+    step = _parse_ui_tars(raw, 1120, 616)
+    assert step is not None and step.action == "click"
+    assert step.x == 500 and step.y == 500  # 560/1120, 308/616 → 千分比
+    assert "新建文件夹" in step.reason
+
+
+def test_parse_ui_tars_hotkey_type_finished() -> None:
+    from astr.effector.cu_engine import _parse_ui_tars
+
+    k = _parse_ui_tars("Thought: 剪切。\nAction: hotkey(key='ctrl x')", 1120, 616)
+    assert k is not None and k.action == "key" and k.text == "ctrl+x"
+    t = _parse_ui_tars("Thought: 命名。\nAction: type(content='2026-04\\n')", 1120, 616)
+    assert t is not None and t.action == "type" and t.text == "2026-04\n"
+    d = _parse_ui_tars("Thought: 完成。\nAction: finished(content='done')", 1120, 616)
+    assert d is not None and d.action == "done"
+
+
+def test_parse_ui_tars_unsupported_is_noop_not_abort() -> None:
+    from astr.effector.cu_engine import _parse_ui_tars
+
+    s = _parse_ui_tars(
+        "Thought: 滚动。\nAction: scroll(start_box='(1,1)', direction='down')", 1120, 616
+    )
+    assert s is not None and s.action == "key" and s.text is None  # 空转一拍，不炸任务
+    assert _parse_ui_tars("胡言乱语没有动作", 1120, 616) is None
+
+
 # ---------- 急停原语 ----------
 
 

@@ -14,10 +14,16 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+# --local：本地 UI-TARS 端到端（隐私不出网）。必须在 import astr 前设 env——Settings 启动即读
+if "--local" in sys.argv:
+    os.environ["CU_GROUNDING_TIER"] = "free"
+    os.environ["CU_GROUNDING_DIALECT"] = "ui_tars"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -27,7 +33,7 @@ GOAL = (
     "资源管理器已打开在 sandbox 文件夹，文件列表在屏幕上——不要切换驱动器或进别的文件夹。"
     "注意：屏幕上形如 2026-05-03 0:00 的是文件的修改日期文本，不是文件夹；"
     "2026-04、2026-05 两个文件夹现在还不存在，必须先由你创建。"
-    "任务分两段：①建文件夹：click 工具栏的\"新建文件夹\"按钮 → type 2026-04 → key enter；"
+    '任务分两段：①建文件夹：click 工具栏的"新建文件夹"按钮 → type 2026-04 → key enter；'
     "再重复一次建 2026-05。②逐个移文件（4 月的进 2026-04，5 月的进 2026-05）："
     "click 文件名 → key ctrl+x → double_click 目标文件夹（点它的名字，不是日期）→ "
     "key ctrl+v → key alt+up 回上级。"
@@ -59,6 +65,33 @@ def seed() -> None:
         t = stamp.timestamp()
         os.utime(p, (t, t))
     print(f"沙箱就绪：{[p.name for p in SANDBOX.iterdir()]}")
+
+
+def _start_local_server() -> subprocess.Popen | None:
+    """起本地 UI-TARS llama-server（:8081），等 /health 就绪（首次加载 ~30-90s）。"""
+    import httpx
+
+    script = Path(__file__).parent / "start_ui_tars.ps1"
+    proc = subprocess.Popen(  # noqa: S603
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
+        try:
+            if httpx.get("http://127.0.0.1:8081/health", timeout=2).status_code == 200:
+                print("本地 UI-TARS 服务就绪 :8081")
+                return proc
+        except Exception:  # noqa: BLE001
+            pass
+        if proc.poll() is not None:
+            print("UI-TARS 服务进程退出（权重没下完/显存不足？）")
+            return None
+        time.sleep(2)
+    proc.terminate()
+    print("UI-TARS 服务 180s 未就绪")
+    return None
 
 
 async def main() -> int:
@@ -96,10 +129,19 @@ async def main() -> int:
 
     trace_id = f"cu_milestone_{datetime.now():%Y%m%d_%H%M%S}"
     engine = CuEngine(backend, perceiver, route_fn=route)
-    async with vram_session():
-        report = await engine.run_task(
-            GOAL, trace_id=trace_id, confirmed=True, refocus_title="sandbox"
-        )
+    local_srv: subprocess.Popen | None = None
+    try:
+        async with vram_session():  # 先停 qwen 腾显存，再起 UI-TARS
+            if "--local" in sys.argv:
+                local_srv = _start_local_server()
+                if local_srv is None:
+                    return 1
+            report = await engine.run_task(
+                GOAL, trace_id=trace_id, confirmed=True, refocus_title="sandbox"
+            )
+    finally:
+        if local_srv is not None:
+            local_srv.terminate()
 
     print(f"\n=== 结果 ok={report.ok} steps={report.steps_taken} ===")
     for i, line in enumerate(report.transcript, 1):

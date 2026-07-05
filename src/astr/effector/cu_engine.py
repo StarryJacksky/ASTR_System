@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,6 +107,68 @@ _PLAN_SYS = (
     '"text":"输入内容或null","reason":"一句话"}。任务完成输出 done；无法完成输出 abort。'
 )
 
+# UI-TARS 原生动作格式（P2.5 本地 grounding）：它按自己的 SFT 模板输出
+# Thought/Action，坐标是"发给它的那张图"的像素——发图前定死尺寸，回来换算千分比。
+_PLAN_SYS_UI_TARS = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
+## Output Format
+```
+Thought: ...
+Action: ...
+```
+## Action Space
+click(start_box='<|box_start|>(x1,y1)<|box_end|>')
+left_double(start_box='<|box_start|>(x1,y1)<|box_end|>')
+hotkey(key='')
+type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
+wait() #Sleep for 1s and take a screenshot to check for any changes.
+finished(content='xxx') # Use escape characters \\', \\", and \\n in content part to ensure we can parse the content in normal python string format.
+## Note
+- Use Chinese in `Thought` part.
+- Write a small plan and finally summarize your next action (with its target element) in one sentence in `Thought` part.
+## User Instruction
+"""
+
+_UI_TARS_COORD = re.compile(r"\((\d+)\s*,\s*(\d+)\)")
+
+
+def _parse_ui_tars(raw: str, img_w: int, img_h: int) -> CuStep | None:
+    """UI-TARS 输出 → CuStep。坐标从发送图像素换算成屏幕千分比（CuStep 协议）。"""
+    m = re.search(r"Action\s*[:：]\s*(.+)", raw, re.DOTALL)
+    if not m:
+        return None
+    act = m.group(1).strip()
+    thought = re.search(r"Thought\s*[:：]\s*(.*?)(?:Action\s*[:：])", raw, re.DOTALL)
+    reason = (thought.group(1).strip() if thought else "")[:120]
+
+    def coords() -> tuple[int, int] | None:
+        c = _UI_TARS_COORD.search(act)
+        if not c:
+            return None
+        return round(int(c.group(1)) / img_w * 1000), round(int(c.group(2)) / img_h * 1000)
+
+    def content(key: str) -> str:
+        c = re.search(rf"{key}='(.*?)'\s*\)", act, re.DOTALL)
+        return c.group(1).replace("\\n", "\n").replace("\\'", "'").replace('\\"', '"') if c else ""
+
+    if act.startswith("click") or act.startswith("left_single"):
+        xy = coords()
+        return CuStep(action="click", x=xy[0], y=xy[1], reason=reason) if xy else None
+    if act.startswith("left_double"):
+        xy = coords()
+        return CuStep(action="double_click", x=xy[0], y=xy[1], reason=reason) if xy else None
+    if act.startswith("hotkey"):
+        keys = content("key").strip().replace(" ", "+")
+        return CuStep(action="key", text=keys or None, reason=reason)
+    if act.startswith("type"):
+        return CuStep(action="type", text=content("content") or None, reason=reason)
+    if act.startswith("finished"):
+        return CuStep(action="done", reason=reason or content("content")[:120])
+    if act.startswith("wait"):
+        return CuStep(action="key", text=None, reason=f"wait：{reason}")  # 引擎空转一拍
+    # scroll/drag/right_single 等暂不在我们动作面里：空转一拍，履历让它换招（复读机刹车兜底）
+    return CuStep(action="key", text=None, reason=f"暂不支持的动作 {act[:40]}，请换一种做法")
+
+
 # 端到端 grounding（调研裁定 2026-07-05）：截图直入、坐标直出，
 # 没有元素解析中间层——与 Operator/CUA、Claude computer use 同构。
 _PLAN_SYS_GROUNDED = (
@@ -144,8 +207,15 @@ class CuEngine:
 
             from PIL import Image
 
+            dialect = get_settings().cu_grounding_dialect
             img = Image.open(_io.BytesIO(png))
-            if img.width > 1440:  # 压 token：千分比坐标与分辨率无关，降采样不损协议
+            if dialect == "ui_tars":
+                # 定死到 28 的倍数（Qwen2-VL patch 尺寸）——mtmd 不再二次缩放，
+                # 模型回报的像素坐标才等于"我们发的这张图"的坐标系
+                w = 1120
+                h = max(28, round(img.height * w / img.width / 28) * 28)
+                img = img.resize((w, h))
+            elif img.width > 1440:  # 压 token：千分比坐标与分辨率无关，降采样不损协议
                 img = img.resize((1440, round(img.height * 1440 / img.width)))
             buf = _io.BytesIO()
             img.convert("RGB").save(buf, "JPEG", quality=80)
@@ -154,27 +224,45 @@ class CuEngine:
                 f"目标：{goal}\n当前前台窗口标题：{window_title}"
                 f"（资源管理器标题=当前所在文件夹）\n已执行：{history or '（无）'}"
             )
+            if dialect == "ui_tars":
+                sys_prompt = _PLAN_SYS_UI_TARS + user_text
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": sys_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                            },
+                        ],
+                    }
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": _PLAN_SYS_GROUNDED},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": user_text},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                            },
+                        ],
+                    },
+                ]
             resp = await self.route_fn(
                 RouteRequest(
                     task="cu_grounding",
-                    messages=[
-                        {"role": "system", "content": _PLAN_SYS_GROUNDED},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": user_text},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
-                                },
-                            ],
-                        },
-                    ],
+                    messages=messages,
                     cost_tier=get_settings().cu_grounding_tier,  # type: ignore[arg-type]
                     trace_id=trace_id,
                 )
             )
             raw = resp.content.strip()
+            if dialect == "ui_tars":
+                return _parse_ui_tars(raw, img.width, img.height)
             if raw.startswith("```"):
                 raw = raw[raw.find("{") : raw.rfind("}") + 1]
             return CuStep.model_validate(json.loads(raw))

@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     cu_grounding_tier: str = (
         "balanced"  # grounded 档位；⚠️ 截图出网，正式启用需主人点头（沙箱里程碑可用）
     )
+    cu_grounding_dialect: str = (
+        "json"  # json=通用 VLM（云）| ui_tars=UI-TARS 原生 Thought/Action（本地 free 档配套）
+    )
     mcp_servers: str = ""  # JSON 数组：[{"name":"fs","command":"npx","args":["-y","@mcp/..."]}]
     estop_hotkey: str = "ctrl+alt+space"  # 全局急停热键（<500ms 停手，不依赖她占用的鼠标）
     llama_start_script: Path = Path(
