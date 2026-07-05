@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # —— 执行层（P2）——
     effector_enabled: bool = True  # 总开关：关了则回到"口头承认做不到"
     tool_planning_tier: str = "balanced"  # 工具决策档位（P2 方案：决策走强模型，参数本地兜底）
+    cu_planner: str = (
+        "grounded"  # CU 规划架构：grounded=截图直出坐标（2-5s/步）| two_stage=OmniParser+LLM 兜底
+    )
+    cu_grounding_tier: str = (
+        "balanced"  # grounded 档位；⚠️ 截图出网，正式启用需主人点头（沙箱里程碑可用）
+    )
     mcp_servers: str = ""  # JSON 数组：[{"name":"fs","command":"npx","args":["-y","@mcp/..."]}]
     estop_hotkey: str = "ctrl+alt+space"  # 全局急停热键（<500ms 停手，不依赖她占用的鼠标）
     llama_start_script: Path = Path(

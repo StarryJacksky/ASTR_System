@@ -239,6 +239,15 @@ class FakeBackend:
     def screen_size(self) -> tuple[int, int]:
         return (1920, 1080)
 
+    def activate_title(self, title_substr: str) -> bool:  # noqa: ARG002
+        return False
+
+    def input_idle_s(self) -> float | None:
+        return None
+
+    def active_window_title(self) -> str:
+        return "sandbox"
+
 
 class FakePerceiver:
     def parse(self, png: bytes) -> list[UIElement]:  # noqa: ARG002

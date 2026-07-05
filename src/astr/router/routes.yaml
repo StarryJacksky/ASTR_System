@@ -34,6 +34,9 @@ tasks:
 
   # —— 执行层工具决策（P2：决策走强模型、参数留本地兜底；8B 工具调用弱）——
   tool_planning: { free: local-qwen3-8b, cheap: deepseek-chat, balanced: gpt-mini, max: gpt-flagship }
+  # —— CU 端到端 grounding：截图直入坐标直出（调研裁定 2026-07-05：两段式 39.6 < 端到端 49.6 且慢一个量级）——
+  # ⚠️ 截图出网=屏幕隐私出网——正式启用需主人后台点头；沙箱里程碑可用。P2.5 换本地 UI-TARS 后 free 档补位。
+  cu_grounding: { balanced: gemini-flash, max: claude-sonnet }
 
   # —— 凌晨批量评分（judge 必须与被评模型异家，99 #11；本地灵魂是 qwen 系，评分故用非 qwen）——
   scoring:      { cheap: deepseek-chat, balanced: claude-haiku }

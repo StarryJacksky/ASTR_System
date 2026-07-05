@@ -66,7 +66,7 @@ audit:
 emergency_stop:
   hotkey: "Ctrl+Alt+Space"   # 全局热键，<500ms 停手；不依赖她正在控制的鼠标
   web_button: true           # 网页也有急停钮（双保险）
-max_steps_per_task: 25       # CU 单任务硬上限，超过即中止
+max_steps_per_task: 40       # CU 单任务硬上限，超过即中止（里程碑实测：3 文件归类带容错需 ~30 步）
 
 # —— ⑦ 权限分级映射（总规 §2.2.2）——
 # L0 任何人 / L1 群友 / L2 你（声纹或平台ID）/ L3 你 + 二次确认
