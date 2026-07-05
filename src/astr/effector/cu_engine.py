@@ -572,56 +572,68 @@ class CuEngine:
                 return CuReport(
                     ok=False, steps_taken=step_no, transcript=transcript, error=plan.reason
                 )
-            if plan.action in ("click", "double_click", "right_click"):
-                if plan.x is not None and plan.y is not None:  # grounded：千分比→像素
+            try:
+                if plan.action in ("click", "double_click", "right_click"):
+                    if plan.x is not None and plan.y is not None:  # grounded：千分比→像素
+                        w, h = self.backend.screen_size()
+                        self.backend.click(
+                            round(plan.x * w / 1000),
+                            round(plan.y * h / 1000),
+                            double=plan.action == "double_click",
+                            button="right" if plan.action == "right_click" else "left",
+                        )
+                    else:
+                        el = _match_element(elements, plan.target)
+                        if el is None:
+                            transcript.append(f"⚠ 找不到元素 {plan.target}")
+                            continue
+                        self.backend.click(
+                            el.x,
+                            el.y,
+                            double=plan.action == "double_click",
+                            button="right" if plan.action == "right_click" else "left",
+                        )
+                elif plan.action == "hover" and plan.x is not None and plan.y is not None:
                     w, h = self.backend.screen_size()
-                    self.backend.click(
+                    self.backend.move(round(plan.x * w / 1000), round(plan.y * h / 1000))
+                elif plan.action == "scroll" and plan.x is not None and plan.y is not None:
+                    w, h = self.backend.screen_size()
+                    self.backend.scroll(
                         round(plan.x * w / 1000),
                         round(plan.y * h / 1000),
-                        double=plan.action == "double_click",
-                        button="right" if plan.action == "right_click" else "left",
+                        600 if plan.text == "up" else -600,
                     )
-                else:
-                    el = _match_element(elements, plan.target)
-                    if el is None:
-                        transcript.append(f"⚠ 找不到元素 {plan.target}")
-                        continue
-                    self.backend.click(
-                        el.x,
-                        el.y,
-                        double=plan.action == "double_click",
-                        button="right" if plan.action == "right_click" else "left",
+                elif plan.action == "drag" and None not in (plan.x, plan.y, plan.x2, plan.y2):
+                    w, h = self.backend.screen_size()
+                    self.backend.drag(
+                        round(plan.x * w / 1000),  # type: ignore[operator]
+                        round(plan.y * h / 1000),  # type: ignore[operator]
+                        round(plan.x2 * w / 1000),  # type: ignore[operator]
+                        round(plan.y2 * h / 1000),  # type: ignore[operator]
                     )
-            elif plan.action == "hover" and plan.x is not None and plan.y is not None:
-                w, h = self.backend.screen_size()
-                self.backend.move(round(plan.x * w / 1000), round(plan.y * h / 1000))
-            elif plan.action == "scroll" and plan.x is not None and plan.y is not None:
-                w, h = self.backend.screen_size()
-                self.backend.scroll(
-                    round(plan.x * w / 1000),
-                    round(plan.y * h / 1000),
-                    600 if plan.text == "up" else -600,
-                )
-            elif plan.action == "drag" and None not in (plan.x, plan.y, plan.x2, plan.y2):
-                w, h = self.backend.screen_size()
-                self.backend.drag(
-                    round(plan.x * w / 1000),  # type: ignore[operator]
-                    round(plan.y * h / 1000),  # type: ignore[operator]
-                    round(plan.x2 * w / 1000),  # type: ignore[operator]
-                    round(plan.y2 * h / 1000),  # type: ignore[operator]
-                )
-            elif plan.action == "type" and plan.text:
-                # UI-TARS 方言：content 尾部 \n 表示"输完提交"。粘贴换行进重命名框
-                # 不等于按回车（run3 实测残留未命名的"新建文件夹"）——忠实翻译成 enter
-                submit = plan.text.endswith("\n")
-                body = plan.text.rstrip("\n")
-                if body:
-                    self.backend.type_text(body)
-                if submit:
-                    time.sleep(0.3)  # 粘贴落定再回车，太快会把半截名字提交掉
-                    self.backend.key("enter")
-            elif plan.action == "key" and plan.text:
-                self.backend.key(plan.text)
+                elif plan.action == "type" and plan.text:
+                    # UI-TARS 方言：content 尾部 \n 表示"输完提交"。粘贴换行进重命名框
+                    # 不等于按回车（run3 实测残留未命名的"新建文件夹"）——忠实翻译成 enter
+                    submit = plan.text.endswith("\n")
+                    body = plan.text.rstrip("\n")
+                    if body:
+                        self.backend.type_text(body)
+                    if submit:
+                        time.sleep(0.3)  # 粘贴落定再回车，太快会把半截名字提交掉
+                        self.backend.key("enter")
+                elif plan.action == "key" and plan.text:
+                    self.backend.key(plan.text)
+            except Exception as e:
+                # PyAutoGUI failsafe：鼠标被甩到屏幕角落=物理急停（与热键/网页钮并列的
+                # 第三条急停通道，run12 实测主人停放鼠标就在角上）。优雅收工不留烂摊子
+                if type(e).__name__ == "FailSafeException":
+                    return CuReport(
+                        ok=False,
+                        steps_taken=step_no,
+                        transcript=transcript,
+                        error="物理急停：鼠标在屏幕角落（PyAutoGUI failsafe）——停手",
+                    )
+                raise
             last_action_mono = time.monotonic()
             time.sleep(0.8)  # UI 稳定窗：新建文件夹编辑框/粘贴刷新都要缓一拍再截屏
         return CuReport(

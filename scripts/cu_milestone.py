@@ -156,6 +156,13 @@ async def main() -> int:
     else:
         print(f"预聚焦失败（90s 内主人一直在用键鼠或窗口拉不起）：前台 {backend.active_window()}")
         return 1
+    # 主人常把鼠标停在屏幕角落"让位"——但 PyAutoGUI 把角落当物理急停（好机制，保留）。
+    # 开工前先把停放的鼠标轻推回屏幕中心（SetCursorPos 不触发 failsafe），中途甩角=真急停
+    import ctypes
+
+    w_scr, h_scr = backend.screen_size()
+    ctypes.windll.user32.SetCursorPos(w_scr // 2, h_scr // 2)
+    time.sleep(0.2)
     backend.key("win+up")  # 最大化：桌面图标不进感知，元素清单干净
     time.sleep(1.0)
 
