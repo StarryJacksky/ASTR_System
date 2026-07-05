@@ -239,6 +239,7 @@ class CuEngine:
         self.guard = guard or Guard()
         self.route_fn = route_fn
         self.shots_dir = Path(str(self.guard.policy.audit.get("log_dir", "D:/ASTR/effector/logs")))
+        self._skill_notes = ""  # run_task 开工时按任务选段（知识外置，enikk 取经 #3）
 
     async def _plan_step_grounded(
         self, goal: str, png: bytes, history: list[str], trace_id: str, window_title: str
@@ -271,9 +272,15 @@ class CuEngine:
             shown_history = (
                 [line[:60] for line in history[-10:]] if dialect == "ui_tars" else history
             )
+            skill_part = (
+                f"\n操作指南（先查指南再动手，不要猜）：\n{self._skill_notes}\n"
+                if self._skill_notes
+                else ""
+            )
             user_text = (
                 f"目标：{goal}\n当前前台窗口标题：{window_title}"
-                f"（资源管理器标题=当前所在文件夹）\n已执行：{shown_history or '（无）'}"
+                f"（资源管理器标题=当前所在文件夹）{skill_part}"
+                f"\n已执行：{shown_history or '（无）'}"
             )
             if dialect == "ui_tars":
                 sys_prompt = _PLAN_SYS_UI_TARS + user_text
@@ -340,7 +347,14 @@ class CuEngine:
         # 窗口标题=位置本体感：实测没有它，规划器进了空文件夹还以为在原地，
         # 对着面包屑重复双击到步数耗尽。
         loc = f"当前前台窗口标题：{window_title}（资源管理器标题=你当前所在的文件夹）\n"
-        user = f"目标：{goal}\n{loc}屏幕元素：\n{catalog}\n已执行：{history or '（无）'}"
+        skill_part = (
+            f"操作指南（先查指南再动手，不要猜）：\n{self._skill_notes}\n"
+            if self._skill_notes
+            else ""
+        )
+        user = (
+            f"目标：{goal}\n{loc}{skill_part}屏幕元素：\n{catalog}\n已执行：{history or '（无）'}"
+        )
         try:
             resp = await self.route_fn(
                 RouteRequest(
@@ -394,6 +408,20 @@ class CuEngine:
         """
         max_steps = self.guard.policy.max_steps_per_task
         transcript: list[str] = []
+        # 技能注入（知识外置）：按任务+前台应用选《系统操作指南》相关段落进规划 prompt。
+        # 8 轮里程碑的教训：让 7B 每次从零发明"资源管理器怎么用"必败——照方抓药才是正解
+        try:
+            from astr.effector import skills as _skills
+
+            budget = 1600 if get_settings().cu_grounding_dialect == "ui_tars" else 3000
+            self._skill_notes = _skills.select(
+                goal,
+                self.backend.active_window(),
+                soul_name=get_settings().soul_name,
+                budget_chars=budget,
+            )
+        except Exception:  # noqa: BLE001 —— 技能库故障不拦任务，只是回到"无知识"状态
+            self._skill_notes = ""
         # 回切预算：真实桌面 30 步任务里通知/别的应用抢焦点不止 3 次（run3 被 claude.exe
         # 抢死）。放宽不弱化护栏——每次回切后都重查白名单，永不在非白名单窗口上动手。
         refocus_left = 6
