@@ -224,7 +224,14 @@ class FakeBackend:
     def screenshot(self) -> bytes:
         return b"png"
 
-    def click(self, x: int, y: int, *, double: bool = False) -> None:  # noqa: ARG002
+    def click(
+        self,
+        x: int,
+        y: int,
+        *,
+        double: bool = False,
+        button: str = "left",  # noqa: ARG002
+    ) -> None:
         self.clicks.append((x, y))
 
     def type_text(self, text: str) -> None:
@@ -247,6 +254,21 @@ class FakeBackend:
 
     def active_window_title(self) -> str:
         return "sandbox"
+
+    def foreground_handle(self) -> int | None:
+        return None
+
+    def activate_handle(self, handle: int) -> bool:  # noqa: ARG002
+        return False
+
+    def move(self, x: int, y: int) -> None:
+        self.typed.append(f"<move {x},{y}>")
+
+    def drag(self, x1: int, y1: int, x2: int, y2: int) -> None:
+        self.typed.append(f"<drag {x1},{y1}->{x2},{y2}>")
+
+    def scroll(self, x: int, y: int, dy: int) -> None:  # noqa: ARG002
+        self.typed.append(f"<scroll {dy}>")
 
 
 class FakePerceiver:
@@ -360,12 +382,89 @@ def test_parse_ui_tars_hotkey_type_finished() -> None:
     assert d is not None and d.action == "done"
 
 
-def test_parse_ui_tars_unsupported_is_noop_not_abort() -> None:
+async def test_cu_engine_title_fence_blocks_and_fails(tmp_path, monkeypatch) -> None:
+    """地盘围栏：窗口标题不在围栏内 → 一个动作都不许执行、自动返航；回不来判死。
+    背景：白名单是进程级的，资源管理器换文件夹进程不变——run6 实测 7B 逃出沙箱
+    在主人桌面上剪走了真实文件。"""
+    from astr.contracts.settings import Settings
+    from astr.effector import cu_engine as cu_mod
+
+    s = Settings(_env_file=None, astr_data_dir=tmp_path, tool_planning_tier="cheap")
+    monkeypatch.setattr(cu_mod, "get_settings", lambda: s)
+
+    backend = FakeBackend()
+    backend.active_window_title = lambda: "此电脑"  # type: ignore[method-assign] —— 逃出地盘
+    eng = CuEngine(
+        backend,
+        FakePerceiver(),
+        guard=_guard(tmp_path, app_whitelist=["explorer.exe"], max_steps_per_task=20),
+        route_fn=_cu_route([{"action": "click", "target": "发送按钮", "reason": "不该执行到"}]),
+    )
+    report = await eng.run_task(
+        "干活", trace_id="t-fence", confirmed=True, title_fence=("sandbox",)
+    )
+    assert not report.ok and "离开地盘" in (report.error or "")
+    assert backend.clicks == []  # 围栏外一个动作都没执行
+    assert any("alt+left" in t for t in backend.typed)  # 返航尝试过
+    assert report.steps_taken == 7  # 6 次返航 + 第 7 步判死
+
+
+def test_parse_ui_tars_right_click() -> None:
     from astr.effector.cu_engine import _parse_ui_tars
 
     s = _parse_ui_tars(
-        "Thought: 滚动。\nAction: scroll(start_box='(1,1)', direction='down')", 1120, 616
+        "Thought: 右键空白处新建。\nAction: right_single(start_box='<|box_start|>(560,308)<|box_end|>')",
+        1120,
+        616,
     )
+    assert s is not None and s.action == "right_click" and s.x == 500 and s.y == 500
+
+
+async def test_cu_engine_type_trailing_newline_submits(tmp_path, monkeypatch) -> None:
+    """UI-TARS 方言：type 尾部 \\n = 输完提交——执行器要粘贴正文再补 enter，
+    不能把换行粘进重命名框（run3 实测残留未命名的"新建文件夹"）。"""
+    from astr.contracts.settings import Settings
+    from astr.effector import cu_engine as cu_mod
+
+    s = Settings(_env_file=None, astr_data_dir=tmp_path, tool_planning_tier="cheap")
+    monkeypatch.setattr(cu_mod, "get_settings", lambda: s)
+    backend = FakeBackend()
+    eng = CuEngine(
+        backend,
+        FakePerceiver(),
+        guard=_guard(tmp_path, app_whitelist=["explorer.exe"]),
+        route_fn=_cu_route(
+            [
+                {"action": "type", "text": "2026-04\n", "reason": "命名并提交"},
+                {"action": "done", "reason": "完事"},
+            ]
+        ),
+    )
+    report = await eng.run_task("建文件夹", trace_id="t-cu-type")
+    assert report.ok
+    assert backend.typed == ["2026-04", "<enter>"]  # 正文粘贴 + 换行译成回车
+
+
+def test_parse_ui_tars_scroll_drag_hover() -> None:
+    """自由度补全：scroll/drag/hover 是 UI-TARS 的原生动作（此前被 no-op 掉了）。"""
+    from astr.effector.cu_engine import _parse_ui_tars
+
+    s = _parse_ui_tars(
+        "Thought: 滚。\nAction: scroll(start_box='(560,308)', direction='down')", 1120, 616
+    )
+    assert s is not None and s.action == "scroll" and s.text == "down" and s.x == 500
+    d = _parse_ui_tars(
+        "Thought: 拖。\nAction: drag(start_box='(112,62)', end_box='(560,308)')", 1120, 616
+    )
+    assert d is not None and d.action == "drag" and (d.x, d.y, d.x2, d.y2) == (100, 101, 500, 500)
+    h = _parse_ui_tars("Thought: 悬停。\nAction: hover(start_box='(560,308)')", 1120, 616)
+    assert h is not None and h.action == "hover" and h.x == 500
+
+
+def test_parse_ui_tars_unsupported_is_noop_not_abort() -> None:
+    from astr.effector.cu_engine import _parse_ui_tars
+
+    s = _parse_ui_tars("Thought: 截屏。\nAction: screenshot()", 1120, 616)
     assert s is not None and s.action == "key" and s.text is None  # 空转一拍，不炸任务
     assert _parse_ui_tars("胡言乱语没有动作", 1120, 616) is None
 

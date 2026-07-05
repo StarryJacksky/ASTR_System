@@ -43,7 +43,50 @@ GOAL = (
 )
 
 
+# 本地 UI-TARS-7B 专用 GOAL：多步规划/自恢复弱于云 gemini（HANDOFF 预告，run2/4 实证）。
+# 与云 GOAL 的差异是"换给法"不是"降任务"：①建文件夹主路径=功能区按钮（独立实测：
+# 本机 ctrl+shift+n / Alt-H-W 键提示对注入键全聋，唯坐标点击有效——test_newfolder2）；
+# ②明令禁碰左侧导航栏（run2 它点快速访问死链被带离沙箱）；③错误弹窗/重复建的标准恢复。
+GOAL_LOCAL = (
+    "资源管理器已打开在 sandbox 文件夹并最大化——保持最大化，不要碰右上角的最小化/还原按钮。"
+    "只在功能区按钮和窗口中部的文件列表区操作，绝对不要点击窗口左侧的导航栏/快速访问"
+    "（会离开 sandbox，任务立即失败）。文件列表里有三个文件："
+    "report_apr.txt、photo_apr.txt、notes_may.txt；"
+    "形如 2026-05-03 0:00 的是文件的修改日期文本，不是文件夹。"
+    "任务分两段：①建两个文件夹 2026-04 和 2026-05（现在还不存在）："
+    'click 窗口左上方功能区的"新建文件夹"按钮（金色文件夹图标）→ type 输入名字并提交；'
+    "这台电脑的 ctrl+shift+n 快捷键是坏的，绝对不要用快捷键建文件夹。"
+    '按钮点不中就右键文件列表空白处→click"新建(W)"→click 子菜单"文件夹(F)"。'
+    "已经存在的文件夹不要重复建。"
+    "②逐个移文件（apr 的进 2026-04，may 的进 2026-05）："
+    "click 文件名 → hotkey ctrl+x → left_double 目标文件夹的名字（不是日期文本）→ "
+    "hotkey ctrl+v → hotkey alt+up 回上级。"
+    "纪律：type 只用来输入文件夹名；同一做法失败两次就换一种；"
+    "看到错误弹窗按 enter 关掉它；"
+    "粘贴后看一眼文件确实出现在列表里再回上级。三个文件都归位后 finished。"
+)
+
 SEED_NAMES = {"report_apr.txt", "photo_apr.txt", "notes_may.txt"}
+
+
+def _clean_quick_access() -> None:
+    """清掉快速访问里指向沙箱的死链。上轮建过的 2026-04 会被 Windows 记进"常用文件夹"，
+    实体删了左侧死链还在——run2 实测 UI-TARS 点它撞出"位置不可用"弹窗，整个任务由此脱轨。"""
+    ps = (
+        "$qa = (New-Object -ComObject shell.application)"
+        ".Namespace('shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}');"
+        "$qa.Items() | Where-Object { $_.Path -like 'D:\\ASTR\\effector\\sandbox*' } | "
+        "ForEach-Object { $_.InvokeVerb('removefromhome'); $_.InvokeVerb('unpinfromhome') }"
+    )
+    try:
+        subprocess.run(  # noqa: S603
+            ["powershell", "-NoProfile", "-Command", ps],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception:  # noqa: BLE001 —— 清理失败不拦任务（只是环境更脏一点）
+        pass
 
 
 def seed() -> None:
@@ -51,6 +94,7 @@ def seed() -> None:
     （上轮实测产生过改名事故 ".txt" 和残余文件夹——沙箱里的东西只有种子有资格留下）。"""
     import shutil
 
+    _clean_quick_access()
     SANDBOX.mkdir(parents=True, exist_ok=True)
     for sub in SANDBOX.iterdir():
         if sub.name not in SEED_NAMES:
@@ -136,8 +180,15 @@ async def main() -> int:
                 local_srv = _start_local_server()
                 if local_srv is None:
                     return 1
+            goal = GOAL_LOCAL if "--local" in sys.argv else GOAL
             report = await engine.run_task(
-                GOAL, trace_id=trace_id, confirmed=True, refocus_title="sandbox"
+                goal,
+                trace_id=trace_id,
+                confirmed=True,
+                refocus_title="sandbox",
+                # 地盘围栏：她只被允许出现在沙箱和两个目标文件夹里（run6 逃出沙箱
+                # 剪走了主人桌面的真实文件——围栏之后位置不对就不执行、自动返航）
+                title_fence=("sandbox", "2026-04", "2026-05", "新建文件夹"),
             )
     finally:
         if local_srv is not None:

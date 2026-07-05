@@ -55,11 +55,24 @@ class StubPerceiver:
 
 
 class CuStep(BaseModel):
-    action: Literal["click", "double_click", "type", "key", "done", "abort"]
+    action: Literal[
+        "click",
+        "double_click",
+        "right_click",
+        "hover",
+        "scroll",
+        "drag",
+        "type",
+        "key",
+        "done",
+        "abort",
+    ]
     target: str | None = None  # 元素 label（两段式）/ 元素描述（grounded，仅记录用）
-    text: str | None = None  # type/key 的内容
+    text: str | None = None  # type/key 的内容；scroll 时是方向（up/down）
     x: int | None = None  # grounded：屏幕千分比坐标（0-1000），engine 换算像素
     y: int | None = None
+    x2: int | None = None  # drag 终点（千分比）
+    y2: int | None = None
     reason: str = ""
 
     @field_validator("target", "text", mode="before")
@@ -118,6 +131,10 @@ Action: ...
 ## Action Space
 click(start_box='<|box_start|>(x1,y1)<|box_end|>')
 left_double(start_box='<|box_start|>(x1,y1)<|box_end|>')
+right_single(start_box='<|box_start|>(x1,y1)<|box_end|>')
+hover(start_box='<|box_start|>(x1,y1)<|box_end|>')
+scroll(start_box='<|box_start|>(x1,y1)<|box_end|>', direction='down or up')
+drag(start_box='<|box_start|>(x1,y1)<|box_end|>', end_box='<|box_start|>(x3,y3)<|box_end|>')
 hotkey(key='')
 type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
 wait() #Sleep for 1s and take a screenshot to check for any changes.
@@ -156,6 +173,32 @@ def _parse_ui_tars(raw: str, img_w: int, img_h: int) -> CuStep | None:
     if act.startswith("left_double"):
         xy = coords()
         return CuStep(action="double_click", x=xy[0], y=xy[1], reason=reason) if xy else None
+    if act.startswith("right_single"):
+        # 右键在 UI-TARS 的训练分布里（右键空白→新建），run3 实测硬拦它只会空转到步数耗尽
+        xy = coords()
+        return CuStep(action="right_click", x=xy[0], y=xy[1], reason=reason) if xy else None
+    if act.startswith("hover"):
+        xy = coords()
+        return CuStep(action="hover", x=xy[0], y=xy[1], reason=reason) if xy else None
+    if act.startswith("scroll"):
+        xy = coords()
+        direction = "up" if "up" in content("direction").lower() else "down"
+        if xy:
+            return CuStep(action="scroll", x=xy[0], y=xy[1], text=direction, reason=reason)
+        return CuStep(action="scroll", x=500, y=500, text=direction, reason=reason)
+    if act.startswith("drag"):
+        pts = _UI_TARS_COORD.findall(act)
+        if len(pts) >= 2:
+            (x1, y1), (x2, y2) = pts[0], pts[1]
+            return CuStep(
+                action="drag",
+                x=round(int(x1) / img_w * 1000),
+                y=round(int(y1) / img_h * 1000),
+                x2=round(int(x2) / img_w * 1000),
+                y2=round(int(y2) / img_h * 1000),
+                reason=reason,
+            )
+        return None
     if act.startswith("hotkey"):
         keys = content("key").strip().replace(" ", "+")
         return CuStep(action="key", text=keys or None, reason=reason)
@@ -165,7 +208,7 @@ def _parse_ui_tars(raw: str, img_w: int, img_h: int) -> CuStep | None:
         return CuStep(action="done", reason=reason or content("content")[:120])
     if act.startswith("wait"):
         return CuStep(action="key", text=None, reason=f"wait：{reason}")  # 引擎空转一拍
-    # scroll/drag/right_single 等暂不在我们动作面里：空转一拍，履历让它换招（复读机刹车兜底）
+    # 剩余不认识的动作：空转一拍，履历让它换招（复读机刹车兜底）
     return CuStep(action="key", text=None, reason=f"暂不支持的动作 {act[:40]}，请换一种做法")
 
 
@@ -211,8 +254,11 @@ class CuEngine:
             img = Image.open(_io.BytesIO(png))
             if dialect == "ui_tars":
                 # 定死到 28 的倍数（Qwen2-VL patch 尺寸）——mtmd 不再二次缩放，
-                # 模型回报的像素坐标才等于"我们发的这张图"的坐标系
-                w = 1120
+                # 模型回报的像素坐标才等于"我们发的这张图"的坐标系。
+                # 1568（56×28）而非 1120：2560 屏降到 1120 时功能区按钮/右键菜单小字
+                # 压到 5px，run2/4 实测 7B 反复点不中"新建文件夹"——分辨率是 grounding
+                # 的地板。代价 ~1792 视觉 token（服务端 --image-max-tokens 2048 兜住）
+                w = 1568
                 h = max(28, round(img.height * w / img.width / 28) * 28)
                 img = img.resize((w, h))
             elif img.width > 1440:  # 压 token：千分比坐标与分辨率无关，降采样不损协议
@@ -220,9 +266,14 @@ class CuEngine:
             buf = _io.BytesIO()
             img.convert("RGB").save(buf, "JPEG", quality=80)
             b64 = base64.b64encode(buf.getvalue()).decode()
+            # 7B 履历减负：全量履历到 20+ 步时把 prompt 撑到 2.7k token，7B 的注意力
+            # 会淹在自己过去的碎碎念里（run3 实测 tokens_in 一路涨、后半程决策明显变糊）
+            shown_history = (
+                [line[:60] for line in history[-10:]] if dialect == "ui_tars" else history
+            )
             user_text = (
                 f"目标：{goal}\n当前前台窗口标题：{window_title}"
-                f"（资源管理器标题=当前所在文件夹）\n已执行：{history or '（无）'}"
+                f"（资源管理器标题=当前所在文件夹）\n已执行：{shown_history or '（无）'}"
             )
             if dialect == "ui_tars":
                 sys_prompt = _PLAN_SYS_UI_TARS + user_text
@@ -258,6 +309,10 @@ class CuEngine:
                     messages=messages,
                     cost_tier=get_settings().cu_grounding_tier,  # type: ignore[arg-type]
                     trace_id=trace_id,
+                    # 不设则吃 llama.cpp 默认 0.8——GUI 操作不是聊天，每步高随机采样
+                    # = 让 7B 掷骰子（run7 实测上一步定的方案下一步就翻悔）。官方
+                    # UI-TARS 推理近贪心；留 0.1 给复读机刹车一点破循环的余地
+                    temperature=0.1,
                 )
             )
             raw = resp.content.strip()
@@ -323,19 +378,38 @@ class CuEngine:
         trace_id: str,
         confirmed: bool = False,
         refocus_title: str | None = None,
+        title_fence: tuple[str, ...] | None = None,
     ) -> CuReport:
-        """跑一个视觉任务。每步：急停查 → 白名单查 → 感知 → 规划 → 执行 → 审计。
+        """跑一个视觉任务。每步：急停查 → 白名单查 → 地盘围栏 → 感知 → 规划 → 执行 → 审计。
 
         refocus_title：目标窗口标题片段。前台被第三方窗口抢走时（通知弹窗等，
         实测 1 次就撞上）回切目标窗口重查一次，而不是直接判死；回切失败仍拒——
         护栏语义不变：绝不在非白名单窗口上动手。
+
+        title_fence：她被允许待的"地盘"（窗口标题片段集合）。应用白名单是进程级的，
+        而资源管理器换文件夹进程不变——run6 实测 7B 从导航栏逃出沙箱后在主人的桌面上
+        剪走了真实文件。围栏把范围执法延伸到"位置"：标题不命中任何围栏项就拒绝执行
+        动作并自动返航（alt+left / enter 交替，兼顾误导航与模态弹窗），连续 6 步回不来
+        判死。None=不围（非资源管理器类任务）。
         """
         max_steps = self.guard.policy.max_steps_per_task
         transcript: list[str] = []
-        refocus_left = 3
+        # 回切预算：真实桌面 30 步任务里通知/别的应用抢焦点不止 3 次（run3 被 claude.exe
+        # 抢死）。放宽不弱化护栏——每次回切后都重查白名单，永不在非白名单窗口上动手。
+        refocus_left = 6
+        fence_breaches = 0
         last_action_mono: float | None = None
         last_sig: tuple | None = None
         repeats = 0
+        # "家"句柄：任务起点的白名单窗口。回切首选句柄——资源管理器标题随导航漂
+        # （实测 run2：误点导航栏后标题变"iCloud 照片"，按"sandbox"标题回切失灵判死）
+        home_handle: int | None = None
+
+        def _refocus() -> bool:
+            if home_handle is not None and self.backend.activate_handle(home_handle):
+                return True
+            return bool(refocus_title) and self.backend.activate_title(refocus_title)
+
         for step_no in range(1, max_steps + 1):
             try:
                 estop.check()
@@ -360,8 +434,7 @@ class CuEngine:
                             ok=False, steps_taken=step_no - 1, transcript=transcript, error=str(e)
                         )
                     time.sleep(0.5)
-                if refocus_title:
-                    self.backend.activate_title(refocus_title)
+                if _refocus():
                     time.sleep(0.3)
             # 白名单：前台窗口必须在册（每步都查——窗口可能中途切换）
             req = ActionRequest(
@@ -371,17 +444,18 @@ class CuEngine:
                 trace_id=trace_id,
             )
             verdict = self.guard.decide(req)
-            if (
-                verdict.decision == "deny"
-                and refocus_title
-                and refocus_left > 0
-                and self.backend.activate_title(refocus_title)
-            ):
-                refocus_left -= 1
-                time.sleep(0.6)
-                transcript.append(f"↻ 前台被 {req.app or '未知'} 抢走，已切回 {refocus_title}")
-                req = req.model_copy(update={"app": self.backend.active_window()})
-                verdict = self.guard.decide(req)
+            if verdict.decision == "deny" and refocus_left > 0:
+                # 抢焦点的多是通知/一闪而过的窗口（run5 被 claude.exe 闪杀）——它还占着
+                # 前台时 SetForegroundWindow 会失败，等它过去再切，最多熬 3 拍
+                for _ in range(3):
+                    if _refocus():
+                        refocus_left -= 1
+                        time.sleep(0.6)
+                        transcript.append(f"↻ 前台被 {req.app or '未知'} 抢走，已切回目标窗口")
+                        req = req.model_copy(update={"app": self.backend.active_window()})
+                        verdict = self.guard.decide(req)
+                        break
+                    time.sleep(1.2)
             if verdict.decision == "deny":
                 self.guard.audit(req, verdict, {"step": step_no, "executed": False})
                 return CuReport(
@@ -394,10 +468,30 @@ class CuEngine:
                     transcript=transcript,
                     error="任务含危险动作，需主人确认后带 confirmed=True 重跑",
                 )
+            if home_handle is None:  # 第一步过白名单的窗口=这个任务的"家"
+                home_handle = self.backend.foreground_handle()
+            # 地盘围栏：不在申报的位置上就不执行任何动作，先返航（见 docstring）
+            title = self.backend.active_window_title()
+            if title_fence and not any(f in title for f in title_fence):
+                fence_breaches += 1
+                if fence_breaches > 6:
+                    return CuReport(
+                        ok=False,
+                        steps_taken=step_no,
+                        transcript=transcript,
+                        error=f"离开地盘且返航失败（当前窗口：{title}）",
+                    )
+                transcript.append(f"⛔ 不在地盘（{title}），自动返航")
+                log.info("cu_fence_breach", trace_id=trace_id, step=step_no, title=title)
+                _refocus()  # 可能只是别的窗口挡在前面
+                # 交替两种返航键：alt+left 治误导航，enter 关模态弹窗（按默认钮）
+                self.backend.key("alt+left" if fence_breaches % 2 else "enter")
+                time.sleep(1.0)
+                continue
+            fence_breaches = 0
             # 感知 → 规划：grounded 优先（截图直出坐标，单步 2-5s），两段式兜底
             png = self.backend.screenshot()
             shot_ref = self._save_shot(png, trace_id, step_no)
-            title = self.backend.active_window_title()
             elements: list[UIElement] = []
             plan: CuStep | None = None
             if get_settings().cu_planner == "grounded":
@@ -444,22 +538,54 @@ class CuEngine:
                 return CuReport(
                     ok=False, steps_taken=step_no, transcript=transcript, error=plan.reason
                 )
-            if plan.action in ("click", "double_click"):
+            if plan.action in ("click", "double_click", "right_click"):
                 if plan.x is not None and plan.y is not None:  # grounded：千分比→像素
                     w, h = self.backend.screen_size()
                     self.backend.click(
                         round(plan.x * w / 1000),
                         round(plan.y * h / 1000),
                         double=plan.action == "double_click",
+                        button="right" if plan.action == "right_click" else "left",
                     )
                 else:
                     el = _match_element(elements, plan.target)
                     if el is None:
                         transcript.append(f"⚠ 找不到元素 {plan.target}")
                         continue
-                    self.backend.click(el.x, el.y, double=plan.action == "double_click")
+                    self.backend.click(
+                        el.x,
+                        el.y,
+                        double=plan.action == "double_click",
+                        button="right" if plan.action == "right_click" else "left",
+                    )
+            elif plan.action == "hover" and plan.x is not None and plan.y is not None:
+                w, h = self.backend.screen_size()
+                self.backend.move(round(plan.x * w / 1000), round(plan.y * h / 1000))
+            elif plan.action == "scroll" and plan.x is not None and plan.y is not None:
+                w, h = self.backend.screen_size()
+                self.backend.scroll(
+                    round(plan.x * w / 1000),
+                    round(plan.y * h / 1000),
+                    600 if plan.text == "up" else -600,
+                )
+            elif plan.action == "drag" and None not in (plan.x, plan.y, plan.x2, plan.y2):
+                w, h = self.backend.screen_size()
+                self.backend.drag(
+                    round(plan.x * w / 1000),  # type: ignore[operator]
+                    round(plan.y * h / 1000),  # type: ignore[operator]
+                    round(plan.x2 * w / 1000),  # type: ignore[operator]
+                    round(plan.y2 * h / 1000),  # type: ignore[operator]
+                )
             elif plan.action == "type" and plan.text:
-                self.backend.type_text(plan.text)
+                # UI-TARS 方言：content 尾部 \n 表示"输完提交"。粘贴换行进重命名框
+                # 不等于按回车（run3 实测残留未命名的"新建文件夹"）——忠实翻译成 enter
+                submit = plan.text.endswith("\n")
+                body = plan.text.rstrip("\n")
+                if body:
+                    self.backend.type_text(body)
+                if submit:
+                    time.sleep(0.3)  # 粘贴落定再回车，太快会把半截名字提交掉
+                    self.backend.key("enter")
             elif plan.action == "key" and plan.text:
                 self.backend.key(plan.text)
             last_action_mono = time.monotonic()

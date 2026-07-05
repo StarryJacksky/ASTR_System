@@ -23,10 +23,19 @@ class PlatformBackend(ABC):
         ...
 
     @abstractmethod
-    def click(self, x: int, y: int, *, double: bool = False) -> None: ...
+    def click(self, x: int, y: int, *, double: bool = False, button: str = "left") -> None: ...
 
     @abstractmethod
     def type_text(self, text: str) -> None: ...
+
+    def move(self, x: int, y: int) -> None:  # noqa: B027 —— 可选能力，平台不支持则静默
+        """悬停/平滑移动（hover 语义：子菜单展开、tooltip 依赖鼠标真的经过）。"""
+
+    def drag(self, x1: int, y1: int, x2: int, y2: int) -> None:  # noqa: B027
+        """按住左键从 (x1,y1) 拖到 (x2,y2)。"""
+
+    def scroll(self, x: int, y: int, dy: int) -> None:  # noqa: B027
+        """在 (x,y) 处滚动 dy（正=向上）。"""
 
     @abstractmethod
     def key(self, combo: str) -> None:  # 如 "enter" / "ctrl+s"
@@ -41,6 +50,15 @@ class PlatformBackend(ABC):
 
     def activate_title(self, title_substr: str) -> bool:
         """把标题含 title_substr 的窗口切到前台（焦点被夺时 cu_engine 回切用）。"""
+        return False
+
+    def foreground_handle(self) -> int | None:
+        """前台窗口的原生句柄。任务开始时记住"家"——资源管理器标题随导航漂
+        （sandbox→iCloud 照片），按标题回切一次误导航就失灵；句柄不漂。None=不支持。"""
+        return None
+
+    def activate_handle(self, handle: int) -> bool:
+        """按句柄把窗口切回前台（回切的首选路径，activate_title 是兜底）。"""
         return False
 
     def input_idle_s(self) -> float | None:
@@ -68,10 +86,30 @@ class WindowsBackend(PlatformBackend):
         shot = self._mss.grab(mon)
         return mss.tools.to_png(shot.rgb, shot.size)
 
-    def click(self, x: int, y: int, *, double: bool = False) -> None:
+    def click(self, x: int, y: int, *, double: bool = False, button: str = "left") -> None:
         import pyautogui
 
-        pyautogui.click(x, y, clicks=2 if double else 1, interval=0.08)
+        # 先平滑移动再点：不是观感——Windows 的悬停语义（子菜单展开/hover 高亮）
+        # 依赖鼠标真的"经过"，瞬移点击跳过了这个物理过程（run6/7 子菜单反复点不进）
+        pyautogui.moveTo(x, y, duration=0.25, tween=pyautogui.easeOutQuad)
+        pyautogui.click(clicks=2 if double else 1, interval=0.08, button=button)
+
+    def move(self, x: int, y: int) -> None:
+        import pyautogui
+
+        pyautogui.moveTo(x, y, duration=0.3, tween=pyautogui.easeOutQuad)
+
+    def drag(self, x1: int, y1: int, x2: int, y2: int) -> None:
+        import pyautogui
+
+        pyautogui.moveTo(x1, y1, duration=0.25)
+        pyautogui.dragTo(x2, y2, duration=0.5, button="left")
+
+    def scroll(self, x: int, y: int, dy: int) -> None:
+        import pyautogui
+
+        pyautogui.moveTo(x, y, duration=0.2)
+        pyautogui.scroll(dy)
 
     def type_text(self, text: str) -> None:
         import pyautogui
@@ -159,6 +197,34 @@ class WindowsBackend(PlatformBackend):
             return buf.value
         except Exception:  # noqa: BLE001
             return ""
+
+    def foreground_handle(self) -> int | None:
+        try:
+            import ctypes
+
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            return int(hwnd) or None
+        except Exception:  # noqa: BLE001
+            return None
+
+    def activate_handle(self, handle: int) -> bool:
+        # 与 activate_title 同一套 ALT 空击解锁（SetForegroundWindow 对后台进程默认失效）
+        try:
+            import ctypes
+            import time as _time
+
+            u32 = ctypes.windll.user32
+            if not u32.IsWindow(handle):
+                return False
+            if u32.IsIconic(handle):
+                u32.ShowWindow(handle, 9)  # SW_RESTORE
+            u32.keybd_event(0x12, 0, 0, 0)  # ALT down
+            u32.keybd_event(0x12, 0, 2, 0)  # ALT up
+            u32.SetForegroundWindow(handle)
+            _time.sleep(0.3)
+            return u32.GetForegroundWindow() == handle
+        except Exception:  # noqa: BLE001
+            return False
 
     def input_idle_s(self) -> float | None:
         try:

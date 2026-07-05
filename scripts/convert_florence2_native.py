@@ -113,9 +113,9 @@ def convert() -> None:
     model = Florence2ForConditionalGeneration(cfg)
     model.load_state_dict(out, strict=True)
     # 确认解绑生效：tying 若仍启用会让 lm_head 被 shared 覆盖
-    assert not torch.equal(
-        model.lm_head.weight, model.model.language_model.shared.weight
-    ), "lm_head 被绑定覆盖，解绑未生效"
+    assert not torch.equal(model.lm_head.weight, model.model.language_model.shared.weight), (
+        "lm_head 被绑定覆盖，解绑未生效"
+    )
 
     OUT_DIR.mkdir(exist_ok=True)
     model.half().save_pretrained(OUT_DIR)
