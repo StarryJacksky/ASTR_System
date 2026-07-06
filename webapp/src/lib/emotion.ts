@@ -13,11 +13,12 @@ export interface EmotionVector {
 }
 
 // 四个锚点色，与 tokens.css 的 --emo-* 严格一致。改色时两边同步。
+// （2026-07-06 三合一定稿：她的光=深海生物荧光——只出现在她身上，绝不进 UI 控件）
 const ANCHORS: Record<keyof EmotionVector, [number, number, number]> = {
-  lonely: [0x4c, 0x6f, 0xff], // #4C6FFF 冷蓝
-  excited: [0xff, 0x7a, 0x59], // #FF7A59 暖橙
+  lonely: [0x5b, 0x8b, 0xff], // #5B8BFF 深海冷蓝
+  excited: [0xff, 0x8a, 0x5c], // #FF8A5C 暖珊瑚
   tsundere: [0xff, 0x5c, 0xa8], // #FF5CA8 品红
-  calm: [0x2d, 0xd4, 0xbf], // #2DD4BF 青绿
+  calm: [0x3d, 0xf5, 0xc4], // #3DF5C4 生物荧光青
 };
 
 /**

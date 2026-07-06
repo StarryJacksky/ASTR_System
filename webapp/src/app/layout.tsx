@@ -1,10 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Geist, Geist_Mono, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// 展示衬线（天文台时刻）：拉丁 Fraunces + 中文 Noto Serif SC（Google 按 unicode-range
+// 切片分发，浏览器只拉用到的字形段，不会整包思源宋体拖 LCP）
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  weight: ["400", "600"],
+});
+const notoSerif = Noto_Serif_SC({
+  variable: "--font-noto-serif",
+  weight: ["400", "600"],
+  preload: false,
+});
 
 export const metadata: Metadata = {
   title: "秋秋 · ASTR 驾驶舱",
@@ -13,9 +25,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="zh"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${notoSerif.variable}`}
+    >
       <body className="min-h-full antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {/* 环境系统（04 §3.2）：天光 + 颗粒，铺在一切内容之下 */}
+          <div aria-hidden className="astr-ambient" />
+          <div aria-hidden className="astr-grain" />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

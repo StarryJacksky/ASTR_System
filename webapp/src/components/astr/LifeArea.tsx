@@ -61,8 +61,16 @@ export function LifeArea({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* 她此刻在干嘛 + 展开/收起 */}
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-        <p className="truncate text-xs text-ink-3">
-          {activity || "（她的生活状态会显示在这里）"}
+        <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-3">
+          <span
+            aria-hidden
+            className="h-1 w-1 shrink-0 rounded-full"
+            style={{
+              background: "var(--astr-emotion-glow)",
+              animation: "astr-breath var(--dur-breath) ease-in-out infinite",
+            }}
+          />
+          <span className="truncate">{activity || "（她的生活状态会显示在这里）"}</span>
         </p>
         <button
           type="button"
@@ -96,9 +104,16 @@ export function LifeArea({
                   initial="hidden"
                   animate="show"
                   className={`rounded-xl px-3 py-2 text-sm leading-relaxed ${
-                    isHer ? "bg-surface-2 text-ink" : "text-ink-2"
+                    isHer ? "astr-edge bg-surface-2 text-ink" : "text-ink-2"
                   }`}
-                  style={isHer ? { boxShadow: "var(--glow-her)" } : undefined}
+                  style={
+                    isHer
+                      ? {
+                          boxShadow: "0 0 20px -12px var(--astr-emotion-glow)",
+                          transition: "box-shadow 2400ms var(--ease-inout)",
+                        }
+                      : undefined
+                  }
                 >
                   <span className={`mr-2 font-medium ${isHer ? "text-ink" : "text-accent"}`}>
                     {isHer ? "秋秋" : (SEAT_LABEL[it.seat ?? ""] ?? it.seat)}

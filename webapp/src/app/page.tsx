@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { Mic, OctagonX, Send, Settings, SlidersHorizontal, X } from "lucide-react";
 import { startRecorder, type MicRecorder } from "@/lib/wav";
-import { Panel } from "@/components/astr/Panel";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
 import { Live2DControls } from "@/components/astr/Live2DControls";
 import { Live2DStage } from "@/components/astr/Live2DStage";
@@ -164,15 +164,23 @@ export default function Cockpit() {
   };
 
   return (
-    <div className="relative flex h-screen flex-col gap-3 p-3">
-      {/* 顶栏 */}
-      <header className="flex items-center justify-between rounded-2xl border border-hairline bg-surface px-4 py-2.5">
-        <div className="flex items-center gap-2">
+    <div className="relative flex h-screen flex-col overflow-hidden">
+      {/* 顶部仪器条：无盒——只有内容和一条刻线。铭牌用衬线，读数用等宽 */}
+      <header className="flex items-center justify-between border-b border-hairline px-8 py-4">
+        <div className="flex items-baseline gap-3">
           <span
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ background: "var(--astr-emotion-glow)", boxShadow: "var(--glow-her)" }}
+            aria-hidden
+            className="h-2 w-2 self-center rounded-full"
+            style={{
+              background: "var(--astr-emotion-glow)",
+              boxShadow: "0 0 14px var(--astr-emotion-glow)",
+              transition:
+                "background 2400ms var(--ease-inout), box-shadow 2400ms var(--ease-inout)",
+              animation: "astr-breath var(--dur-breath) ease-in-out infinite",
+            }}
           />
-          <span className="text-sm font-semibold text-ink">秋秋 · ASTR 驾驶舱</span>
+          <span className="astr-wordmark text-xl text-ink">露怀秋</span>
+          <span className="astr-label">ASTR OBSERVATORY</span>
         </div>
         <StatusBar
           soulName={status?.soul_name ?? "justin"}
@@ -181,16 +189,16 @@ export default function Cockpit() {
           budget={status?.daily_budget_usd ?? null}
           connected={connected}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             aria-label={estopped ? "复位急停" : "急停"}
             title={estopped ? "急停已触发——点击复位" : "急停（她立刻停手）"}
             onClick={toggleEstop}
-            className={`grid h-8 w-8 place-items-center rounded-lg border transition-colors ${
+            className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${
               estopped
-                ? "animate-pulse border-danger bg-danger/20 text-danger"
-                : "border-hairline text-danger/70 hover:bg-surface-2"
+                ? "animate-pulse border border-danger bg-danger/20 text-danger"
+                : "text-danger/60 hover:bg-surface-2 hover:text-danger"
             }`}
           >
             <OctagonX size={16} />
@@ -199,7 +207,7 @@ export default function Cockpit() {
             type="button"
             aria-label="设置"
             onClick={() => setShowSettings((v) => !v)}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-hairline text-ink-2 transition-colors hover:bg-surface-2"
+            className="grid h-8 w-8 place-items-center rounded-md text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <Settings size={16} />
           </button>
@@ -207,7 +215,7 @@ export default function Cockpit() {
             href="/admin"
             aria-label="后台控制台"
             title="后台控制台（执行层旋钮/审计）"
-            className="grid h-8 w-8 place-items-center rounded-lg border border-hairline text-ink-2 transition-colors hover:bg-surface-2"
+            className="grid h-8 w-8 place-items-center rounded-md text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <SlidersHorizontal size={16} />
           </Link>
@@ -216,98 +224,135 @@ export default function Cockpit() {
       </header>
 
       {/* 设置浮层：声纹录入（W10-f）*/}
-      {showSettings && (
-        <div className="absolute left-3 top-16 z-[var(--z-overlay)] max-h-[82vh] w-80 overflow-auto rounded-2xl border border-hairline bg-surface p-4 shadow-[var(--shadow-3)]">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-ink">设置 · 声纹</h3>
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="astr-glass absolute left-3 top-16 z-[var(--z-overlay)] max-h-[82vh] w-80 overflow-auto rounded-2xl border border-hairline p-4 shadow-[var(--shadow-3)]"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-ink">设置 · 声纹</h3>
+              <button
+                type="button"
+                aria-label="关闭"
+                onClick={() => setShowSettings(false)}
+                className="text-ink-3 hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <VoiceprintPanel />
+            <div className="my-4 border-t border-hairline" />
+            <h3 className="mb-3 text-sm font-medium text-ink">看板娘取景</h3>
+            <Live2DControls />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 观测场景：左=对话之河（无盒，上下渐隐），右=她的观测柱（全高，一条刻线分隔） */}
+      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_420px] lg:overflow-hidden">
+        {/* 对话之河 */}
+        <section className="relative mx-auto flex h-full w-full min-w-0 max-w-3xl flex-col px-8 lg:min-h-0">
+          <div className="astr-label shrink-0 pb-4 pt-6">01 / DIALOGUE — 对话</div>
+          <div
+            className="min-h-0 flex-1 overflow-y-auto pr-2"
+            style={{
+              maskImage:
+                "linear-gradient(to bottom, transparent, black 28px, black calc(100% - 28px), transparent)",
+              WebkitMaskImage:
+                "linear-gradient(to bottom, transparent, black 28px, black calc(100% - 28px), transparent)",
+            }}
+          >
+            <MessageTimeline messages={messages} />
+          </div>
+
+          {/* 输入：一条刻线上的仪器行，不是大盒子。聚焦=琥珀刻线通电 */}
+          <footer className="astr-composer flex shrink-0 items-center gap-3 border-t border-hairline py-4">
+            <span aria-hidden className="font-mono text-sm text-ink-3">
+              ❯
+            </span>
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder={
+                recording
+                  ? "录音中…再点一下麦克风停止"
+                  : transcribing
+                    ? "转写中…"
+                    : connected
+                      ? "和秋秋说点什么…"
+                      : "Core 离线 —— 消息只在本地显示"
+              }
+              className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
+            />
+            <VoiceVisualizer />
             <button
               type="button"
-              aria-label="关闭"
-              onClick={() => setShowSettings(false)}
-              className="text-ink-3 hover:text-ink"
+              aria-label={recording ? "停止录音" : "语音输入"}
+              onClick={toggleMic}
+              disabled={transcribing}
+              className={`grid h-8 w-8 place-items-center rounded-md transition-colors disabled:opacity-50 ${
+                recording
+                  ? "animate-pulse border border-danger text-danger"
+                  : "text-ink-3 hover:bg-surface-2 hover:text-ink"
+              }`}
             >
-              <X size={16} />
+              <Mic size={15} />
             </button>
-          </div>
-          <VoiceprintPanel />
-          <div className="my-4 border-t border-hairline" />
-          <h3 className="mb-3 text-sm font-medium text-ink">看板娘取景</h3>
-          <Live2DControls />
-        </div>
-      )}
+            <motion.button
+              type="button"
+              aria-label="发送"
+              onClick={() => send()}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ duration: 0.12 }}
+              className="grid h-8 w-8 place-items-center rounded-md text-on-accent"
+              style={{ background: "var(--astr-accent)" }}
+            >
+              <Send size={15} />
+            </motion.button>
+          </footer>
+        </section>
 
-      {/* 主区：左聊天，右栏 Live2D / 当前任务·思考 / 圆桌 */}
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_380px]">
-        <Panel title="对话" className="min-h-0">
-          <MessageTimeline messages={messages} />
-        </Panel>
-
-        <div className="flex min-h-0 flex-col gap-3">
-          <Panel glow className="shrink-0">
-            <Live2DStage
-              emotionLabel={emotionLabel}
-              expressionIndex={expressionIndex}
-              speakSignal={speak.sig}
-              speakMs={speak.ms}
-            />
-            <div className="mt-3">
-              <EmotionGauge emotion={status?.emotion ?? null} />
-            </div>
-          </Panel>
-          <Panel
-            title="生活区"
-            className={`min-h-0 ${lifeExpanded ? "flex-[3]" : "flex-1"}`}
+        {/* 她的观测柱：房间里唯一发光的存在。竖排铭牌立在分隔线上 */}
+        <aside className="relative flex min-h-0 flex-col border-t border-hairline lg:border-l lg:border-t-0">
+          <span
+            aria-hidden
+            className="astr-label absolute left-3 top-6 hidden lg:block"
+            style={{ writingMode: "vertical-rl", letterSpacing: "0.4em" }}
           >
-            <LifeArea
-              events={events}
-              activity={status?.activity}
-              expanded={lifeExpanded}
-              onToggle={() => setLifeExpanded((v) => !v)}
-            />
-          </Panel>
-        </div>
+            观测记录
+          </span>
+          <div className="flex min-h-0 flex-1 flex-col pl-8 pr-8 lg:pl-12">
+            <div className="relative shrink-0 pt-2">
+              <Live2DStage
+                emotionLabel={emotionLabel}
+                expressionIndex={expressionIndex}
+                speakSignal={speak.sig}
+                speakMs={speak.ms}
+              />
+              <div className="mt-4">
+                <EmotionGauge emotion={status?.emotion ?? null} />
+              </div>
+            </div>
+            <div className="mt-5 shrink-0 border-t border-hairline pt-4">
+              <div className="astr-label pb-3">02 / LIFE — 她的生活</div>
+            </div>
+            <div className={`min-h-0 ${lifeExpanded ? "flex-[3]" : "flex-1"} pb-4`}>
+              <LifeArea
+                events={events}
+                activity={status?.activity}
+                expanded={lifeExpanded}
+                onToggle={() => setLifeExpanded((v) => !v)}
+              />
+            </div>
+          </div>
+        </aside>
       </main>
-
-      {/* 底栏：输入 + 麦克风 + 声波 */}
-      <footer className="flex items-center gap-3 rounded-2xl border border-hairline bg-surface px-3 py-2.5">
-        <VoiceVisualizer />
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder={
-            recording
-              ? "录音中…再点一下麦克风停止"
-              : transcribing
-                ? "转写中…"
-                : connected
-                  ? "和秋秋说点什么…"
-                  : "Core 离线 —— 消息只在本地显示"
-          }
-          className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
-        />
-        <button
-          type="button"
-          aria-label={recording ? "停止录音" : "语音输入"}
-          onClick={toggleMic}
-          disabled={transcribing}
-          className={`grid h-9 w-9 place-items-center rounded-xl border transition-colors disabled:opacity-50 ${
-            recording
-              ? "animate-pulse border-danger text-danger"
-              : "border-hairline text-ink-2 hover:bg-surface-2"
-          }`}
-        >
-          <Mic size={16} />
-        </button>
-        <button
-          type="button"
-          aria-label="发送"
-          onClick={() => send()}
-          className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-ink transition-transform hover:scale-[1.03]"
-        >
-          <Send size={16} />
-        </button>
-      </footer>
     </div>
   );
 }

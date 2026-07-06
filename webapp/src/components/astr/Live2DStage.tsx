@@ -44,21 +44,33 @@ function loadCubismCore(): Promise<void> {
 }
 
 function EmotionBacklight() {
+  // 一束天光（三合一定稿）：从舞台顶垂落的情绪光，她=天文台里被照亮的存在
   return (
     <div
       className="pointer-events-none absolute inset-0"
       style={{
-        background: "radial-gradient(circle at 50% 42%, var(--astr-emotion-glow), transparent 68%)",
-        opacity: 0.2,
-        transition: "background var(--dur-slow) var(--ease-inout)",
+        background:
+          "radial-gradient(42% 72% at 50% 0%, color-mix(in srgb, var(--astr-emotion-glow) 26%, transparent), transparent 82%)",
+        transition: "background 2400ms var(--ease-inout)",
+        animation: "astr-breath var(--dur-breath) ease-in-out infinite",
       }}
+    />
+  );
+}
+
+function StageFade() {
+  // 舞台底部融进面板底色，Live2D 与 UI 无缝（放在 canvas 之后=盖在其上）
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-0 h-14"
+      style={{ background: "linear-gradient(to top, var(--astr-surface), transparent)" }}
     />
   );
 }
 
 function FallbackOrb({ emotionLabel }: { emotionLabel?: string }) {
   return (
-    <div className="relative flex h-72 items-center justify-center overflow-hidden rounded-2xl">
+    <div className="relative flex h-[38vh] max-h-[520px] min-h-[280px] items-center justify-center overflow-hidden rounded-2xl">
       <EmotionBacklight />
       <motion.div
         className="relative flex h-40 w-40 items-center justify-center rounded-full border border-hairline bg-surface-2 text-center text-ink-3"
@@ -131,7 +143,10 @@ export function Live2DStage({
           autoDensity: true,
           resolution: window.devicePixelRatio || 1,
         });
-        const model = await Live2DModel.from(MODEL_URL, { autoInteract: false });
+        const model = await Live2DModel.from(MODEL_URL, {
+          autoHitTest: false,
+          autoFocus: false,
+        });
         if (cancelled) {
           model.destroy();
           app.destroy(true);
@@ -203,11 +218,13 @@ export function Live2DStage({
 
   if (failed) return <FallbackOrb emotionLabel={emotionLabel} />;
 
-  // 固定高度 + canvas 绝对定位（脱离文档流），杜绝 canvas↔父容器尺寸反馈环。
+  // 视口比例高度（她是主角，占观测柱主体）+ canvas 绝对定位（脱离文档流），
+  // 杜绝 canvas↔父容器尺寸反馈环。
   return (
-    <div className="relative h-72 overflow-hidden rounded-2xl">
+    <div className="relative h-[38vh] max-h-[520px] min-h-[280px] overflow-hidden rounded-2xl">
       <EmotionBacklight />
       <canvas ref={canvasRef} className="absolute inset-0" />
+      <StageFade />
     </div>
   );
 }
