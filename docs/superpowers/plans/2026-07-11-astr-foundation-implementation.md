@@ -535,7 +535,30 @@ export const createSemanticStore = () => createStore<SemanticStoreState>()((set)
 
 Export the singleton and a typed React selector hook built with `useStore`.
 
-Extend `types.ts` with optional `display_name?: string` and explicit `CoreStatusProjection`, `ConversationProjection`, and `IngestReceipt { event_id; trace_id }`. Do not add Task/Artifact fields to current Core responses.
+Extend `types.ts` with optional `display_name?: string`, `IngestReceipt { event_id; trace_id }`, and these exact read models:
+
+```ts
+export interface CoreStatusProjection {
+  internalHandle: string;
+  displayName?: string;
+  model: string;
+  costTodayUsd: number;
+  dailyBudgetUsd: number;
+  emotion: SoulEmotion;
+  activity?: string;
+}
+
+export interface ConversationProjection {
+  messages: readonly ChatMessage[];
+  receipt: IngestReceipt | null;
+  provisionalText: string;
+  provisionalActive: boolean;
+  authoritativeDecision: AstrEvent | null;
+  error: string | null;
+}
+```
+
+Do not invent a provisional trace association: current HTTP SSE does not carry a resumable cursor or reliable request binding. Do not add Task/Artifact/device fields to current Core responses.
 
 - [ ] **Step 5: Verify reducer/store behavior**
 
