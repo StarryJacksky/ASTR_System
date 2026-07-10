@@ -61,14 +61,14 @@ Expected: FAIL with vendored `public/live2d` diagnostics plus React hook diagnos
 Run:
 
 ```powershell
-npm install --save-dev vitest @vitejs/plugin-react jsdom vite-tsconfig-paths @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event @vitest/coverage-v8
+npm install --save-dev vitest @vitejs/plugin-react jsdom @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event @vitest/coverage-v8
 ```
 
 Add these scripts and runtime declarations to `package.json`:
 
 ```json
 {
-  "engines": { "node": ">=20.9.0" },
+  "engines": { "node": "^20.19.0 || ^22.13.0 || >=24.0.0" },
   "packageManager": "npm@10.8.2",
   "scripts": {
     "dev": "next dev -p 3100",
@@ -89,11 +89,16 @@ Create `vitest.config.mts`:
 
 ```ts
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  plugins: [tsconfigPaths(), react()],
+  plugins: [react()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
