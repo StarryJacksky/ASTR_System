@@ -598,6 +598,7 @@ Cover all of the following:
 ```ts
 it("allows only one owner and higher priority preempts", () => {
   const leases = new JewelLeaseController();
+  leases.setEnvironment({ visibility: "visible", motion: "full", runtime: "ready" });
   expect(leases.acquire({ owner: "live2d", mode: "idle", traceId: null })?.owner).toBe("live2d");
   expect(leases.acquire({ owner: "orbitTraveler", mode: "navigate", traceId: "trc_1" })?.owner).toBe("orbitTraveler");
   expect(leases.current()?.owner).toBe("orbitTraveler");
@@ -605,6 +606,7 @@ it("allows only one owner and higher priority preempts", () => {
 
 it("transfers stream ownership from Lens to speech without overlap", () => {
   const leases = new JewelLeaseController();
+  leases.setEnvironment({ visibility: "visible", motion: "full", runtime: "ready" });
   leases.acquire({ owner: "soulLens", mode: "streamStage", traceId: "trc_1" });
   leases.release("soulLens", "streamStage");
   leases.acquire({ owner: "live2d", mode: "speech", traceId: "trc_1" });
@@ -613,6 +615,7 @@ it("transfers stream ownership from Lens to speech without overlap", () => {
 
 it.each(["hidden", "offscreen"] as const)("releases immediately when visibility is %s", (visibility) => {
   const leases = new JewelLeaseController();
+  leases.setEnvironment({ visibility: "visible", motion: "full", runtime: "ready" });
   leases.acquire({ owner: "live2d", mode: "idle", traceId: null });
   leases.setEnvironment({ visibility, motion: "full", runtime: "ready" });
   expect(leases.current()).toBeNull();
@@ -620,8 +623,31 @@ it.each(["hidden", "offscreen"] as const)("releases immediately when visibility 
 
 it("keeps future success rituals disabled without evidence", () => {
   const leases = new JewelLeaseController();
+  leases.setEnvironment({ visibility: "visible", motion: "full", runtime: "ready" });
   expect(leases.acquire({ owner: "artifactReturn", mode: "complete", traceId: "trc_1" })).toBeNull();
   expect(leases.acquire({ owner: "authorizationSeal", mode: "confirmed", traceId: "trc_1" })).toBeNull();
+});
+
+it("fails closed until the visual runtime reports ready", () => {
+  const leases = new JewelLeaseController();
+  expect(leases.acquire({ owner: "live2d", mode: "idle", traceId: null })).toBeNull();
+});
+
+it("revokes an active gated lease as soon as its evidence is withdrawn", () => {
+  const leases = new JewelLeaseController({ canSealApproval: true });
+  leases.setEnvironment({ visibility: "visible", motion: "full", runtime: "ready" });
+  leases.acquire({ owner: "authorizationSeal", mode: "confirmed", traceId: "trc_1" });
+  leases.setCapabilities({ canSealApproval: false });
+  expect(leases.current()).toBeNull();
+});
+
+it("does not expose mutable controller state", () => {
+  const leases = new JewelLeaseController();
+  leases.setEnvironment({ visibility: "visible", motion: "full", runtime: "ready" });
+  const lease = leases.acquire({ owner: "live2d", mode: "idle", traceId: null });
+  expect(Object.isFrozen(lease)).toBe(true);
+  expect(() => Object.assign(lease!, { priority: Number.POSITIVE_INFINITY })).toThrow();
+  expect(leases.acquire({ owner: "safetyBoundary", mode: "stop", traceId: null })?.owner).toBe("safetyBoundary");
 });
 ```
 
@@ -651,7 +677,7 @@ export const JEWEL_PRIORITY = {
 } as const;
 ```
 
-`acquire` resolves the priority from the owner/mode pair, rejects dynamic acquisition unless environment is `visible/full/ready`, rejects lower priority, and lets the newest equal-priority intent replace the old lease. Every lease includes `owner`, `mode`, `traceId`, `priority`, `acquiredAt`, and `semanticEnd`.
+The constructor defaults to `{ visibility: "visible", motion: "full", runtime: "loading" }`, so acquisition is fail-closed until the real renderer reports ready. `acquire` resolves the priority from the owner/mode pair, rejects dynamic acquisition unless environment is `visible/full/ready`, rejects lower priority, and lets the newest equal-priority intent replace the old lease. Every lease includes `owner`, `mode`, `traceId`, `priority`, `acquiredAt`, and `semanticEnd`.
 
 Capability defaults are both false:
 
@@ -662,7 +688,7 @@ export interface JewelCapabilities {
 }
 ```
 
-`authorizationSeal/confirmed` requires `canSealApproval`; `artifactReturn/complete` requires `canReturnArtifact`. `setEnvironment` releases the current lease immediately when visibility, motion, or runtime cannot animate. `release` is idempotent and requires the exact owner/mode pair.
+Normalize capability evidence with strict `value === true`; malformed runtime strings, numbers, or objects must remain false. `authorizationSeal/confirmed` requires `canSealApproval`; `artifactReturn/complete` requires `canReturnArtifact`. Revoking either capability immediately releases the corresponding active gated lease. Store each lease with `Object.freeze` so `acquire()` and `current()` cannot expose mutable controller state. `setEnvironment` releases the current lease immediately when visibility, motion, or runtime cannot animate. `release` is idempotent and requires the exact owner/mode pair.
 
 - [ ] **Step 4: Verify lease semantics**
 
