@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AstrEvent, CoreStatus } from "./types";
 
 // 普通 fetch 经 next.config 代理到 Core :8300（同源，免 CORS）。Core 不在线时各 hook 优雅降级。
@@ -43,17 +43,17 @@ export function useStatus(intervalMs = 4000) {
 export function useEventStream(types: string[], max = 60) {
   const [events, setEvents] = useState<AstrEvent[]>([]);
   const [live, setLive] = useState(false);
-  const typesRef = useRef(types);
-  typesRef.current = types;
+  const typesKey = [...types].sort().join("\u001f");
 
   useEffect(() => {
     let es: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
+    const subscribedTypes = typesKey ? typesKey.split("\u001f") : [];
 
     const onMsg = (e: MessageEvent) => {
       try {
         const evt = JSON.parse(e.data) as AstrEvent;
-        if (!typesRef.current.includes(evt.type)) return;
+        if (!subscribedTypes.includes(evt.type)) return;
         setEvents((prev) => [...prev.slice(-(max - 1)), evt]);
       } catch {
         /* 忽略坏帧 */
@@ -64,7 +64,7 @@ export function useEventStream(types: string[], max = 60) {
       es = new EventSource(`${SSE_BASE}/v1/stream`);
       es.onopen = () => setLive(true);
       // Core 用具名事件（event: agent.thought 等），逐类监听
-      for (const t of typesRef.current) es.addEventListener(t, onMsg as EventListener);
+      for (const t of subscribedTypes) es.addEventListener(t, onMsg as EventListener);
       es.onerror = () => {
         setLive(false);
         es?.close();
@@ -77,8 +77,7 @@ export function useEventStream(types: string[], max = 60) {
       if (retry) clearTimeout(retry);
       es?.close();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [max]);
+  }, [max, typesKey]);
 
   return { events, live };
 }

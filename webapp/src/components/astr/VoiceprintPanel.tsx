@@ -21,16 +21,22 @@ export function VoiceprintPanel() {
   const [clip, setClip] = useState(0);
   const [msg, setMsg] = useState("");
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const r = await fetch("/api/core/v1/voiceprint/status", { cache: "no-store" });
-      setStatus((await r.json()) as VpStatus);
+      const r = await fetch("/api/core/v1/voiceprint/status", { cache: "no-store", signal });
+      const nextStatus = (await r.json()) as VpStatus;
+      if (!signal?.aborted) setStatus(nextStatus);
     } catch {
-      setStatus(null);
+      if (!signal?.aborted) setStatus(null);
     }
   }, []);
   useEffect(() => {
-    refresh();
+    const controller = new AbortController();
+    const loadInitial = async () => {
+      await refresh(controller.signal);
+    };
+    void loadInitial();
+    return () => controller.abort();
   }, [refresh]);
 
   const enroll = async () => {
@@ -51,7 +57,7 @@ export function VoiceprintPanel() {
       const data = (await r.json()) as { ok: boolean; clips?: number; error?: string };
       if (data.ok) {
         setPhase("done");
-        setMsg(`注册成功（${data.clips} 段）。语音入口已开始只认你的声音。`);
+        setMsg("声纹模板已注册；网页转写入口仍需单独验证身份。");
         refresh();
       } else {
         setPhase("error");

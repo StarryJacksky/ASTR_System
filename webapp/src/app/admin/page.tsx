@@ -238,26 +238,35 @@ export default function AdminConsole() {
   const [err, setErr] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
 
-  const loadAll = useCallback(async (date?: string) => {
+  const loadAll = useCallback(async (date?: string, signal?: AbortSignal) => {
     try {
       const [p, a, s] = await Promise.all([
-        fetch(`${CORE}/v1/admin/effector/policy`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`${CORE}/v1/admin/effector/policy`, { cache: "no-store", signal }).then((r) =>
+          r.json(),
+        ),
         fetch(`${CORE}/v1/admin/effector/audit${date ? `?date=${date}` : ""}`, {
           cache: "no-store",
+          signal,
         }).then((r) => r.json()),
-        fetch(`${CORE}/v1/effector/status`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`${CORE}/v1/effector/status`, { cache: "no-store", signal }).then((r) => r.json()),
       ]);
+      if (signal?.aborted) return;
       setPolicy(p);
       setAudit(a);
       setEstopped(Boolean(s.stopped));
       setOffline(false);
     } catch {
-      setOffline(true);
+      if (!signal?.aborted) setOffline(true);
     }
   }, []);
 
   useEffect(() => {
-    loadAll();
+    const controller = new AbortController();
+    const loadInitial = async () => {
+      await loadAll(undefined, controller.signal);
+    };
+    void loadInitial();
+    return () => controller.abort();
   }, [loadAll]);
 
   // 改一个旋钮 = 发一次 PUT，Core 写覆盖层 + Guard 热重载，返回新有效策略。

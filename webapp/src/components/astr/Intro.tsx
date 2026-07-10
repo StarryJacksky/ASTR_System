@@ -16,12 +16,12 @@ export function Intro() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (
-      !sessionStorage.getItem("astr-intro-seen") &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      setShow(true);
-    }
+    const frame = requestAnimationFrame(() => {
+      const seen = sessionStorage.getItem("astr-intro-seen");
+      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!seen && !reduced) setShow(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const dismiss = () => {

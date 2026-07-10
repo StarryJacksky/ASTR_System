@@ -252,13 +252,11 @@ export function Live2DStage({
       cancelled = true;
       cleanup?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 滑块改变 → 实时套用到模型。
   useEffect(() => {
     applyTransform();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale, x, y, ready]);
 
   // 情绪 → 表情切换。
