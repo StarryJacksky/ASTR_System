@@ -4,6 +4,7 @@ import type { EmotionVector } from "./emotion";
 /** GET /v1/status 的返回（core/app.py status）。 */
 export interface CoreStatus {
   soul_name: string;
+  display_name?: string;
   local_llm_model: string;
   cost_today_usd: number;
   daily_budget_usd: number;
@@ -45,6 +46,12 @@ export interface AstrEvent {
   trace_id: string;
 }
 
+/** POST /v1/ingest acknowledges receipt; it does not contain a final answer. */
+export interface IngestReceipt {
+  event_id: string;
+  trace_id: string;
+}
+
 /** 聊天时间线里的一条消息。 */
 export interface ChatMessage {
   id: string;
@@ -52,6 +59,27 @@ export interface ChatMessage {
   text: string;
   platform?: string;
   ts: number;
+}
+
+/** Frontend projection of the current GET /v1/status fields. */
+export interface CoreStatusProjection {
+  internalHandle: string;
+  displayName?: string;
+  model: string;
+  costTodayUsd: number;
+  dailyBudgetUsd: number;
+  emotion: SoulEmotion;
+  activity?: string;
+}
+
+/** Frontend-only conversation data backed by ingest, SSE, and local messages. */
+export interface ConversationProjection {
+  messages: readonly ChatMessage[];
+  receipt: IngestReceipt | null;
+  provisionalText: string;
+  provisionalActive: boolean;
+  authoritativeDecision: AstrEvent | null;
+  error: string | null;
 }
 
 /** 圆桌一条发言（P3 才真正用，骨架先留）。 */
