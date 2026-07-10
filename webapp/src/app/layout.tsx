@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Geist, Geist_Mono, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
+import { AppShell } from "@/components/system/AppShell";
 import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -34,9 +35,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ThemeProvider>
           {/* 全局环境（04 §3.2）：天光 + 颗粒。星野只属于上甲板（驾驶舱页自带），
               引擎室在甲板之下——那里没有天空，有图纸（admin 页自带 .astr-blueprint）。 */}
-          <div aria-hidden className="astr-ambient" />
-          <div aria-hidden className="astr-grain" />
-          {children}
+          <AppShell>{children}</AppShell>
         </ThemeProvider>
       </body>
     </html>

@@ -308,6 +308,7 @@ export default function Cockpit() {
           旧双栏（聊天霸屏+她蜷侧栏）自 v1 起违宪，本版纠正。
           启幕：各庭错峰 40ms 淡入——一次，之后全部静止（法则四）。 */}
       <motion.main
+        id="main-content"
         variants={staggerList}
         initial="hidden"
         animate="show"

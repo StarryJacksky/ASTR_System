@@ -337,6 +337,7 @@ export default function AdminConsole() {
       </header>
 
       <motion.main
+        id="main-content"
         variants={staggerList}
         initial="hidden"
         animate="show"

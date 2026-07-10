@@ -54,6 +54,65 @@ body {
   outline-offset: 2px;
 }
 
+.astr-skip-link {
+  position: fixed;
+  inset: 12px auto auto 12px;
+  z-index: var(--z-modal);
+  transform: translateY(-180%);
+  padding: 8px 12px;
+  border: 1px solid var(--astr-action);
+  border-radius: var(--radius-small);
+  background: var(--astr-surface);
+  color: var(--astr-text);
+}
+
+.astr-skip-link:focus {
+  transform: translateY(0);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.astr-motion-toggle {
+  position: fixed;
+  inset: auto 12px 12px auto;
+  z-index: var(--z-toast);
+  display: inline-flex;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--astr-hairline);
+  border-radius: var(--radius-small);
+  background: var(--astr-surface);
+  color: var(--astr-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.astr-motion-toggle:hover {
+  border-color: var(--astr-action);
+  color: var(--astr-text);
+}
+
+[data-visual-motion="paused"] *,
+[data-visual-motion="paused"] *::before,
+[data-visual-motion="paused"] *::after {
+  animation-play-state: paused !important;
+  scroll-behavior: auto !important;
+}
+
 /* ============================================================
    Constitutional ambient system
    Surfaces remain stable; emotional light comes from her presence.
