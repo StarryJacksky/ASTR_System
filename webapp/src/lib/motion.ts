@@ -27,3 +27,24 @@ export const tapFeedback = {
   whileTap: { scale: 0.98 },
   transition: { duration: 0.12, ease: easeOut },
 } as const;
+
+/** 景深对焦入场（04 v2.1）：新事物从虚焦深处推到焦平面——
+ *  这间天文台的"3D"不是转立方体，是望远镜拉焦。用于消息/生活流条目；
+ *  大块区域仍用 enter（整段模糊代价高）。 */
+export const focusEnter: Variants = {
+  hidden: { opacity: 0, y: 10, scale: 0.965, filter: "blur(6px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: { duration: 0.32, ease: easeOut },
+  },
+};
+
+/** 浮层进出（设置面板/弹窗）：轻微下落 + 缩放，带 exit（AnimatePresence 用）。 */
+export const overlay: Variants = {
+  hidden: { opacity: 0, y: -8, scale: 0.98 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.2, ease: easeOut } },
+  exit: { opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2, ease: easeOut } },
+};

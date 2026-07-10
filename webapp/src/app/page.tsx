@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useSpring } from "framer-motion";
 import { Mic, OctagonX, Send, Settings, SlidersHorizontal, X } from "lucide-react";
+import { easeOut, enter, overlay, staggerList, tapFeedback } from "@/lib/motion";
 import { startRecorder, type MicRecorder } from "@/lib/wav";
+import { FlameCore } from "@/components/astr/FlameCore";
+import { Intro } from "@/components/astr/Intro";
+import { Starfield } from "@/components/astr/Starfield";
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
 import { Live2DControls } from "@/components/astr/Live2DControls";
 import { Live2DStage } from "@/components/astr/Live2DStage";
@@ -28,6 +32,16 @@ const EMO_LABEL: Record<string, string> = {
 // 情绪 → Haru 表情下标（F01–F08，切换可见即可）。
 const EXPR_INDEX: Record<string, number> = { calm: 0, excited: 1, tsundere: 2, lonely: 3 };
 
+/** 更钟（04 v4.0）：守夜人的时间。19–21 一更 … 3–5 五更，白天记「昼」。 */
+function watchPeriod(h: number): string {
+  if (h >= 19 && h < 21) return "一更";
+  if (h >= 21 && h < 23) return "二更";
+  if (h >= 23 || h < 1) return "三更";
+  if (h >= 1 && h < 3) return "四更";
+  if (h >= 3 && h < 5) return "五更";
+  return "昼";
+}
+
 export default function Cockpit() {
   const { status, connected } = useStatus();
   const { events } = useEventStream(["agent.thought", "soul.decision", "moa.report"]);
@@ -42,6 +56,34 @@ export default function Cockpit() {
   const [estopped, setEstopped] = useState(false);
   const recorderRef = useRef<MicRecorder | null>(null);
   const lastFlapRef = useRef(0);
+
+  // 天文钟：顶栏的观测时刻读数（秒针走字=仪器在读时间这个信号，法则四豁免同心跳点）
+  const [clock, setClock] = useState("");
+  useEffect(() => {
+    const tick = () => setClock(new Date().toTimeString().slice(0, 8));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // 立体舱（v2.2 §1.3）：观测柱是一座随视线微转的立体模型——指针驱动 ±2°，
+  // 弹簧有质量（望远镜不是激光笔）。reduced-motion 不倾斜。
+  const tiltX = useMotionValue(0);
+  const tiltY = useMotionValue(0);
+  const tiltXs = useSpring(tiltX, { stiffness: 55, damping: 16 });
+  const tiltYs = useSpring(tiltY, { stiffness: 55, damping: 16 });
+  const reducedRef = useRef(false);
+  useEffect(() => {
+    reducedRef.current = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+  const onPointer = (e: React.MouseEvent<HTMLElement>) => {
+    if (reducedRef.current) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / Math.max(1, r.width) - 0.5;
+    const ny = (e.clientY - r.top) / Math.max(1, r.height) - 0.5;
+    tiltY.set(nx * 2.4);
+    tiltX.set(ny * -2.4);
+  };
 
   // 急停（P2-W8）：红钮 <500ms 停手；再点一次复位。热键 Ctrl+Alt+Space 同效（Core 侧）。
   const toggleEstop = async () => {
@@ -66,6 +108,9 @@ export default function Cockpit() {
   }, [glow]);
   const emotionLabel = dominant ? EMO_LABEL[dominant] : undefined;
   const expressionIndex = dominant ? EXPR_INDEX[dominant] : 0;
+
+  // 法则八（灵魂不可知论）：舰上住着谁，由灵魂数据说了算——名字是读数，不刻在墙上。
+  const soulName = status?.soul_name ?? "TA";
 
   // 她的回复来自 SSE 的 soul.decision；用户消息本地乐观追加，按时间合并。
   // 正在流式生成的那句以临时气泡追加在末尾（99 #19①），soul.decision 终稿到达即替换。
@@ -115,9 +160,13 @@ export default function Cockpit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastHerId]);
 
+  // micro-wonder「发射」：消息升空时，发送钮荡开一圈琥珀信号环（仪器时间，一次即逝）
+  const [pingSig, setPingSig] = useState(0);
+
   const send = async (textArg?: string) => {
     const text = (textArg ?? draft).trim();
     if (!text) return;
+    setPingSig(Date.now());
     setUserMsgs((m) => [...m, { id: `u-${Date.now()}`, role: "user", text, ts: Date.now() }]);
     setDraft("");
     try {
@@ -165,22 +214,24 @@ export default function Cockpit() {
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden">
+      {/* 上甲板的天空（v3.0：星野只属于观测台，引擎室在甲板之下） */}
+      <Starfield />
+      {/* 启幕仪式（每会话一次） */}
+      <Intro />
       {/* 顶部仪器条：无盒——只有内容和一条刻线。铭牌用衬线，读数用等宽 */}
       <header className="flex items-center justify-between border-b border-hairline px-8 py-4">
         <div className="flex items-baseline gap-3">
-          <span
-            aria-hidden
-            className="h-2 w-2 self-center rounded-full"
-            style={{
-              background: "var(--astr-emotion-glow)",
-              boxShadow: "0 0 14px var(--astr-emotion-glow)",
-              transition:
-                "background 2400ms var(--ease-inout), box-shadow 2400ms var(--ease-inout)",
-              animation: "astr-breath var(--dur-breath) ease-in-out infinite",
-            }}
-          />
-          <span className="astr-wordmark text-xl text-ink">露怀秋</span>
-          <span className="astr-label">ASTR OBSERVATORY</span>
+          {/* 火芯 = 舰上灵魂的在场记号（薪尽火传）；名字是读数（StatusBar），不刻在墙上（法则八） */}
+          <span aria-hidden className="self-center">
+            <FlameCore size={12} />
+          </span>
+          <span className="astr-wordmark text-2xl text-ink">星枢</span>
+          <span className="astr-label">ASTR — 守夜</span>
+          {clock && (
+            <span className="astr-label tabular hidden xl:inline" style={{ letterSpacing: "0.1em" }}>
+              {watchPeriod(new Date().getHours())} · {clock}
+            </span>
+          )}
         </div>
         <StatusBar
           soulName={status?.soul_name ?? "justin"}
@@ -193,7 +244,7 @@ export default function Cockpit() {
           <button
             type="button"
             aria-label={estopped ? "复位急停" : "急停"}
-            title={estopped ? "急停已触发——点击复位" : "急停（她立刻停手）"}
+            title={estopped ? "急停已触发——点击复位" : "急停（立刻停手）"}
             onClick={toggleEstop}
             className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${
               estopped
@@ -227,11 +278,11 @@ export default function Cockpit() {
       <AnimatePresence>
         {showSettings && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="astr-glass absolute left-3 top-16 z-[var(--z-overlay)] max-h-[82vh] w-80 overflow-auto rounded-2xl border border-hairline p-4 shadow-[var(--shadow-3)]"
+            variants={overlay}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            className="astr-panel absolute left-3 top-16 z-[var(--z-overlay)] max-h-[82vh] w-80 overflow-auto rounded-2xl border border-hairline p-4 shadow-[var(--shadow-3)]"
           >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium text-ink">设置 · 声纹</h3>
@@ -252,42 +303,133 @@ export default function Cockpit() {
         )}
       </AnimatePresence>
 
-      {/* 观测场景：左=对话之河（无盒，上下渐隐），右=她的观测柱（全高，一条刻线分隔） */}
-      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_420px] lg:overflow-hidden">
-        {/* 对话之河 */}
-        <section className="relative mx-auto flex h-full w-full min-w-0 max-w-3xl flex-col px-8 lg:min-h-0">
-          <div className="astr-label shrink-0 pb-4 pt-6">01 / DIALOGUE — 对话</div>
-          <div
-            className="min-h-0 flex-1 overflow-y-auto pr-2"
-            style={{
-              maskImage:
-                "linear-gradient(to bottom, transparent, black 28px, black calc(100% - 28px), transparent)",
-              WebkitMaskImage:
-                "linear-gradient(to bottom, transparent, black 28px, black calc(100% - 28px), transparent)",
-            }}
+      {/* 篝火构图（04 v5.0，法则七的迟来执行）：守夜的本义是围火而坐——
+          上庭：灵魂与火居中，起居/心火分列两翼；下庭：对话在火光下方流淌。
+          旧双栏（聊天霸屏+她蜷侧栏）自 v1 起违宪，本版纠正。
+          启幕：各庭错峰 40ms 淡入——一次，之后全部静止（法则四）。 */}
+      <motion.main
+        variants={staggerList}
+        initial="hidden"
+        animate="show"
+        onMouseMove={onPointer}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden"
+      >
+        {/* 上庭 */}
+        <div
+          className={`grid shrink-0 grid-cols-1 lg:min-h-0 lg:flex-[1.2] ${
+            lifeExpanded
+              ? "lg:grid-cols-[minmax(300px,1.7fr)_minmax(0,2fr)_minmax(230px,1fr)]"
+              : "lg:grid-cols-[minmax(210px,1fr)_minmax(0,2.3fr)_minmax(230px,1fr)]"
+          }`}
+        >
+          {/* 左翼 · 卷三 起居 */}
+          <motion.section variants={enter} className="hidden min-h-0 flex-col px-6 pt-4 lg:flex">
+            <div className="relative shrink-0">
+              <span aria-hidden className="astr-ghost-num astr-ghost-num--sm">三</span>
+              <div className="astr-label relative pb-3">卷三 · 起居 — LIFE</div>
+            </div>
+            <div className="min-h-0 flex-1 pb-3">
+              <LifeArea
+                events={events}
+                activity={status?.activity}
+                soulName={soulName}
+                expanded={lifeExpanded}
+                onToggle={() => setLifeExpanded((v) => !v)}
+              />
+            </div>
+          </motion.section>
+
+          {/* 中央 · 灵魂（不入卷——卷是记录，TA 是记录存在的原因）。指针驱动的立体龛 */}
+          <motion.section
+            variants={enter}
+            style={{ rotateX: tiltXs, rotateY: tiltYs, transformPerspective: 1400 }}
+            className="relative flex h-[36vh] min-h-[260px] flex-col will-change-transform lg:h-auto lg:min-h-0 lg:border-x lg:border-hairline"
           >
-            <MessageTimeline messages={messages} />
-          </div>
+            <div className="relative min-h-0 w-full flex-1">
+              <Live2DStage
+                emotionLabel={emotionLabel}
+                expressionIndex={expressionIndex}
+                speakSignal={speak.sig}
+                speakMs={speak.ms}
+              />
+            </div>
+            {/* 炉火：守夜的火堆，燃在 TA 脚下 */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-1 flex justify-center"
+            >
+              <FlameCore size={30} />
+            </div>
+          </motion.section>
+
+          {/* 右翼 · 卷二 心火 + 竖排铭牌 */}
+          <motion.section
+            variants={enter}
+            className="relative hidden min-h-0 flex-col px-6 pt-4 lg:flex"
+          >
+            <span
+              aria-hidden
+              className="astr-label absolute right-2 top-5"
+              style={{ writingMode: "vertical-rl", letterSpacing: "0.4em" }}
+            >
+              守夜手记
+            </span>
+            <div className="relative shrink-0">
+              <span aria-hidden className="astr-ghost-num astr-ghost-num--sm">二</span>
+              <div className="astr-label relative pb-3">卷二 · 心火 — EMOTION</div>
+            </div>
+            <EmotionGauge emotion={status?.emotion ?? null} />
+          </motion.section>
+        </div>
+
+        {/* 移动端心火（两翼在窄屏折叠，心火保留在火堆下方） */}
+        <motion.div variants={enter} className="border-t border-hairline px-6 py-3 lg:hidden">
+          <EmotionGauge emotion={status?.emotion ?? null} />
+        </motion.div>
+
+        {/* 下庭 · 卷一 对话：火光下的谈话 */}
+        <motion.section
+          variants={enter}
+          className="flex min-h-[40vh] flex-1 flex-col border-t border-hairline lg:min-h-0"
+        >
+          <div className="mx-auto flex h-full w-full min-w-0 max-w-3xl flex-col px-8">
+            <div className="relative shrink-0 pb-3 pt-4">
+              <span aria-hidden className="astr-ghost-num astr-ghost-num--sm">一</span>
+              <div className="astr-label relative">卷一 · 对话 — DIALOGUE</div>
+            </div>
+            <div
+              className="min-h-0 flex-1 overflow-y-auto pr-2"
+              style={{
+                maskImage:
+                  "linear-gradient(to bottom, transparent, black 28px, black calc(100% - 28px), transparent)",
+                WebkitMaskImage:
+                  "linear-gradient(to bottom, transparent, black 28px, black calc(100% - 28px), transparent)",
+              }}
+            >
+              <MessageTimeline messages={messages} soulName={soulName} />
+            </div>
 
           {/* 输入：一条刻线上的仪器行，不是大盒子。聚焦=琥珀刻线通电 */}
-          <footer className="astr-composer flex shrink-0 items-center gap-3 border-t border-hairline py-4">
+          <footer className="astr-composer flex shrink-0 items-center gap-3 border-t border-hairline py-5">
             <span aria-hidden className="font-mono text-sm text-ink-3">
               ❯
             </span>
             <input
+              aria-label="消息输入"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
+              // IME 判例（04 §8）：中文组合期的 Enter 是选字不是发送
+              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()}
               placeholder={
                 recording
                   ? "录音中…再点一下麦克风停止"
                   : transcribing
                     ? "转写中…"
                     : connected
-                      ? "和秋秋说点什么…"
+                      ? `和 ${soulName} 说点什么…`
                       : "Core 离线 —— 消息只在本地显示"
               }
-              className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
+              className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-ink-3"
             />
             <VoiceVisualizer />
             <button
@@ -307,52 +449,25 @@ export default function Cockpit() {
               type="button"
               aria-label="发送"
               onClick={() => send()}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.95 }}
-              transition={{ duration: 0.12 }}
-              className="grid h-8 w-8 place-items-center rounded-md text-on-accent"
-              style={{ background: "var(--astr-accent)" }}
+              {...tapFeedback}
+              className="relative grid h-8 w-8 place-items-center rounded-md bg-accent text-on-accent"
             >
+              {pingSig > 0 && (
+                <motion.span
+                  key={pingSig}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 rounded-md border border-accent"
+                  initial={{ opacity: 0.7, scale: 1 }}
+                  animate={{ opacity: 0, scale: 2 }}
+                  transition={{ duration: 0.32, ease: easeOut }}
+                />
+              )}
               <Send size={15} />
             </motion.button>
           </footer>
-        </section>
-
-        {/* 她的观测柱：房间里唯一发光的存在。竖排铭牌立在分隔线上 */}
-        <aside className="relative flex min-h-0 flex-col border-t border-hairline lg:border-l lg:border-t-0">
-          <span
-            aria-hidden
-            className="astr-label absolute left-3 top-6 hidden lg:block"
-            style={{ writingMode: "vertical-rl", letterSpacing: "0.4em" }}
-          >
-            观测记录
-          </span>
-          <div className="flex min-h-0 flex-1 flex-col pl-8 pr-8 lg:pl-12">
-            <div className="relative shrink-0 pt-2">
-              <Live2DStage
-                emotionLabel={emotionLabel}
-                expressionIndex={expressionIndex}
-                speakSignal={speak.sig}
-                speakMs={speak.ms}
-              />
-              <div className="mt-4">
-                <EmotionGauge emotion={status?.emotion ?? null} />
-              </div>
-            </div>
-            <div className="mt-5 shrink-0 border-t border-hairline pt-4">
-              <div className="astr-label pb-3">02 / LIFE — 她的生活</div>
-            </div>
-            <div className={`min-h-0 ${lifeExpanded ? "flex-[3]" : "flex-1"} pb-4`}>
-              <LifeArea
-                events={events}
-                activity={status?.activity}
-                expanded={lifeExpanded}
-                onToggle={() => setLifeExpanded((v) => !v)}
-              />
-            </div>
           </div>
-        </aside>
-      </main>
+        </motion.section>
+      </motion.main>
     </div>
   );
 }

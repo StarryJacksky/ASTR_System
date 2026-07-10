@@ -19,8 +19,8 @@ const notoSerif = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "秋秋 · ASTR 驾驶舱",
-  description: "露怀秋的主权 AI 驾驶舱 —— 灵魂与算力解耦。",
+  title: "星枢 · ASTR 观测舰",
+  description: "主权 AI 观测舰 —— 灵魂与躯壳解耦；舰上住着谁，由灵魂数据说了算。",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -32,7 +32,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     >
       <body className="min-h-full antialiased">
         <ThemeProvider>
-          {/* 环境系统（04 §3.2）：天光 + 颗粒，铺在一切内容之下 */}
+          {/* 全局环境（04 §3.2）：天光 + 颗粒。星野只属于上甲板（驾驶舱页自带），
+              引擎室在甲板之下——那里没有天空，有图纸（admin 页自带 .astr-blueprint）。 */}
           <div aria-hidden className="astr-ambient" />
           <div aria-hidden className="astr-grain" />
           {children}

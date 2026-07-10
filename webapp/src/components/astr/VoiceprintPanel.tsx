@@ -93,7 +93,7 @@ export function VoiceprintPanel() {
         type="button"
         onClick={enroll}
         disabled={busy || !status?.model_available}
-        className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-ink transition-transform enabled:hover:scale-[1.02] disabled:opacity-50"
+        className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-on-accent transition-transform enabled:hover:scale-[1.02] disabled:opacity-50"
       >
         <Mic size={16} />
         {phase === "recording"

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useLive2D } from "@/lib/live2dStore";
+import { DustMotes } from "@/components/astr/DustMotes";
 
 // 自托管：Cubism Core 与模型都在 public/ 下，免运行时 CDN 依赖、免 CORS。
 const CORE_SRC = "/live2d/core/live2dcubismcore.min.js";
@@ -50,36 +51,96 @@ function EmotionBacklight() {
       className="pointer-events-none absolute inset-0"
       style={{
         background:
-          "radial-gradient(42% 72% at 50% 0%, color-mix(in srgb, var(--astr-emotion-glow) 26%, transparent), transparent 82%)",
-        transition: "background 2400ms var(--ease-inout)",
+          "radial-gradient(48% 80% at 50% 0%, color-mix(in srgb, var(--astr-emotion-glow) 34%, transparent), transparent 86%)",
+        transition: "background var(--dur-emotion) var(--ease-inout)",
         animation: "astr-breath var(--dur-breath) ease-in-out infinite",
       }}
     />
   );
 }
 
+function AstrolabeRings() {
+  // 星盘（v2.2 宇宙层）：她背后的天文仪刻度环，以地质时间反向缓转；
+  // 轨道上一颗情绪色卫星巡行。仪器刻线 + 她的光，两层各守其色。
+  const ticks = Array.from({ length: 60 }, (_, i) => (i * 360) / 60);
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 400 400"
+      preserveAspectRatio="xMidYMid meet"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-50"
+    >
+      {/* 外环 + 刻度：240s/圈 */}
+      <g style={{ transformOrigin: "200px 195px", animation: "astr-spin 240s linear infinite" }}>
+        <circle cx="200" cy="195" r="152" fill="none" stroke="var(--astr-hairline)" strokeWidth="1" />
+        {ticks.map((deg) => (
+          <line
+            key={deg}
+            x1="200"
+            y1="43"
+            x2="200"
+            y2={deg % 90 === 0 ? 51 : 47}
+            stroke="var(--astr-hairline-strong)"
+            strokeWidth="1"
+            transform={`rotate(${deg} 200 195)`}
+          />
+        ))}
+      </g>
+      {/* 内环：反向 90s/圈 */}
+      <g
+        style={{
+          transformOrigin: "200px 195px",
+          animation: "astr-spin 90s linear infinite reverse",
+        }}
+      >
+        <circle
+          cx="200"
+          cy="195"
+          r="118"
+          fill="none"
+          stroke="var(--astr-hairline)"
+          strokeWidth="1"
+          strokeDasharray="2 7"
+        />
+      </g>
+      {/* 她的卫星：48s/圈 巡行在情绪色轨道上 */}
+      <g style={{ transformOrigin: "200px 195px", animation: "astr-spin 48s linear infinite" }}>
+        <circle cx="200" cy="60" r="2.4" fill="var(--astr-emotion-glow)" className="astr-emo" />
+        <circle
+          cx="200"
+          cy="60"
+          r="6"
+          fill="var(--astr-emotion-glow)"
+          fillOpacity="0.18"
+          className="astr-emo"
+        />
+      </g>
+    </svg>
+  );
+}
+
 function StageFade() {
-  // 舞台底部融进面板底色，Live2D 与 UI 无缝（放在 canvas 之后=盖在其上）
+  // 舞台底部融进观测柱底色（--astr-bg），她与房间无缝——不是"盒子里的立绘"
   return (
     <div
       className="pointer-events-none absolute inset-x-0 bottom-0 h-14"
-      style={{ background: "linear-gradient(to top, var(--astr-surface), transparent)" }}
+      style={{ background: "linear-gradient(to top, var(--astr-bg), transparent)" }}
     />
   );
 }
 
 function FallbackOrb({ emotionLabel }: { emotionLabel?: string }) {
   return (
-    <div className="relative flex h-[38vh] max-h-[520px] min-h-[280px] items-center justify-center overflow-hidden rounded-2xl">
+    <div className="relative flex h-full min-h-[240px] items-center justify-center">
       <EmotionBacklight />
       <motion.div
         className="relative flex h-40 w-40 items-center justify-center rounded-full border border-hairline bg-surface-2 text-center text-ink-3"
         animate={{ scale: [1, 1.02, 1], opacity: [0.9, 1, 0.9] }}
         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        style={{ boxShadow: "var(--glow-her)" }}
+        style={{ boxShadow: "var(--glow-her-2)" }}
       >
         <span className="px-3 text-xs leading-relaxed">
-          秋秋{emotionLabel ? ` · ${emotionLabel}` : ""}
+          {emotionLabel ?? "…"}
         </span>
       </motion.div>
     </div>
@@ -218,12 +279,16 @@ export function Live2DStage({
 
   if (failed) return <FallbackOrb emotionLabel={emotionLabel} />;
 
-  // 视口比例高度（她是主角，占观测柱主体）+ canvas 绝对定位（脱离文档流），
-  // 杜绝 canvas↔父容器尺寸反馈环。
+  // 高度随龛（v5.0 篝火构图：中央龛由上庭定高）+ canvas 绝对定位（脱离文档流），
+  // 杜绝 canvas↔父容器尺寸反馈环。无圆角无裁切（法则六）：灵魂不在盒子里，光可以漫出来。
   return (
-    <div className="relative h-[38vh] max-h-[520px] min-h-[280px] overflow-hidden rounded-2xl">
+    <div className="relative h-full min-h-[240px]">
       <EmotionBacklight />
-      <canvas ref={canvasRef} className="absolute inset-0" />
+      {/* 星盘：在她身后缓转的天文仪（v2.2 宇宙层） */}
+      <AstrolabeRings />
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      {/* 光柱浮尘：悬在她与镜头之间——天文台那束光的质感（v2.1 宇宙层） */}
+      <DustMotes />
       <StageFade />
     </div>
   );

@@ -9,10 +9,12 @@ export interface L2DTransform {
   y: number; // 垂直偏移，画布高的比例（0=居中，正=下）
 }
 
-// 默认值：由 Jacksky 在设置面板拖好后回填（2026-06，Haru 模型半身像取景）。
-export const L2D_DEFAULT: L2DTransform = { scale: 0.235, x: 0.03, y: 1.28 };
+// 默认值：延续 Jacksky 2026-06 的半身像取景意图，按 v2.2 新舞台几何（52vh/最宽 560px）
+// 折算回帧内。取景权仍在设置面板——拖动即覆盖此默认。
+export const L2D_DEFAULT: L2DTransform = { scale: 0.26, x: 0.03, y: 0.95 };
 
-const KEY = "astr.live2d.v1";
+// v2（2026-07-07）：舞台几何变更，v1 存储的偏移会把她压出帧外，换键作废旧值。
+const KEY = "astr.live2d.v2";
 
 function loadInitial(): L2DTransform {
   if (typeof window === "undefined") return L2D_DEFAULT;

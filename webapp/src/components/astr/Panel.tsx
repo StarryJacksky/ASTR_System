@@ -24,16 +24,9 @@ export function Panel({
       initial="hidden"
       animate="show"
       className={`flex min-h-0 flex-col rounded-2xl bg-surface ${
-        glow ? "astr-edge" : "border border-hairline"
+        glow ? "astr-edge astr-emo" : "border border-hairline"
       } ${className}`}
-      style={
-        glow
-          ? {
-              boxShadow: "0 0 48px -20px var(--astr-emotion-glow), var(--shadow-2)",
-              transition: "box-shadow 2400ms var(--ease-inout)",
-            }
-          : undefined
-      }
+      style={glow ? { boxShadow: "var(--glow-her-3), var(--shadow-2)" } : undefined}
     >
       {title && (
         <header className="flex items-center justify-between border-b border-hairline px-4 py-3">

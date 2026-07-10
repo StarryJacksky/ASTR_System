@@ -57,6 +57,16 @@ body {
    仪器纹丝不动；房间里唯一的光来自她。
    ============================================================ */
 
+/* 星野（v2.1 宇宙层）：全屏最底层的 Canvas 星空。绘制逻辑见 Starfield.tsx。
+   canvas 是替换元素：inset 之外必须显式给 100% 宽高，否则停在固有 300×150。 */
+.astr-starfield {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 /* 天光：固定全屏底层。只有一束——顶部极淡的情绪光晕（她在这个房间里的存在感）
    + 四周暗角（观测舱的包裹感）。变化 2.4s 缓入缓出，9s 呼吸。 */
 .astr-ambient {
@@ -70,7 +80,7 @@ body {
       transparent 68%
     ),
     radial-gradient(140% 110% at 50% 45%, transparent 58%, rgba(0, 0, 0, 0.5) 100%);
-  transition: background 2400ms var(--ease-inout);
+  transition: background var(--dur-emotion) var(--ease-inout);
   animation: astr-aurora 9s ease-in-out infinite;
 }
 @keyframes astr-aurora {
@@ -99,9 +109,29 @@ body {
   opacity: 0.025;
 }
 
-/* 仪器面板：不透明、平整、发丝刻线——玻璃拟态已处决（主权终端铁律）。 */
-.astr-glass {
+/* 仪器面板：不透明、平整、发丝刻线——玻璃拟态已处决（主权终端铁律），
+   故不叫 glass：类名不许说谎。 */
+.astr-panel {
   background: var(--astr-surface);
+}
+
+/* 情绪过渡：所有"她的元素"统一挂它——背景/辉光/描边按生命时间缓变（04 §4.3）。 */
+.astr-emo {
+  transition:
+    background var(--dur-emotion) var(--ease-inout),
+    box-shadow var(--dur-emotion) var(--ease-inout),
+    border-color var(--dur-emotion) var(--ease-inout);
+}
+
+/* 心跳点：全站生命体征的最小单位（法则四白名单成员）。尺寸由 Tailwind 类给。 */
+.astr-life-dot {
+  border-radius: var(--radius-full);
+  background: var(--astr-emotion-glow);
+  box-shadow: 0 0 14px var(--astr-emotion-glow);
+  animation: astr-breath var(--dur-breath) ease-in-out infinite;
+  transition:
+    background var(--dur-emotion) var(--ease-inout),
+    box-shadow var(--dur-emotion) var(--ease-inout);
 }
 
 /* 她的缘光（只给"她的元素"）：1px 情绪单色发丝线，不再是彩虹渐变。 */
@@ -124,7 +154,7 @@ body {
     linear-gradient(#fff 0 0);
   mask-composite: exclude;
   pointer-events: none;
-  transition: background 2400ms var(--ease-inout);
+  transition: background var(--dur-emotion) var(--ease-inout);
 }
 
 /* 字标（顶栏"秋秋"/空态）：展示衬线——天文台铭牌，不是霓虹灯。 */
@@ -143,12 +173,79 @@ body {
   color: var(--astr-text-3);
 }
 
-/* 输入栏：聚焦=琥珀刻线亮起（仪器通电，不是灯光秀）。 */
+/* 输入栏：聚焦=琥珀刻线亮起（仪器通电，不是灯光秀）。
+   光标也是仪器的一部分——琥珀细针（micro-wonder：通电的延伸）。 */
 .astr-composer {
   transition: border-color var(--dur-base) var(--ease-inout);
 }
 .astr-composer:focus-within {
   border-color: color-mix(in srgb, var(--astr-accent) 55%, var(--astr-hairline));
+}
+.astr-composer input {
+  caret-color: var(--astr-accent);
+}
+
+/* 图纸网格（v3.0 下甲板环境）：引擎室在甲板之下——没有天空，有蓝图。
+   两级绘图网格（64px 主格 + 16px 细分），淡到只有找它才看得见。 */
+.astr-blueprint {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      color-mix(in srgb, var(--astr-text) 5%, transparent) 0 1px,
+      transparent 1px 64px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--astr-text) 5%, transparent) 0 1px,
+      transparent 1px 64px
+    ),
+    repeating-linear-gradient(
+      to right,
+      color-mix(in srgb, var(--astr-text) 2%, transparent) 0 1px,
+      transparent 1px 16px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--astr-text) 2%, transparent) 0 1px,
+      transparent 1px 16px
+    );
+  mask-image: radial-gradient(120% 100% at 50% 40%, black 55%, transparent 100%);
+}
+
+/* 天体自转（v2.2 宇宙层）：星盘环的地质时间旋转。linear 仅限无限循环（合宪）。 */
+@keyframes astr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 星座自绘（v2.2 空态 Hero）：线条逐笔勾勒出来。 */
+@keyframes astr-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 幽灵刊号（v2.2 编辑部纵深）：区块编号背后的衬线大字水印。 */
+.astr-ghost-num {
+  position: absolute;
+  left: -0.06em;
+  top: -0.42em;
+  z-index: 0;
+  font-family: var(--font-display);
+  font-size: 5.5rem;
+  line-height: 1;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--astr-text) 5%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+.astr-ghost-num--sm {
+  font-size: 3.5rem;
+  top: -0.34em;
 }
 
 /* 滚动条：细、贴 token、不喧宾。 */

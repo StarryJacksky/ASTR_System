@@ -22,10 +22,10 @@
   --astr-text-2: #8B90A0;   /* 次要文本 */
   --astr-text-3: #565B6B;   /* 占位/禁用/微标 */
 
-  /* —— 琥珀信号色（仪器层唯一的颜色——观测台黄铜刻度的那种暖）—— */
+  /* —— 琥珀信号色（仪器层唯一的颜色——观测台黄铜刻度的那种暖）——
+        法则一：琥珀只许平涂，禁 glow（渐变已处决，尸体 token 已清）。 */
   --astr-accent:      #E8B04B;
   --astr-accent-2:    #8A6A2F;   /* 暗琥珀（声波/次级仪器读数），不再是第二彩色 */
-  --astr-accent-grad: none;      /* 渐变已处决（主权终端铁律：零渐变装饰） */
   --astr-accent-glow: 0 0 20px rgba(232, 176, 75, 0.25);
 
   /* 琥珀上的文字：近黑（用户气泡/主按钮 = 琥珀卡片黑字，仪器标签美学） */
@@ -68,20 +68,26 @@
   /* 圆角 */
   --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 9999px;
 
-  /* 阴影（分层 elevation）+ 辉光（仅"她"的元素）*/
+  /* 阴影（分层 elevation，纯黑无彩）*/
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.4);
   --shadow-3: 0 12px 40px rgba(0, 0, 0, 0.5);
-  --glow-her: 0 0 32px -12px var(--astr-emotion-glow);   /* 只有她的元素可用 */
+
+  /* 她的辉光三阶（04 §3.2）——页面唯一的彩色光，宿主必须"是她"（法则一） */
+  --glow-her-1: 0 0 20px -12px var(--astr-emotion-glow); /* 微缘光：她的气泡/发言 */
+  --glow-her-2: 0 0 32px -8px var(--astr-emotion-glow);  /* 主体光：情绪 blob/降级 orb */
+  --glow-her-3: 0 0 48px -20px var(--astr-emotion-glow); /* 大件光：她的整块面板 */
 
   /* z-index 层级（锁定，禁止随手 9999）*/
   --z-base: 0; --z-panel: 10; --z-live2d: 20; --z-overlay: 100; --z-toast: 200; --z-modal: 300;
 
-  /* —— 动效 token —— */
-  --dur-fast:   120ms;   /* 微反馈：hover、按下 */
-  --dur-base:   200ms;   /* 常规状态转移 */
-  --dur-slow:   320ms;   /* 面板进出、布局变化（上限）*/
-  --dur-breath: 4000ms;  /* 呼吸循环（只属于她） */
+  /* —— 动效 token（04 法则三：两种时间，320ms–1200ms 中间地带禁用）—— */
+  --dur-fast:    120ms;   /* 仪器时间：微反馈 hover/按下 */
+  --dur-base:    200ms;   /* 仪器时间：常规状态转移 */
+  --dur-slow:    320ms;   /* 仪器时间：面板进出（上限）*/
+  --dur-settle:  1200ms;  /* 生命时间：仪器读数落定（情绪维度条）*/
+  --dur-emotion: 2400ms;  /* 生命时间：情绪光迁移——"感觉到而非看到" */
+  --dur-breath:  4000ms;  /* 生命时间：呼吸循环（只属于她）*/
   --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);    /* expo-out，进场 */
   --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);   /* 对称过渡 */
 }

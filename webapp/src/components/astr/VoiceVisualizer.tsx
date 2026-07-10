@@ -2,12 +2,13 @@
 
 import { motion } from "framer-motion";
 
-/** 声波可视化（04 §5）：随 TTS 播放的音量包络律动。无包络时 idle 轻微呼吸。 */
+/** 声波可视化（04 §5）：随 TTS 播放的音量包络律动。
+ *  无信号时不渲染（04 法则四：仪器不动）——只有她开口，这台仪器才通电。 */
 export function VoiceVisualizer({ envelope }: { envelope?: number[] }) {
-  const bars = envelope && envelope.length > 0 ? envelope : Array.from({ length: 16 }, () => 0.12);
+  if (!envelope || envelope.length === 0) return null;
   return (
     <div className="flex h-8 items-center gap-1">
-      {bars.map((v, i) => (
+      {envelope.map((v, i) => (
         <motion.span
           key={i}
           className="w-1 rounded-full bg-accent-2"
