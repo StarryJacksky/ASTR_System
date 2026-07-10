@@ -848,6 +848,7 @@ git commit -m "feat: add accessible ASTR application shell"
 - Modify: `webapp/src/components/system/AppShell.tsx`
 - Create: `webapp/src/lib/runtime-metrics.ts`
 - Create: `webapp/src/lib/runtime-metrics.test.ts`
+- Modify: `webapp/eslint.config.mjs`
 - Modify: `.gitignore`
 
 **Interfaces:**
@@ -860,9 +861,10 @@ Tests must prove:
 
 - hidden dispatches `DOCUMENT_HIDDEN` and visible dispatches `DOCUMENT_VISIBLE`;
 - reduced-motion changes dispatch `REDUCE_ON`/`REDUCE_OFF` unless the explicit persistent pause is active;
+- resuming visual motion while the media query still requests reduced motion immediately settles back to `reduced`, so a delayed persisted `VISUAL_RESUME` cannot win;
 - listeners are removed on unmount;
 - no `requestAnimationFrame` loop is created;
-- `recordRuntimeMetric("app-raf", 0)` retains only the latest bounded sample set and `readRuntimeMetrics()` returns a frozen copy.
+- `recordRuntimeMetric("app-raf", 0)` retains only the latest bounded sample set and `readRuntimeMetrics()` returns a frozen copy whose records cannot mutate internal samples.
 
 - [ ] **Step 2: Run tests and verify missing modules**
 
@@ -876,7 +878,7 @@ Expected: FAIL because bridge and metric modules do not exist.
 
 - [ ] **Step 3: Implement the runtime bridge**
 
-`SemanticRuntimeBridge` is a renderless client component. It registers exactly one `visibilitychange` listener and one `(prefers-reduced-motion: reduce)` change listener, dispatches current values after listener registration, and removes both listeners on cleanup. It never calls RAF, creates Canvas, or imports Pixi.
+`SemanticRuntimeBridge` is a renderless client component. It registers exactly one `visibilitychange` listener and one `(prefers-reduced-motion: reduce)` change listener, dispatches current values after listener registration, and removes both listeners on cleanup. While Motion is `paused`, media changes are remembered but cannot override the explicit pause; when Motion resumes, the bridge immediately reapplies the current media-query truth. It never calls RAF, creates Canvas, or imports Pixi.
 
 Render it once inside `AppShell` before route children.
 
@@ -892,7 +894,9 @@ export function readRuntimeMetrics(): readonly RuntimeMetric[];
 export function clearRuntimeMetrics(): void;
 ```
 
-Keep at most 100 samples in module memory, reject non-finite or negative values, and make `readRuntimeMetrics` return `Object.freeze([...samples])`. Do not send telemetry or write persistent storage.
+Keep at most 100 samples in module memory, reject non-finite or negative values, freeze stored metric records, and make `readRuntimeMetrics` return a frozen cloned array. Do not send telemetry or write persistent storage.
+
+Add `coverage/**` to ESLint `globalIgnores`. The acceptance sequence intentionally runs coverage before lint; generated HTML/JS reports must never become application lint inputs.
 
 - [ ] **Step 5: Create the durable local progress boundary**
 
@@ -916,7 +920,7 @@ Expected: all tests pass; coverage report is generated; lint/typecheck/build all
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add .gitignore webapp/src/components/system/SemanticRuntimeBridge.tsx webapp/src/components/system/SemanticRuntimeBridge.test.tsx webapp/src/components/system/AppShell.tsx webapp/src/lib/runtime-metrics.ts webapp/src/lib/runtime-metrics.test.ts
+git add .gitignore webapp/eslint.config.mjs webapp/src/components/system/SemanticRuntimeBridge.tsx webapp/src/components/system/SemanticRuntimeBridge.test.tsx webapp/src/components/system/AppShell.tsx webapp/src/lib/runtime-metrics.ts webapp/src/lib/runtime-metrics.test.ts
 git commit -m "feat: synchronize browser runtime state"
 ```
 
