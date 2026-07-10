@@ -19,6 +19,8 @@
   --color-ink: var(--astr-text);
   --color-ink-2: var(--astr-text-2);
   --color-ink-3: var(--astr-text-3);
+  --color-soul: var(--astr-soul);
+  --color-action: var(--astr-action);
   --color-accent: var(--astr-accent);
   --color-accent-2: var(--astr-accent-2);
   --color-on-accent: var(--astr-on-accent);
@@ -48,13 +50,13 @@ body {
 
 /* 焦点环（04 §7 可访问性硬要求，不可移除）*/
 :focus-visible {
-  outline: 2px solid var(--astr-accent);
+  outline: 2px solid var(--astr-action);
   outline-offset: 2px;
 }
 
 /* ============================================================
-   环境系统 ·「天文台里的活体观测仪」（2026-07-06 三合一定稿）
-   仪器纹丝不动；房间里唯一的光来自她。
+   Constitutional ambient system
+   Surfaces remain stable; emotional light comes from her presence.
    ============================================================ */
 
 /* 星野（v2.1 宇宙层）：全屏最底层的 Canvas 星空。绘制逻辑见 Starfield.tsx。
@@ -67,8 +69,8 @@ body {
   pointer-events: none;
 }
 
-/* 天光：固定全屏底层。只有一束——顶部极淡的情绪光晕（她在这个房间里的存在感）
-   + 四周暗角（观测舱的包裹感）。变化 2.4s 缓入缓出，9s 呼吸。 */
+/* Ambient light: a restrained emotion wash above a quiet vignette.
+   Changes ease in over 2.4s while the environment breathes over 9s. */
 .astr-ambient {
   position: fixed;
   inset: 0;
@@ -109,8 +111,7 @@ body {
   opacity: 0.025;
 }
 
-/* 仪器面板：不透明、平整、发丝刻线——玻璃拟态已处决（主权终端铁律），
-   故不叫 glass：类名不许说谎。 */
+/* Material panel: opaque, stable, and bounded by a hairline. */
 .astr-panel {
   background: var(--astr-surface);
 }
@@ -157,14 +158,14 @@ body {
   transition: background var(--dur-emotion) var(--ease-inout);
 }
 
-/* 字标（顶栏"秋秋"/空态）：展示衬线——天文台铭牌，不是霓虹灯。 */
+/* Wordmark and empty-state headings use the editorial display face. */
 .astr-wordmark {
   font-family: var(--font-display);
   font-weight: 560;
   letter-spacing: 0.02em;
 }
 
-/* 仪器微标：等宽 + 大字距 + 小号——所有面板编号/标签统一用它。 */
+/* System micro-label: monospace, wide-tracked, and compact. */
 .astr-label {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
@@ -173,8 +174,7 @@ body {
   color: var(--astr-text-3);
 }
 
-/* 输入栏：聚焦=琥珀刻线亮起（仪器通电，不是灯光秀）。
-   光标也是仪器的一部分——琥珀细针（micro-wonder：通电的延伸）。 */
+/* Composer focus and caret use the shared action role. */
 .astr-composer {
   transition: border-color var(--dur-base) var(--ease-inout);
 }

@@ -2,7 +2,7 @@
 // 规范：04_DESIGN_SYSTEM.md §3.2。
 // 思路：把她的情绪向量在四个锚点色（孤独/兴奋/傲娇/平静）之间做加权混合，
 //      写入 CSS 变量 --astr-emotion-glow。情绪不是一个数字，是"整个房间的光"。
-// 变化必须缓慢（配合 tokens.css 的 --dur-slow+ 过渡），让人"感觉到"而非"看到突变"。
+// 变化必须缓慢（配合 tokens.css 的空间/标志性动效层级），让人"感觉到"而非"看到突变"。
 
 /** MaiBot 情绪向量，各分量 0..1（见 P1-W4 / soul/emotion.py）。 */
 export interface EmotionVector {
@@ -13,12 +13,11 @@ export interface EmotionVector {
 }
 
 // 四个锚点色，与 tokens.css 的 --emo-* 严格一致。改色时两边同步。
-// （2026-07-06 三合一定稿：她的光=深海生物荧光——只出现在她身上，绝不进 UI 控件）
 const ANCHORS: Record<keyof EmotionVector, [number, number, number]> = {
-  lonely: [0x5b, 0x8b, 0xff], // #5B8BFF 深海冷蓝
-  excited: [0xff, 0x8a, 0x5c], // #FF8A5C 暖珊瑚
-  tsundere: [0xff, 0x5c, 0xa8], // #FF5CA8 品红
-  calm: [0x3d, 0xf5, 0xc4], // #3DF5C4 生物荧光青
+  lonely: [0x6f, 0x8c, 0xff], // #6F8CFF
+  excited: [0xff, 0x8c, 0x78], // #FF8C78
+  tsundere: [0xc8, 0x84, 0xff], // #C884FF
+  calm: [0x92, 0xb7, 0xff], // #92B7FF
 };
 
 /**

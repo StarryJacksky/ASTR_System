@@ -223,10 +223,10 @@ const DECKS: [string, string][] = [
   ["传承/迁移", "P5"],
 ];
 
-/** 审计链节点色：deny=红（拦下）/ confirm=琥珀（等你点头）/ 其余=绿（放行）。 */
+/** 审计链节点色：deny=危险色（拦下）/ confirm=警告色（等你点头）/ 其余=成功语义色（放行）。 */
 function decisionColor(decision: string): string {
   if (decision === "deny") return "var(--astr-danger)";
-  if (decision === "confirm") return "var(--astr-accent)";
+  if (decision === "confirm") return "var(--astr-warning)";
   return "var(--astr-success)";
 }
 

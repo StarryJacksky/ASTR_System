@@ -1,53 +1,51 @@
-/* ASTR 设计系统 · Design Tokens（单一真相源）
- * 规范：04_DESIGN_SYSTEM.md §2/§3。组件内禁止硬编码色值，只用 var(--astr-*) 或 Tailwind 映射类。
- * 任何修改都要同步回 04 号文档，否则以本文件为准并视为文档 bug。
- *
- * 艺术方向（2026-07-06 主人拍板，三合一）：「天文台里的活体观测仪」
- *   - 天文台：近黑深空底、极致留白、衬线展示字、她=被一束光照亮的存在
- *   - 深海：生命感只属于她——她的光是生物荧光（情绪通道），UI 本身纹丝不动
- *   - 主权终端：仪器层瑞士化——等宽字、编号、发丝线；零玻璃、零渐变装饰
- * 全页只有三种声音：深空黑 + 暖琥珀信号色（仪器）+ 她的生物荧光（只在她身上）。
+/* ASTR constitutional design tokens.
+ * Components consume semantic roles through var(--astr-*) or Tailwind mappings.
+ * Soul violet expresses identity; action blue expresses interaction; emotion colors belong to her presence.
  */
 
 :root {
-  /* —— 深空底（暗色主题，默认）—— */
-  --astr-bg:              #060708;   /* 观测舱底：近纯黑，一丝蓝 */
-  --astr-surface:         #0C0E12;   /* 面板 */
-  --astr-surface-2:       #13161C;   /* 抬升面板（hover/active 容器）*/
-  --astr-hairline:        rgba(255, 255, 255, 0.07);   /* 1px 仪器刻线 */
-  --astr-hairline-strong: rgba(255, 255, 255, 0.13);
-
-  /* —— 文本 —— */
-  --astr-text:   #E9EAEE;   /* 主文本 */
-  --astr-text-2: #8B90A0;   /* 次要文本 */
-  --astr-text-3: #565B6B;   /* 占位/禁用/微标 */
-
-  /* —— 琥珀信号色（仪器层唯一的颜色——观测台黄铜刻度的那种暖）——
-        法则一：琥珀只许平涂，禁 glow（渐变已处决，尸体 token 已清）。 */
-  --astr-accent:      #E8B04B;
-  --astr-accent-2:    #8A6A2F;   /* 暗琥珀（声波/次级仪器读数），不再是第二彩色 */
-  --astr-accent-glow: 0 0 20px rgba(232, 176, 75, 0.25);
-
-  /* 琥珀上的文字：近黑（用户气泡/主按钮 = 琥珀卡片黑字，仪器标签美学） */
-  --astr-on-accent: #14100A;
-
-  /* —— 语义色（克制使用）—— */
-  --astr-success: #4EC98F;
-  --astr-warning: var(--astr-accent);   /* 警示并入信号色：仪器只有一种提醒 */
-  --astr-danger:  #F25555;
-
-  /* —— 她的生物荧光（情绪通道，§3.2）：只允许出现在她身上——舞台背光/她的气泡/
-        情绪计/心跳点。绝不进按钮、进度条、图表。 —— */
-  --emo-lonely:   #5B8BFF;   /* 孤独：深海冷蓝 */
-  --emo-excited:  #FF8A5C;   /* 兴奋：暖珊瑚 */
-  --emo-tsundere: #FF5CA8;   /* 傲娇：品红 */
-  --emo-calm:     #3DF5C4;   /* 平静：生物荧光青 */
+  color-scheme: dark;
+  --astr-bg: #050611;
+  --astr-surface: #0e1123;
+  --astr-surface-2: #15192f;
+  --astr-text: #f5f4fb;
+  --astr-text-2: #969fbd;
+  --astr-text-3: #b3bad2;
+  --astr-hairline: rgba(151, 165, 214, 0.18);
+  --astr-hairline-strong: #2b3253;
+  --astr-soul: #9184ff;
+  --astr-action: #8bcfff;
+  --astr-accent: var(--astr-action);
+  --astr-accent-2: #6a78ba;
+  --astr-on-accent: #07101d;
+  --astr-success: #c8dcff;
+  --astr-warning: #efa85f;
+  --astr-danger: #ff7087;
+  --emo-lonely: #6f8cff;
+  --emo-excited: #ff8c78;
+  --emo-tsundere: #c884ff;
+  --emo-calm: #92b7ff;
   --astr-emotion-glow: var(--emo-calm);
+  --touch-target: 44px;
+  --radius-small: 6px;
+  --radius-medium: 12px;
+  --radius-large: 22px;
+  --radius-jewel: 999px;
+  --corner-eclipse: 28px 5px 28px 5px;
+  --motion-instant: 120ms;
+  --motion-fast: 200ms;
+  --motion-spatial: 320ms;
+  --motion-signature: 1200ms;
+  --dpr-desktop: 1.5;
+  --dpr-mobile: 1.25;
 
-  /* —— 字体 —— */
+  /* Backward-compatible effect alias */
+  --astr-accent-glow: 0 0 20px color-mix(in srgb, var(--astr-action) 25%, transparent);
+
+  /* Typography */
   --font-sans: "Geist", "Inter", "HarmonyOS Sans SC", "Source Han Sans SC", system-ui, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
-  /* 展示衬线（天文台时刻：字标/空态/大标题），由 next/font 注入真实家族名 */
+  /* Display face for wordmarks, empty states, and editorial headings. */
   --font-display: "Fraunces", "Noto Serif SC", serif;
 
   /* 字号阶梯（rem，基准 16px）*/
@@ -65,8 +63,12 @@
   --space-1: 4px;  --space-2: 8px;   --space-3: 12px; --space-4: 16px;
   --space-6: 24px; --space-8: 32px;  --space-12: 48px; --space-16: 64px; --space-24: 96px;
 
-  /* 圆角 */
-  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 9999px;
+  /* Backward-compatible shape aliases */
+  --radius-sm: var(--radius-small);
+  --radius-md: var(--radius-medium);
+  --radius-lg: var(--radius-large);
+  --radius-xl: var(--radius-large);
+  --radius-full: var(--radius-jewel);
 
   /* 阴影（分层 elevation，纯黑无彩）*/
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -81,29 +83,36 @@
   /* z-index 层级（锁定，禁止随手 9999）*/
   --z-base: 0; --z-panel: 10; --z-live2d: 20; --z-overlay: 100; --z-toast: 200; --z-modal: 300;
 
-  /* —— 动效 token（04 法则三：两种时间，320ms–1200ms 中间地带禁用）—— */
-  --dur-fast:    120ms;   /* 仪器时间：微反馈 hover/按下 */
-  --dur-base:    200ms;   /* 仪器时间：常规状态转移 */
-  --dur-slow:    320ms;   /* 仪器时间：面板进出（上限）*/
-  --dur-settle:  1200ms;  /* 生命时间：仪器读数落定（情绪维度条）*/
+  /* Backward-compatible motion aliases and extended emotional rhythms */
+  --dur-fast: var(--motion-instant);
+  --dur-base: var(--motion-fast);
+  --dur-slow: var(--motion-spatial);
+  --dur-settle: var(--motion-signature);
   --dur-emotion: 2400ms;  /* 生命时间：情绪光迁移——"感觉到而非看到" */
   --dur-breath:  4000ms;  /* 生命时间：呼吸循环（只属于她）*/
   --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);    /* expo-out，进场 */
   --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);   /* 对称过渡 */
 }
 
-/* —— 亮色主题（白天工作场景，备选）：data-theme="light" 挂在 <html> —— */
+/* Day material inversion */
 [data-theme="light"] {
-  --astr-bg:              #F5F4F0;   /* 观测台白天：暖灰纸感，不是冷白 */
-  --astr-surface:         #FDFCFA;
-  --astr-surface-2:       #ECEAE4;
-  --astr-hairline:        rgba(12, 12, 10, 0.09);
-  --astr-hairline-strong: rgba(12, 12, 10, 0.16);
-  --astr-text:   #17171A;
-  --astr-text-2: #55565E;
-  --astr-text-3: #8E8F98;
-  --astr-accent: #B8822B;   /* 琥珀在纸上加深，保对比度 */
-  --astr-accent-glow: 0 0 16px rgba(184, 130, 43, 0.2);
+  color-scheme: light;
+  --astr-bg: #f1f3fa;
+  --astr-surface: #ffffff;
+  --astr-surface-2: #e7eaf4;
+  --astr-text: #16172b;
+  --astr-text-2: #4e5572;
+  --astr-text-3: #606781;
+  --astr-hairline: rgba(31, 42, 82, 0.18);
+  --astr-hairline-strong: #aeb7d2;
+  --astr-soul: #5b48b8;
+  --astr-action: #216ca6;
+  --astr-accent: var(--astr-action);
+  --astr-accent-2: #526a9d;
+  --astr-on-accent: #ffffff;
+  --astr-success: #315f91;
+  --astr-warning: #955005;
+  --astr-danger: #b92f4c;
 }
 
 /* 呼吸动画（"会呼吸"准则）：只用于她的生命体征（情绪光/心跳点/她的 idle） */
