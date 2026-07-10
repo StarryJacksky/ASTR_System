@@ -228,6 +228,7 @@ git commit -m "test: establish frontend validation harness"
 - Create: `webapp/src/styles/tokens.test.ts`
 - Modify: `webapp/src/styles/tokens.css`
 - Modify: `webapp/src/app/globals.css`
+- Modify: `webapp/src/app/admin/page.tsx`
 - Modify: `webapp/src/lib/emotion.ts`
 
 **Interfaces:**
@@ -244,6 +245,20 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync(resolve(process.cwd(), "src/styles/tokens.css"), "utf8");
+
+function luminance(hex: string): number {
+  const channels = hex.slice(1).match(/.{2}/g)?.map((pair) => Number.parseInt(pair, 16) / 255) ?? [];
+  const linear = channels.map((channel) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function contrast(foreground: string, background: string): number {
+  const a = luminance(foreground);
+  const b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
 
 describe("ASTR constitutional tokens", () => {
   it.each([
@@ -264,6 +279,11 @@ describe("ASTR constitutional tokens", () => {
     for (const value of ["#f1f3fa", "#ffffff", "#16172b", "#5b48b8", "#216ca6", "#955005", "#b92f4c"]) {
       expect(css.toLowerCase()).toContain(value);
     }
+  });
+
+  it("keeps day tertiary text at AA contrast on the raised surface", () => {
+    expect(css.toLowerCase()).toContain("--astr-text-3: #606781");
+    expect(contrast("#606781", "#e7eaf4")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("contains no legacy green success or calm color", () => {
@@ -334,7 +354,7 @@ The `:root` semantic block must contain:
   --astr-surface-2: #e7eaf4;
   --astr-text: #16172b;
   --astr-text-2: #4e5572;
-  --astr-text-3: #656c88;
+  --astr-text-3: #606781;
   --astr-hairline: rgba(31, 42, 82, 0.18);
   --astr-hairline-strong: #aeb7d2;
   --astr-soul: #5b48b8;
@@ -349,6 +369,8 @@ The `:root` semantic block must contain:
 ```
 
 Keep the existing typography, spacing, z-index, easing, and shadow roles, but rename comments and references away from the amber observatory concept. Update `emotion.ts` fallback hex values to the four new emotion tokens. In `globals.css`, map `soul` and `action` roles and ensure the default focus ring uses `--astr-action`.
+
+Because `--astr-accent` now aliases action blue, update the existing Admin audit mapper so `decision === "confirm"` returns `var(--astr-warning)` rather than `var(--astr-accent)`, and update its adjacent comment to describe cold blue/silver success. The token test reads `admin/page.tsx` and asserts this branch so a future alias change cannot silently recolor pending confirmation.
 
 - [ ] **Step 4: Verify the token system**
 
@@ -365,7 +387,7 @@ Expected: token tests pass; no lint/type errors.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add webapp/src/styles/tokens.css webapp/src/styles/tokens.test.ts webapp/src/app/globals.css webapp/src/lib/emotion.ts
+git add webapp/src/styles/tokens.css webapp/src/styles/tokens.test.ts webapp/src/app/globals.css webapp/src/app/admin/page.tsx webapp/src/lib/emotion.ts
 git commit -m "feat: establish ASTR constitutional design tokens"
 ```
 
