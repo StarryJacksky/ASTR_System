@@ -23,6 +23,14 @@ const validStatus = {
   activity: "在整理今天的记录",
 };
 
+const emotionFields = ["loneliness", "talkativeness", "irritation", "excitement"] as const;
+const emotionBoundaryCases = emotionFields.flatMap((field) =>
+  [0, 1].map((value) => [field, value] as const),
+);
+const invalidEmotionCases = emotionFields.flatMap((field) =>
+  [-0.01, 1.01].map((value) => [field, value] as const),
+);
+
 function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -174,6 +182,43 @@ describe("Presence Core client", () => {
     const error = await capturedError(createCoreClient({ fetch: fetcher }).status());
 
     expect(error).toMatchObject({ kind: "shape", operation: "status" });
+  });
+
+  it.each(emotionBoundaryCases)("accepts the inclusive emotion boundary %s=%s", async (field, value) => {
+    const body = {
+      ...validStatus,
+      emotion: { ...validStatus.emotion, [field]: value },
+    };
+    const fetcher = vi.fn<CoreFetch>().mockResolvedValue(jsonResponse(body));
+
+    await expect(createCoreClient({ fetch: fetcher }).status()).resolves.toMatchObject({
+      emotion: { [field]: value },
+    });
+  });
+
+  it.each(invalidEmotionCases)("rejects the out-of-range emotion value %s=%s", async (field, value) => {
+    const body = {
+      ...validStatus,
+      emotion: { ...validStatus.emotion, [field]: value },
+    };
+    const fetcher = vi.fn<CoreFetch>().mockResolvedValue(jsonResponse(body));
+    const error = await capturedError(createCoreClient({ fetch: fetcher }).status());
+
+    expect(error).toMatchObject({ kind: "shape", operation: "status" });
+  });
+
+  it("keeps finite cost and budget values independent from the emotion unit interval", async () => {
+    const body = {
+      ...validStatus,
+      cost_today_usd: -0.01,
+      daily_budget_usd: 10_000,
+    };
+    const fetcher = vi.fn<CoreFetch>().mockResolvedValue(jsonResponse(body));
+
+    await expect(createCoreClient({ fetch: fetcher }).status()).resolves.toMatchObject({
+      cost_today_usd: -0.01,
+      daily_budget_usd: 10_000,
+    });
   });
 
   it.each([

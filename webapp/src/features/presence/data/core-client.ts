@@ -212,10 +212,10 @@ function parseEmotion(value: unknown): SoulEmotion | null {
   const excitement = own(value, "excitement");
   const updatedAt = own(value, "updated_at");
   if (
-    !isFiniteNumber(loneliness) ||
-    !isFiniteNumber(talkativeness) ||
-    !isFiniteNumber(irritation) ||
-    !isFiniteNumber(excitement) ||
+    !isUnitInterval(loneliness) ||
+    !isUnitInterval(talkativeness) ||
+    !isUnitInterval(irritation) ||
+    !isUnitInterval(excitement) ||
     (Object.hasOwn(value, "updated_at") && typeof updatedAt !== "string")
   ) {
     return null;
@@ -334,6 +334,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function isUnitInterval(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0 && value <= 1;
 }
 
 function isNonBlankString(value: unknown): value is string {

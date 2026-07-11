@@ -69,20 +69,37 @@ export class PresenceStream {
 
   start(): void {
     if (this.started || this.closed) return;
-    this.started = true;
-    this.emitState("connecting");
-    if (this.closed) return;
+    const previousStarted = this.started;
+    const previousState = this.state;
+    const previousSource = this.source;
+    const previousRegistrationCount = this.registrations.length;
+    let createdSource: PresenceEventSource | null = null;
 
-    const source = this.eventSourceFactory(this.url);
-    this.source = source;
-    this.register("open", () => {
-      if (!this.closed) this.emitState("open");
-    });
-    this.register("error", () => {
-      if (!this.closed) this.emitState("retrying");
-    });
-    for (const eventName of PRESENCE_SSE_EVENT_NAMES) {
-      this.register(eventName, (event) => this.acceptEvent(eventName, event));
+    this.started = true;
+    try {
+      this.emitState("connecting");
+      if (this.closed) return;
+
+      createdSource = this.eventSourceFactory(this.url);
+      this.source = createdSource;
+      this.register("open", () => {
+        if (!this.closed) this.emitState("open");
+      });
+      this.register("error", () => {
+        if (!this.closed) this.emitState("retrying");
+      });
+      for (const eventName of PRESENCE_SSE_EVENT_NAMES) {
+        this.register(eventName, (event) => this.acceptEvent(eventName, event));
+      }
+    } catch (error) {
+      this.rollbackStart(
+        previousStarted,
+        previousState,
+        previousSource,
+        previousRegistrationCount,
+        createdSource,
+      );
+      throw error;
     }
   }
 
@@ -104,8 +121,30 @@ export class PresenceStream {
   private register(type: string, listener: EventListener): void {
     const source = this.source;
     if (!source || this.closed) return;
-    this.registrations.push([type, listener]);
     source.addEventListener(type, listener);
+    this.registrations.push([type, listener]);
+  }
+
+  private rollbackStart(
+    previousStarted: boolean,
+    previousState: PresenceTransportState | null,
+    previousSource: PresenceEventSource | null,
+    previousRegistrationCount: number,
+    createdSource: PresenceEventSource | null,
+  ): void {
+    const addedRegistrations = this.registrations.splice(previousRegistrationCount);
+    try {
+      if (createdSource) {
+        for (const [type, listener] of addedRegistrations) {
+          createdSource.removeEventListener(type, listener);
+        }
+        createdSource.close();
+      }
+    } finally {
+      this.started = previousStarted;
+      this.state = previousState;
+      this.source = previousSource;
+    }
   }
 
   private acceptEvent(eventName: PresenceSseEventName, event: Event): void {

@@ -24,7 +24,12 @@ class FakeEventSource implements PresenceEventSource {
   readonly close = vi.fn();
   private readonly listeners = new Map<string, Set<Listener>>();
 
+  constructor(
+    private readonly addFailure?: { readonly type: string; readonly error: Error },
+  ) {}
+
   addEventListener(type: string, listener: Listener): void {
+    if (this.addFailure?.type === type) throw this.addFailure.error;
     this.added.push({ type, listener });
     const listeners = this.listeners.get(type) ?? new Set<Listener>();
     listeners.add(listener);
@@ -133,6 +138,126 @@ describe("PresenceStream", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("rolls back when the initial connecting callback throws and retries from scratch", () => {
+    const failure = new Error("connecting callback failed");
+    const source = new FakeEventSource();
+    const eventSourceFactory = vi.fn<PresenceEventSourceFactory>(() => source);
+    const states: PresenceTransportState[] = [];
+    let firstConnecting = true;
+    const onState = vi.fn((state: PresenceTransportState) => {
+      states.push(state);
+      if (state === "connecting" && firstConnecting) {
+        firstConnecting = false;
+        throw failure;
+      }
+    });
+    const stream = new PresenceStream({
+      url: "http://core.test/v1/stream",
+      eventSourceFactory,
+      onEvent: vi.fn(),
+      onState,
+    });
+
+    expect(() => stream.start()).toThrow(failure);
+    expect(eventSourceFactory).not.toHaveBeenCalled();
+    expect(source.added).toEqual([]);
+
+    stream.start();
+    expect(onState).toHaveBeenCalledTimes(2);
+    expect(states).toEqual(["connecting", "connecting"]);
+    expect(eventSourceFactory).toHaveBeenCalledTimes(1);
+    expect(source.added).toHaveLength(2 + PRESENCE_SSE_EVENT_NAMES.length);
+
+    source.emit("open");
+    stream.close();
+    expect(states).toEqual(["connecting", "connecting", "open", "closed"]);
+    expect(source.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back a throwing EventSource factory so the next start genuinely retries", () => {
+    const failure = new Error("factory failed");
+    const source = new FakeEventSource();
+    let attempt = 0;
+    const eventSourceFactory = vi.fn<PresenceEventSourceFactory>(() => {
+      attempt += 1;
+      if (attempt === 1) throw failure;
+      return source;
+    });
+    const states: PresenceTransportState[] = [];
+    const stream = new PresenceStream({
+      url: "http://core.test/v1/stream",
+      eventSourceFactory,
+      onEvent: vi.fn(),
+      onState: (state) => states.push(state),
+    });
+
+    expect(() => stream.start()).toThrow(failure);
+    expect(eventSourceFactory).toHaveBeenCalledTimes(1);
+    expect(source.added).toEqual([]);
+
+    stream.start();
+    expect(eventSourceFactory).toHaveBeenCalledTimes(2);
+    expect(states).toEqual(["connecting", "connecting"]);
+    expect(source.added).toHaveLength(2 + PRESENCE_SSE_EVENT_NAMES.length);
+    stream.close();
+    expect(source.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleans a partially registered source before retrying with a good source", () => {
+    const failure = new Error("listener registration failed");
+    const partial = new FakeEventSource({ type: "soul.stream", error: failure });
+    const good = new FakeEventSource();
+    let attempt = 0;
+    const eventSourceFactory = vi.fn<PresenceEventSourceFactory>(() => {
+      attempt += 1;
+      return attempt === 1 ? partial : good;
+    });
+    const states: PresenceTransportState[] = [];
+    const stream = new PresenceStream({
+      url: "http://core.test/v1/stream",
+      eventSourceFactory,
+      onEvent: vi.fn(),
+      onState: (state) => states.push(state),
+    });
+
+    expect(() => stream.start()).toThrow(failure);
+    expect(partial.added.map(({ type }) => type)).toEqual(["open", "error", "agent.thought"]);
+    expect(partial.removed).toEqual(partial.added);
+    expect(partial.close).toHaveBeenCalledTimes(1);
+
+    stream.start();
+    expect(eventSourceFactory).toHaveBeenCalledTimes(2);
+    expect(states).toEqual(["connecting", "connecting"]);
+    expect(good.added).toHaveLength(2 + PRESENCE_SSE_EVENT_NAMES.length);
+    good.emit("open");
+    stream.close();
+    expect(states).toEqual(["connecting", "connecting", "open", "closed"]);
+    expect(good.close).toHaveBeenCalledTimes(1);
+    expect(partial.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes deterministically after a failed start", () => {
+    const failure = new Error("factory failed");
+    const eventSourceFactory = vi.fn<PresenceEventSourceFactory>(() => {
+      throw failure;
+    });
+    const states: PresenceTransportState[] = [];
+    const stream = new PresenceStream({
+      url: "http://core.test/v1/stream",
+      eventSourceFactory,
+      onEvent: vi.fn(),
+      onState: (state) => states.push(state),
+    });
+
+    expect(() => stream.start()).toThrow(failure);
+    stream.close();
+    stream.close();
+    stream.start();
+
+    expect(states).toEqual(["connecting", "closed"]);
+    expect(eventSourceFactory).toHaveBeenCalledTimes(1);
   });
 
   it("diagnoses and skips malformed frames without affecting a later valid event", () => {
