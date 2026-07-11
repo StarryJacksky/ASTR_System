@@ -79,6 +79,18 @@ function decisionEvent(id: string, traceId: string, replyText: string): AstrEven
   return astrEvent(id, traceId, "soul.decision", { reply_text: replyText });
 }
 
+function unsafeEvent(overrides: Record<string, unknown>): AstrEvent {
+  return {
+    id: "unsafe-event",
+    ts: "2026-07-11T00:00:00.000Z",
+    type: "soul.stream",
+    source: "soul.orchestrator",
+    payload: { seq: 1, delta: "safe", done: false },
+    trace_id: "trace-active",
+    ...overrides,
+  } as unknown as AstrEvent;
+}
+
 function receive(state: ConversationModelState, event: AstrEvent, at: number) {
   return reduce(state, { type: "REPLY_EVENT", event, at });
 }
@@ -489,5 +501,323 @@ describe("Presence conversation model", () => {
       { id: "local-1", role: "user", text: "你好，星枢", ts: 1 },
     ]);
     expect(Object.keys(exactProjection.messages[0] ?? {})).toEqual(["id", "role", "text", "ts"]);
+  });
+
+  it.each([
+    ["empty event_id", { event_id: "", trace_id: "trace-active" }],
+    ["whitespace event_id", { event_id: "   ", trace_id: "trace-active" }],
+    ["empty trace_id", { event_id: "ingest-1", trace_id: "" }],
+    ["whitespace trace_id", { event_id: "ingest-1", trace_id: "  \t " }],
+  ])("rejects an ACK with %s before draft clearing or buffered replay", (_label, receipt) => {
+    let state = send(createConversationState(draft("do not clear", 12, 3, 8)));
+    state = receive(state, streamEvent("pre-ack", "trace-active", 1, "buffered"), 2);
+    const beforeAck = state;
+
+    const afterAck = reduce(state, {
+      type: "INGEST_ACK",
+      attemptId: "attempt-1",
+      receipt,
+      at: 3,
+    });
+
+    expect(afterAck).toBe(beforeAck);
+    expect(afterAck.draft).toEqual(draft("do not clear", 12, 3, 8));
+    expect(afterAck.activeAttempt?.receipt).toBeNull();
+    expect(afterAck.preAckBuffer.map((frame) => frame.eventId)).toEqual(["pre-ack"]);
+    expect(afterAck.provisionalReplies).toEqual([]);
+  });
+
+  it.each([
+    ["null payload", { payload: null }],
+    ["undefined payload", { payload: undefined }],
+    ["array payload", { payload: [{ seq: 1 }] }],
+    ["unsupported event type", { type: "agent.thought", payload: {} }],
+    ["empty event id", { id: "" }],
+    ["whitespace event id", { id: "   " }],
+    ["empty trace id", { trace_id: "" }],
+    ["whitespace trace id", { trace_id: " \t " }],
+  ])("diagnoses %s as malformed without throwing", (_label, overrides) => {
+    const event = unsafeEvent(overrides);
+    let state = acknowledge(send(), "trace-active");
+
+    expect(() => {
+      state = receive(state, event, 3);
+    }).not.toThrow();
+
+    expect(state.provisionalReplies).toEqual([]);
+    expect(state.diagnostics.at(-1)?.code).toBe("MALFORMED_REPLY_EVENT");
+  });
+
+  it.each([
+    ["function", () => "unsupported"],
+    ["undefined", undefined],
+    ["non-finite number", Number.POSITIVE_INFINITY],
+    ["non-plain object", new Date("2026-07-11T00:00:00.000Z")],
+  ])("rejects a payload containing an unsupported %s value", (_label, unsupported) => {
+    const event = unsafeEvent({
+      type: "soul.decision",
+      payload: { reply_text: "must not survive", unsupported },
+    });
+    let state = createConversationState();
+
+    state = receive(state, event, 3);
+
+    expect(state.messages).toEqual([]);
+    expect(state.authoritativeDecision).toBeNull();
+    expect(state.diagnostics.at(-1)?.code).toBe("MALFORMED_REPLY_EVENT");
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "normalizes local-send time %s to the pure zero fallback",
+    (at) => {
+      const state = send(createConversationState(draft("finite")), "attempt-1", "local-1", at);
+
+      expect(state.messages[0]?.ts).toBe(0);
+      expect(state.activeAttempt?.startedAt).toBe(0);
+      expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+    },
+  );
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "normalizes draft-change time %s before TTL evaluation",
+    (at) => {
+      let state = send(createConversationState(draft("first")), "attempt-1", "local-1", 0);
+      state = receive(state, streamEvent("buffered", "trace-active", 1, "delta"), 0);
+
+      state = reduce(state, {
+        type: "DRAFT_CHANGED",
+        draft: draft("edited", 2, 1, 3),
+        at,
+      });
+
+      expect(state.draft).toEqual(draft("edited", 2, 1, 3));
+      expect(state.preAckBuffer.map((frame) => frame.eventId)).toEqual(["buffered"]);
+    },
+  );
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "normalizes reply time %s before buffering or message projection",
+    (at) => {
+      let buffered = send(createConversationState(draft()), "attempt-1", "local-1", 0);
+      buffered = receive(buffered, streamEvent("buffered", "trace-active", 1, "delta"), at);
+      expect(buffered.preAckBuffer[0]?.receivedAt).toBe(0);
+
+      let external = createConversationState();
+      const invalidTsDecision = {
+        ...decisionEvent("external", "trace-external", "truth"),
+        ts: "not-a-date",
+      };
+      external = receive(external, invalidTsDecision, at);
+      expect(external.messages[0]?.ts).toBe(0);
+      expect(JSON.parse(JSON.stringify(external))).toEqual(external);
+    },
+  );
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "normalizes ACK time %s before pre-ACK TTL evaluation",
+    (at) => {
+      let state = send(createConversationState(draft()), "attempt-1", "local-1", 0);
+      state = receive(state, decisionEvent("buffered-final", "trace-active", "final"), 0);
+
+      state = reduce(state, {
+        type: "INGEST_ACK",
+        attemptId: "attempt-1",
+        receipt: { event_id: "ingest-1", trace_id: "trace-active" },
+        at,
+      });
+
+      expect(state.activeAttempt?.status).toBe("final");
+      expect(state.authoritativeDecision?.id).toBe("buffered-final");
+    },
+  );
+
+  it("normalizes non-finite diagnostic event times", () => {
+    let failed = send();
+    failed = reduce(failed, {
+      type: "INGEST_FAILED",
+      attemptId: "attempt-1",
+      message: "failed",
+      at: Number.POSITIVE_INFINITY,
+    });
+    expect(failed.diagnostics.at(-1)?.at).toBe(0);
+
+    let timedOut = acknowledge(send(), "trace-active");
+    timedOut = reduce(timedOut, {
+      type: "REQUEST_TIMED_OUT",
+      attemptId: "attempt-1",
+      at: Number.NaN,
+    });
+    expect(timedOut.diagnostics.at(-1)?.at).toBe(0);
+    expect(JSON.parse(JSON.stringify(timedOut))).toEqual(timedOut);
+  });
+
+  it("deep-owns a buffered event and nested payload", () => {
+    const payload = {
+      seq: 1,
+      delta: "original",
+      done: false,
+      metadata: { tags: ["owned"] },
+    };
+    const event = astrEvent("buffer-owned", "trace-active", "soul.stream", payload);
+    let state = send();
+
+    state = receive(state, event, 2);
+    payload.delta = "mutated";
+    payload.metadata.tags[0] = "mutated";
+    (event as { id: string }).id = "mutated-id";
+
+    expect(state.preAckBuffer[0]?.event).toMatchObject({
+      id: "buffer-owned",
+      payload: { delta: "original", metadata: { tags: ["owned"] } },
+    });
+    expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+
+  it.each(["active", "external"])("deep-owns an %s authoritative decision", (scope) => {
+    const payload = {
+      reply_text: "original final",
+      metadata: { reasons: ["owned"] },
+    };
+    const event = astrEvent(`decision-${scope}`, `trace-${scope}`, "soul.decision", payload);
+    let state =
+      scope === "active"
+        ? acknowledge(send(), "trace-active")
+        : createConversationState();
+
+    if (scope === "active") {
+      state = receive(
+        state,
+        { ...event, trace_id: "trace-active" },
+        3,
+      );
+    } else {
+      state = receive(state, event, 3);
+    }
+    payload.reply_text = "mutated";
+    payload.metadata.reasons[0] = "mutated";
+
+    expect(state.messages.at(-1)?.text).toBe("original final");
+    expect(state.authoritativeDecision?.payload).toMatchObject({
+      reply_text: "original final",
+      metadata: { reasons: ["owned"] },
+    });
+    expect(state.authoritativeDecision).not.toBe(event);
+    expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+
+  it("keeps an external decision out of the public authoritative slot while active is pending", () => {
+    const external = decisionEvent("external-pending", "trace-other", "external truth");
+    let state = acknowledge(send(), "trace-active");
+
+    state = receive(state, external, 3);
+
+    expect(state.messages.at(-1)).toMatchObject({ external: true, text: "external truth" });
+    expect(selectConversationProjection(state).authoritativeDecision).toBeNull();
+    expect(state.activeAttempt?.status).toBe("acknowledged");
+  });
+
+  it("lets the later active final own the projection after an earlier external decision", () => {
+    let state = acknowledge(send(), "trace-active");
+    state = receive(state, decisionEvent("external-first", "trace-other", "external"), 3);
+    state = receive(state, decisionEvent("active-final", "trace-active", "active"), 4);
+
+    expect(state.messages.filter((message) => message.kind === "decision")).toHaveLength(2);
+    expect(selectConversationProjection(state).authoritativeDecision?.id).toBe("active-final");
+  });
+
+  it("does not let an external decision overwrite an existing active final", () => {
+    let state = acknowledge(send(), "trace-active");
+    state = receive(state, decisionEvent("active-final", "trace-active", "active"), 3);
+    state = receive(state, decisionEvent("external-later", "trace-other", "external"), 4);
+
+    expect(state.messages.at(-1)).toMatchObject({ external: true, text: "external" });
+    expect(selectConversationProjection(state).authoritativeDecision?.id).toBe("active-final");
+  });
+
+  it("uses an external decision as authoritative truth when there is no active attempt", () => {
+    const external = decisionEvent("external-only", "trace-other", "external");
+
+    const state = receive(createConversationState(), external, 1);
+
+    expect(selectConversationProjection(state).authoritativeDecision?.id).toBe("external-only");
+  });
+
+  it("retains an overflow-evicted decision externally exactly once", () => {
+    const evictedDecision = decisionEvent("overflow-decision", "trace-overflow", "retain once");
+    let state = send(createConversationState(draft()), "attempt-1", "local-1", 0);
+    state = receive(state, evictedDecision, 0);
+    for (let index = 1; index <= PRE_ACK_BUFFER_CAPACITY; index += 1) {
+      state = receive(
+        state,
+        streamEvent(`overflow-stream-${index}`, `trace-${index}`, 1, String(index)),
+        index,
+      );
+    }
+
+    expect(state.messages.filter((message) => message.eventId === "overflow-decision")).toHaveLength(
+      1,
+    );
+    expect(state.messages.find((message) => message.eventId === "overflow-decision")).toMatchObject({
+      external: true,
+      text: "retain once",
+    });
+    expect(state.authoritativeDecision).toBeNull();
+
+    const duplicate = receive(state, evictedDecision, PRE_ACK_BUFFER_CAPACITY + 1);
+    expect(duplicate).toBe(state);
+  });
+
+  it("falls back to reducer time when AstrEvent.ts is invalid", () => {
+    const decision = {
+      ...decisionEvent("invalid-ts", "trace-active", "final"),
+      ts: "not-a-date",
+    };
+    let state = acknowledge(send(), "trace-active");
+
+    state = receive(state, decision, 77);
+
+    expect(state.messages.at(-1)?.ts).toBe(77);
+  });
+
+  it("keeps 1,000 ordered deltas correct while all bounded histories stay bounded", () => {
+    let state = acknowledge(send(), "trace-active");
+
+    for (let index = 1; index <= 1_000; index += 1) {
+      state = receive(
+        state,
+        streamEvent(`long-stream-${index}`, "trace-active", index, "x"),
+        index + 2,
+      );
+    }
+
+    expect(state.provisionalReplies[0]).toMatchObject({
+      text: "x".repeat(1_000),
+      lastSeq: 1_000,
+      done: false,
+    });
+    expect(state.seenEventIds).toHaveLength(SEEN_EVENT_CAPACITY);
+    expect(state.preAckBuffer.length).toBeLessThanOrEqual(PRE_ACK_BUFFER_CAPACITY);
+    expect(state.diagnostics.length).toBeLessThanOrEqual(64);
+  });
+
+  it("expires pre-ACK truth before applying the request timeout", () => {
+    let state = send(createConversationState(draft("timeout")), "attempt-1", "local-1", 0);
+    state = receive(state, streamEvent("ttl-stream", "trace-ttl", 1, "discard"), 0);
+    state = receive(state, decisionEvent("ttl-decision", "trace-ttl", "retain"), 0);
+
+    state = reduce(state, {
+      type: "REQUEST_TIMED_OUT",
+      attemptId: "attempt-1",
+      at: PRE_ACK_BUFFER_TTL_MS,
+    });
+
+    expect(state.preAckBuffer).toEqual([]);
+    expect(state.activeAttempt?.status).toBe("timedOut");
+    expect(state.messages.filter((message) => message.eventId === "ttl-decision")).toHaveLength(1);
+    expect(state.messages.at(-1)).toMatchObject({ external: true, text: "retain" });
+    expect(state.authoritativeDecision).toBeNull();
+    expect(state.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(["UNBOUND_STREAM_DROPPED", "REQUEST_TIMED_OUT"]),
+    );
   });
 });

@@ -1,4 +1,4 @@
-import type { ChatMessage, ConversationProjection } from "@/lib/types";
+import type { AstrEvent, ChatMessage, ConversationProjection } from "@/lib/types";
 
 import type {
   BufferedDecisionFrame,
@@ -18,6 +18,8 @@ export const PRE_ACK_BUFFER_TTL_MS = 10_000;
 export const SEEN_EVENT_CAPACITY = 256;
 
 const DIAGNOSTIC_CAPACITY = 64;
+// Invalid transport/controller times collapse to zero so the reducer stays deterministic and pure.
+const INVALID_REDUCER_TIME_FALLBACK = 0;
 const EMPTY_DRAFT: DraftSnapshot = {
   revision: 0,
   text: "",
@@ -45,23 +47,26 @@ export function conversationReducer(
   state: ConversationModelState,
   event: ConversationEvent,
 ): ConversationModelState {
-  const current = releaseExpiredPreAck(state, event.at);
+  const at = normalizeReducerTime(event.at);
+  if (event.type === "INGEST_ACK" && !isUsableReceipt(event.receipt)) return state;
+
+  const current = releaseExpiredPreAck(state, at);
 
   switch (event.type) {
     case "DRAFT_CHANGED":
       return { ...current, draft: { ...event.draft } };
     case "LOCAL_SEND":
-      return startLocalSend(current, event);
+      return startLocalSend(current, { ...event, at });
     case "INGEST_ACK":
-      return applyIngestAck(current, event);
+      return applyIngestAck(current, { ...event, at });
     case "INGEST_FAILED":
-      return applyIngestFailure(current, event);
+      return applyIngestFailure(current, { ...event, at });
     case "REPLY_EVENT":
-      return receiveReplyEvent(current, event.event, event.at);
+      return receiveReplyEvent(current, event.event, at);
     case "PRE_ACK_EXPIRED":
       return current;
     case "REQUEST_TIMED_OUT":
-      return applyRequestTimeout(current, event.attemptId, event.at);
+      return applyRequestTimeout(current, event.attemptId, at);
   }
 }
 
@@ -204,22 +209,22 @@ function receiveReplyEvent(
   event: Extract<ConversationEvent, { type: "REPLY_EVENT" }>["event"],
   at: number,
 ): ConversationModelState {
-  if (state.seenEventIds.includes(event.id)) return state;
+  const frame = normalizeReplyFrame(event, at);
+  if (!frame) {
+    return addDiagnostic(state, {
+      code: "MALFORMED_REPLY_EVENT",
+      message: "Malformed reply event was discarded.",
+      at,
+      eventId: typeof event.id === "string" ? event.id : undefined,
+      traceId: typeof event.trace_id === "string" ? event.trace_id : undefined,
+    });
+  }
+  if (state.seenEventIds.includes(frame.eventId)) return state;
 
   const next: ConversationModelState = {
     ...state,
-    seenEventIds: appendBounded(state.seenEventIds, event.id, SEEN_EVENT_CAPACITY),
+    seenEventIds: appendBounded(state.seenEventIds, frame.eventId, SEEN_EVENT_CAPACITY),
   };
-  const frame = normalizeReplyFrame(event, at);
-  if (!frame) {
-    return addDiagnostic(next, {
-      code: "MALFORMED_REPLY_EVENT",
-      message: `Malformed ${event.type} frame was discarded.`,
-      at,
-      eventId: event.id,
-      traceId: event.trace_id,
-    });
-  }
 
   if (
     next.activeAttempt?.status === "sending" &&
@@ -234,10 +239,28 @@ function normalizeReplyFrame(
   event: Extract<ConversationEvent, { type: "REPLY_EVENT" }>["event"],
   receivedAt: number,
 ): BufferedReplyFrame | null {
-  if (!event.id || !event.trace_id) return null;
+  if (
+    !isNonBlankString(event.id) ||
+    !isNonBlankString(event.trace_id) ||
+    typeof event.ts !== "string" ||
+    typeof event.source !== "string" ||
+    (event.type !== "soul.stream" && event.type !== "soul.decision")
+  ) {
+    return null;
+  }
+  const payload = cloneJsonRecord(event.payload);
+  if (!payload) return null;
+  const ownedEvent: AstrEvent = {
+    id: event.id,
+    ts: event.ts,
+    type: event.type,
+    source: event.source,
+    payload,
+    trace_id: event.trace_id,
+  };
 
   if (event.type === "soul.stream") {
-    const { seq, delta = "", done = false } = event.payload;
+    const { seq, delta = "", done = false } = payload;
     if (
       !Number.isInteger(seq) ||
       (seq as number) < 1 ||
@@ -248,9 +271,9 @@ function normalizeReplyFrame(
     }
     return {
       kind: "stream",
-      event,
-      eventId: event.id,
-      traceId: event.trace_id,
+      event: ownedEvent,
+      eventId: ownedEvent.id,
+      traceId: ownedEvent.trace_id,
       receivedAt,
       seq: seq as number,
       delta,
@@ -259,13 +282,13 @@ function normalizeReplyFrame(
   }
 
   if (event.type === "soul.decision") {
-    const replyText = event.payload.reply_text;
+    const replyText = payload.reply_text;
     if (typeof replyText !== "string" || replyText.length === 0) return null;
     return {
       kind: "decision",
-      event,
-      eventId: event.id,
-      traceId: event.trace_id,
+      event: ownedEvent,
+      eventId: ownedEvent.id,
+      traceId: ownedEvent.trace_id,
       receivedAt,
       replyText,
     };
@@ -392,7 +415,7 @@ function retainExternalDecision(
   return {
     ...state,
     messages: [...state.messages, message],
-    authoritativeDecision: frame.event,
+    authoritativeDecision: state.activeAttempt ? state.authoritativeDecision : frame.event,
   };
 }
 
@@ -519,4 +542,75 @@ function toChatMessage(message: PresenceMessage): ChatMessage {
     ts: message.ts,
   };
   return message.platform ? { ...projected, platform: message.platform } : projected;
+}
+
+function normalizeReducerTime(at: number): number {
+  return Number.isFinite(at) ? at : INVALID_REDUCER_TIME_FALLBACK;
+}
+
+function isNonBlankString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isUsableReceipt(receipt: { readonly event_id: string; readonly trace_id: string }): boolean {
+  return isNonBlankString(receipt.event_id) && isNonBlankString(receipt.trace_id);
+}
+
+type JsonValue = null | string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+type JsonCloneResult = { readonly valid: true; readonly value: JsonValue } | { readonly valid: false };
+
+function cloneJsonRecord(value: unknown): Readonly<Record<string, unknown>> | null {
+  if (!isPlainRecord(value)) return null;
+  try {
+    const result = cloneJsonValue(value, []);
+    if (
+      !result.valid ||
+      result.value === null ||
+      typeof result.value !== "object" ||
+      Array.isArray(result.value)
+    ) {
+      return null;
+    }
+    return result.value;
+  } catch {
+    return null;
+  }
+}
+
+function cloneJsonValue(value: unknown, ancestors: readonly object[]): JsonCloneResult {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return { valid: true, value };
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? { valid: true, value } : { valid: false };
+  }
+  if (typeof value !== "object" || ancestors.includes(value)) return { valid: false };
+
+  const nextAncestors = [...ancestors, value];
+  if (Array.isArray(value)) {
+    const cloned: JsonValue[] = [];
+    for (const item of value) {
+      const result = cloneJsonValue(item, nextAncestors);
+      if (!result.valid) return result;
+      cloned.push(result.value);
+    }
+    return { valid: true, value: cloned };
+  }
+  if (!isPlainRecord(value) || Object.getOwnPropertySymbols(value).length > 0) {
+    return { valid: false };
+  }
+
+  const cloned: { [key: string]: JsonValue } = {};
+  for (const key of Object.keys(value)) {
+    const result = cloneJsonValue(value[key], nextAncestors);
+    if (!result.valid) return result;
+    cloned[key] = result.value;
+  }
+  return { valid: true, value: cloned };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
