@@ -166,16 +166,22 @@ Add `"public/live2d/**"` and `"public/pixi-live2d-display.js"` to `globalIgnores
 Apply these exact refactor rules:
 
 ```ts
-// Intro.tsx: defer the initial state synchronization and cancel it on unmount.
+// Intro.tsx: use a cancellable one-shot task; do not own a RAF.
 useEffect(() => {
-  const frame = requestAnimationFrame(() => {
-    const seen = sessionStorage.getItem("astr-intro-seen");
-    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!seen && !reduced) setShow(true);
-  });
-  return () => cancelAnimationFrame(frame);
+  const timer = window.setTimeout(() => {
+    try {
+      const seen = sessionStorage.getItem("astr-intro-seen");
+      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!seen && !reduced) setShow(true);
+    } catch {
+      // Storage can be unavailable in privacy-restricted browsing contexts.
+    }
+  }, 0);
+  return () => window.clearTimeout(timer);
 }, []);
 ```
+
+TDD record: the final-review source assertion first failed while `Intro` still owned a direct RAF; GREEN replaced it with the cancellable one-shot timer above without introducing another animation loop.
 
 ```ts
 // ThemeToggle.tsx: remove mounted state/effect; resolvedTheme is the source.
@@ -226,6 +232,8 @@ git commit -m "test: establish frontend validation harness"
 
 **Files:**
 - Create: `webapp/src/styles/tokens.test.ts`
+- Create: `webapp/src/test/no-green-scanner.ts`
+- Create: `webapp/src/test/no-green-scanner.test.ts`
 - Modify: `webapp/src/styles/tokens.css`
 - Modify: `webapp/src/app/globals.css`
 - Modify: `webapp/src/app/admin/page.tsx`
@@ -286,24 +294,36 @@ describe("ASTR constitutional tokens", () => {
     expect(contrast("#606781", "#e7eaf4")).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("contains no legacy green success or calm color", () => {
-    expect(css.toLowerCase()).not.toContain("#4ec98f");
-    expect(css.toLowerCase()).not.toContain("#3df5c4");
+  it("rejects static green hues and CSS named greens across frontend source", () => {
+    expect(findForbiddenGreenUsages('const style = { color: "green" };')).not.toEqual([]);
+    expect(findForbiddenGreenUsages("#00ff00")).not.toEqual([]);
+    expect(findForbiddenGreenUsages("hsl(120 100% 50%)")).not.toEqual([]);
+    expect(scanFrontendSourceOutsideTestFixtures()).toEqual([]);
   });
 
-  it("defines non-color craft and performance tokens", () => {
-    for (const token of ["--radius-jewel", "--corner-eclipse", "--motion-instant", "--motion-signature", "--dpr-desktop", "--dpr-mobile", "--touch-target"]) {
-      expect(css).toContain(`${token}:`);
-    }
+  it.each([
+    ["--radius-small", "2px"],
+    ["--radius-medium", "6px"],
+    ["--radius-large", "12px"],
+    ["--radius-jewel", "50%"],
+    ["--corner-signature", "14px"],
+    ["--space-5", "24px"],
+    ["--space-6", "32px"],
+    ["--space-7", "48px"],
+    ["--space-8", "72px"],
+  ])("defines %s exactly as %s", (token, value) => {
+    expect(customProperty(css, token)).toBe(value);
   });
 });
 ```
+
+`findForbiddenGreenUsages` is a pure test helper. It lexically removes comments without corrupting quoted URLs, covers exact quoted and bare CSS green-hue names, Tailwind green-family utilities, hex, comma/modern `rgb`, comma/modern `hsl`, and runtime `[0x..]` anchors. Frontend source enumeration skips `*.test.*` and `src/test/**`, so the scanner never reports its own fixtures.
 
 - [ ] **Step 2: Run the test and verify the constitutional mismatch**
 
 Run `npm run test:run -- src/styles/tokens.test.ts`.
 
-Expected: FAIL on the old black/amber/green palette and missing craft tokens.
+Expected initial RED: FAIL on the old black/amber/green palette and missing craft tokens. Final-review RED additionally records 33 exact §8.1 token mismatches; the strengthened scanner RED catches quoted CSS named colors such as `style={{ color: "green" }}` before GREEN.
 
 - [ ] **Step 3: Replace the root token roles while preserving compatibility aliases**
 
@@ -334,15 +354,33 @@ The `:root` semantic block must contain:
   --emo-calm: #92b7ff;
   --astr-emotion-glow: var(--emo-calm);
   --touch-target: 44px;
-  --radius-small: 6px;
-  --radius-medium: 12px;
-  --radius-large: 22px;
-  --radius-jewel: 999px;
-  --corner-eclipse: 28px 5px 28px 5px;
+  --radius-small: 2px;
+  --radius-medium: 6px;
+  --radius-large: 12px;
+  --radius-jewel: 50%;
+  --corner-signature: 14px;
+  --type--1: 11px;
+  --type-0: 13px;
+  --type-1: 16px;
+  --type-2: 20px;
+  --type-3: 28px;
+  --type-4: 48px;
+  --type-5: 72px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
   --motion-instant: 120ms;
   --motion-fast: 200ms;
-  --motion-spatial: 320ms;
-  --motion-signature: 1200ms;
+  --motion-medium: 320ms;
+  --motion-ritual: 1200ms;
+  --motion-life: 4000ms;
+  --ease-standard: cubic-bezier(.2,.8,.2,1);
+  --ease-emphatic: cubic-bezier(.16,1,.3,1);
   --dpr-desktop: 1.5;
   --dpr-mobile: 1.25;
 }
@@ -368,7 +406,7 @@ The `:root` semantic block must contain:
 }
 ```
 
-Keep the existing typography, spacing, z-index, easing, and shadow roles, but rename comments and references away from the amber observatory concept. Update `emotion.ts` fallback hex values to the four new emotion tokens. In `globals.css`, map `soul` and `action` roles and ensure the default focus ring uses `--astr-action`.
+Replace typography, spacing, shape, and motion with the exact Master Spec §8.1 values above. Compatibility aliases may point to constitutional tokens but may not preserve conflicting legacy values. Keep the z-index and shadow roles, and rename comments and references away from the amber observatory concept. Update `emotion.ts` fallback hex values to the four new emotion tokens. In `globals.css`, map `soul` and `action` roles and ensure the default focus ring uses `--astr-action`.
 
 Because `--astr-accent` now aliases action blue, update the existing Admin audit mapper so `decision === "confirm"` returns `var(--astr-warning)` rather than `var(--astr-accent)`, and update its adjacent comment to describe cold blue/silver success. The token test reads `admin/page.tsx` and asserts this branch so a future alias change cannot silently recolor pending confirmation.
 
@@ -387,7 +425,7 @@ Expected: token tests pass; no lint/type errors.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add webapp/src/styles/tokens.css webapp/src/styles/tokens.test.ts webapp/src/app/globals.css webapp/src/app/admin/page.tsx webapp/src/lib/emotion.ts
+git add webapp/src/styles/tokens.css webapp/src/styles/tokens.test.ts webapp/src/test/no-green-scanner.ts webapp/src/test/no-green-scanner.test.ts webapp/src/app/globals.css webapp/src/app/admin/page.tsx webapp/src/lib/emotion.ts
 git commit -m "feat: establish ASTR constitutional design tokens"
 ```
 
@@ -718,6 +756,7 @@ git commit -m "feat: add global Jewel lease arbitration"
 - Create: `webapp/src/components/system/AppShell.tsx`
 - Create: `webapp/src/components/system/AppShell.test.tsx`
 - Create: `webapp/src/components/system/StateAnnouncer.tsx`
+- Create: `webapp/src/components/system/StateAnnouncer.test.tsx`
 - Create: `webapp/src/components/system/VisualMotionToggle.tsx`
 - Modify: `webapp/src/app/layout.tsx`
 - Modify: `webapp/src/app/page.tsx`
@@ -744,13 +783,13 @@ expect(screen.getAllByRole("status")).toHaveLength(1);
 expect(screen.getByRole("button", { name: "暂停视觉动态" })).toHaveStyle({ minWidth: "var(--touch-target)" });
 ```
 
-Dispatching `announce("Core 已接收 · trc_1")` must update the single status node once. Clicking the visual control must change Motion from full to paused, set `data-visual-motion="paused"` on `<html>`, and persist `astr.visual-motion=paused`.
+The announcer tests use fake timers and prove: the first polite message publishes, later polite messages coalesce to the latest value at no more than 1Hz, `clearAnnouncement` empties the DOM without resetting that cadence, assertive messages interrupt immediately and cancel queued routine status, repeated text replaces the keyed child node, and unmount clears component-owned timers. Clicking the visual control must change Motion from full to paused, set `data-visual-motion="paused"` on `<html>`, and persist `astr.visual-motion=paused`.
 
 - [ ] **Step 2: Run tests and verify missing components**
 
 Run `npm run test:run -- src/components/system/AppShell.test.tsx`.
 
-Expected: FAIL because the system components do not exist.
+Expected initial RED: FAIL because the system components do not exist. Final-review RED separately reproduces immediate polite overwrites, repeated-text non-mutation, and the `polite → clearAnnouncement → polite` cadence bypass before the throttling implementation is accepted.
 
 - [ ] **Step 3: Implement the shell and announcer**
 
@@ -767,18 +806,30 @@ Expected: FAIL because the system components do not exist.
 </>
 ```
 
-`StateAnnouncer` contains one atomic node outside all busy regions:
+`StateAnnouncer` owns its timer inside the mounted effect, subscribes to the semantic store, and contains one atomic node outside all busy regions. The binding algorithm is:
 
 ```tsx
+const POLITE_INTERVAL_MS = 1000;
+
+// Coalesce routine updates and publish the latest polite announcement at the cadence boundary.
+// clearAnnouncement does not reset the polite cadence.
+// assertive announcements publish immediately and cancel queued routine status.
+
 <div
   className="sr-only"
   role={announcement?.politeness === "assertive" ? "alert" : "status"}
   aria-live={announcement?.politeness === "assertive" ? "assertive" : "polite"}
   aria-atomic="true"
 >
-  {announcement?.message ?? ""}
+  {announcement && (
+    <span key={announcement.id} data-announcement-id={announcement.id}>
+      {announcement.message}
+    </span>
+  )}
 </div>
 ```
+
+The store keeps announcement IDs monotonic across clears so repeating identical text still replaces the child node. The effect cleanup unsubscribes and clears any pending timer; there is no module-level timer.
 
 `VisualMotionToggle` initializes from localStorage in a scheduled effect, dispatches `VISUAL_PAUSE` or `VISUAL_RESUME`, keeps `<html data-visual-motion>` synchronized, and uses the invariant labels `暂停视觉动态` / `恢复视觉动态`. It must not hide content or disable application behavior.
 
@@ -824,7 +875,7 @@ The toggle itself uses `min-width` and `min-height: var(--touch-target)` and rem
 Run:
 
 ```powershell
-npm run test:run -- src/components/system/AppShell.test.tsx
+npm run test:run -- src/components/system/AppShell.test.tsx src/components/system/StateAnnouncer.test.tsx
 npm run lint
 npm run typecheck
 npm run build

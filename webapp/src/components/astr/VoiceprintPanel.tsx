@@ -14,7 +14,7 @@ interface VpStatus {
 const CLIPS = 5;
 const SECS = 4;
 
-/** 声纹录入（W10-f，从 W9 后端移入网页）：录 5 段→注册主人声纹，语音入口据此升 L2。 */
+/** 声纹录入仅注册模板；网页转写入口不执行说话者身份验证，也不据此提升认证级别。 */
 export function VoiceprintPanel() {
   const [status, setStatus] = useState<VpStatus | null>(null);
   const [phase, setPhase] = useState<"idle" | "recording" | "uploading" | "done" | "error">("idle");

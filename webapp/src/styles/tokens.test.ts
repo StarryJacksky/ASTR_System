@@ -2,6 +2,13 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import {
+  CSS_GREEN_HUE_NAMES,
+  findForbiddenGreenUsages,
+  isGreenHue,
+  rgbFromHex,
+} from "@/test/no-green-scanner";
+
 const css = readFileSync(resolve(process.cwd(), "src/styles/tokens.css"), "utf8");
 const globals = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 const emotion = readFileSync(resolve(process.cwd(), "src/lib/emotion.ts"), "utf8");
@@ -17,77 +24,9 @@ function customProperty(source: string, token: string): string {
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = resolve(directory, entry.name);
-    if (entry.isDirectory()) return sourceFiles(path);
+    if (entry.isDirectory()) return entry.name === "test" ? [] : sourceFiles(path);
     return /\.(?:css|ts|tsx)$/.test(entry.name) && !/\.test\./.test(entry.name) ? [path] : [];
   });
-}
-
-function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:'"`])\/\/.*$/gm, "$1");
-}
-
-function rgbFromHex(value: string): [number, number, number] {
-  const hex = value.slice(1);
-  const expanded = hex.length === 3 || hex.length === 4
-    ? [...hex].map((digit) => `${digit}${digit}`).join("")
-    : hex;
-  return [0, 2, 4].map((offset) => Number.parseInt(expanded.slice(offset, offset + 2), 16)) as [
-    number,
-    number,
-    number,
-  ];
-}
-
-function hueForRgb([red8, green8, blue8]: [number, number, number]): {
-  hue: number;
-  saturation: number;
-} {
-  const [red, green, blue] = [red8, green8, blue8].map((channel) => channel / 255);
-  const max = Math.max(red, green, blue);
-  const min = Math.min(red, green, blue);
-  const delta = max - min;
-  if (delta === 0) return { hue: 0, saturation: 0 };
-  const saturation = delta / (1 - Math.abs(max + min - 1));
-  const sector = max === red
-    ? ((green - blue) / delta) % 6
-    : max === green
-      ? (blue - red) / delta + 2
-      : (red - green) / delta + 4;
-  return { hue: (sector * 60 + 360) % 360, saturation };
-}
-
-function isGreenHue(rgb: [number, number, number]): boolean {
-  const { hue, saturation } = hueForRgb(rgb);
-  return saturation >= 0.2 && hue >= 75 && hue <= 170;
-}
-
-function forbiddenGreenUsages(source: string): string[] {
-  const code = stripComments(source);
-  const findings: string[] = [];
-  for (const match of code.matchAll(/#[0-9a-f]{3,8}\b/gi)) {
-    if (isGreenHue(rgbFromHex(match[0]))) findings.push(match[0]);
-  }
-  for (const match of code.matchAll(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/gi)) {
-    const rgb = match.slice(1, 4).map(Number) as [number, number, number];
-    if (rgb.every((channel) => channel <= 255) && isGreenHue(rgb)) findings.push(match[0]);
-  }
-  for (const match of code.matchAll(/\[\s*0x([0-9a-f]{2})\s*,\s*0x([0-9a-f]{2})\s*,\s*0x([0-9a-f]{2})\s*\]/gi)) {
-    const rgb = match.slice(1, 4).map((channel) => Number.parseInt(channel, 16)) as [
-      number,
-      number,
-      number,
-    ];
-    if (isGreenHue(rgb)) findings.push(match[0]);
-  }
-  for (const match of code.matchAll(/hsla?\(\s*(-?[\d.]+)(?:deg)?\s*,\s*([\d.]+)%/gi)) {
-    const hue = ((Number(match[1]) % 360) + 360) % 360;
-    if (Number(match[2]) >= 20 && hue >= 75 && hue <= 170) findings.push(match[0]);
-  }
-  const semanticGreen = /(?:bg|text|border|outline|ring|fill|stroke|from|via|to)-(?:green|lime|emerald|teal)(?:-\d+)?\b|(?:color|background(?:-color)?|border-color|fill|stroke)\s*:\s*(?:green|lime|emerald|teal|chartreuse|springgreen|seagreen|forestgreen)\b/gi;
-  findings.push(...Array.from(code.matchAll(semanticGreen), (match) => match[0]));
-  return findings;
 }
 
 function cssHexToken(declarations: string, token: string): string {
@@ -137,14 +76,18 @@ describe("ASTR constitutional tokens", () => {
     expect(isGreenHue(rgbFromHex("#3df5c4"))).toBe(true);
     expect(isGreenHue(rgbFromHex("#8bcfff"))).toBe(false);
     expect(
-      forbiddenGreenUsages(
+      findForbiddenGreenUsages(
         '// green browser keyword\nconst copy = "evergreen";\nconst url = "https://green.example";\nconst color = action; // bg-green-500 is a comment',
       ),
     ).toEqual([]);
-    expect(forbiddenGreenUsages("const anchor = [0x00, 0xff, 0x00];")).not.toEqual([]);
+    expect(findForbiddenGreenUsages("const anchor = [0x00, 0xff, 0x00];")).not.toEqual([]);
+    expect(findForbiddenGreenUsages('const style = { color: "green" };')).not.toEqual([]);
+    for (const namedGreen of CSS_GREEN_HUE_NAMES) {
+      expect(findForbiddenGreenUsages(`const color = "${namedGreen}";`), namedGreen).not.toEqual([]);
+    }
 
     const findings = sourceFiles(resolve(process.cwd(), "src")).flatMap((file) =>
-      forbiddenGreenUsages(readFileSync(file, "utf8")).map((usage) => `${file}: ${usage}`),
+      findForbiddenGreenUsages(readFileSync(file, "utf8")).map((usage) => `${file}: ${usage}`),
     );
 
     expect(findings).toEqual([]);

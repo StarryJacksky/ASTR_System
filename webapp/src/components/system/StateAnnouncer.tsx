@@ -33,7 +33,6 @@ export function StateAnnouncer() {
     const accept = (next: Announcement | null) => {
       if (next === null) {
         cancelPendingPolite();
-        lastPoliteAt = null;
         setAnnouncement(null);
         return;
       }

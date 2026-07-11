@@ -14,7 +14,7 @@ describe("StateAnnouncer", () => {
   });
 
   afterEach(() => {
-    semanticStore.setState({ ...initialSemanticState, announcement: null });
+    act(() => semanticStore.setState({ ...initialSemanticState, announcement: null }));
     vi.useRealTimers();
   });
 
@@ -70,6 +70,24 @@ describe("StateAnnouncer", () => {
     expect(nextMessageNode).not.toBe(firstMessageNode);
     expect(nextMessageNode).toHaveTextContent("状态未变化");
     expect(nextMessageNode?.getAttribute("data-announcement-id")).not.toBe(firstSequence);
+  });
+
+  it("does not let clearing the live region reset the one-second polite cadence", () => {
+    render(<StateAnnouncer />);
+
+    act(() => semanticStore.getState().announce("第一条普通状态"));
+    expect(screen.getByRole("status")).toHaveTextContent("第一条普通状态");
+
+    act(() => semanticStore.getState().clearAnnouncement());
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    act(() => semanticStore.getState().announce("清空后的普通状态"));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("status")).toHaveTextContent("清空后的普通状态");
   });
 
   it("keeps one atomic live region and clears component-owned timers on unmount", () => {
