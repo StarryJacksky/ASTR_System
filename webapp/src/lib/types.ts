@@ -38,27 +38,27 @@ function clamp01(x: number): number {
 
 /** SSE 事件（/v1/stream 推送的 Event 模型，03 §1）。 */
 export interface AstrEvent {
-  id: string;
-  ts: string;
-  type: string;
-  source: string;
-  payload: Record<string, unknown>;
-  trace_id: string;
+  readonly id: string;
+  readonly ts: string;
+  readonly type: string;
+  readonly source: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly trace_id: string;
 }
 
 /** POST /v1/ingest acknowledges receipt; it does not contain a final answer. */
 export interface IngestReceipt {
-  event_id: string;
-  trace_id: string;
+  readonly event_id: string;
+  readonly trace_id: string;
 }
 
 /** 聊天时间线里的一条消息。 */
 export interface ChatMessage {
-  id: string;
-  role: "user" | "qiuqiu";
-  text: string;
-  platform?: string;
-  ts: number;
+  readonly id: string;
+  readonly role: "user" | "qiuqiu";
+  readonly text: string;
+  readonly platform?: string;
+  readonly ts: number;
 }
 
 /** Frontend projection of the current GET /v1/status fields. */
@@ -74,12 +74,12 @@ export interface CoreStatusProjection {
 
 /** Frontend-only conversation data backed by ingest, SSE, and local messages. */
 export interface ConversationProjection {
-  messages: readonly ChatMessage[];
-  receipt: IngestReceipt | null;
-  provisionalText: string;
-  provisionalActive: boolean;
-  authoritativeDecision: AstrEvent | null;
-  error: string | null;
+  readonly messages: readonly ChatMessage[];
+  readonly receipt: IngestReceipt | null;
+  readonly provisionalText: string;
+  readonly provisionalActive: boolean;
+  readonly authoritativeDecision: AstrEvent | null;
+  readonly error: string | null;
 }
 
 /** 圆桌一条发言（P3 才真正用，骨架先留）。 */
