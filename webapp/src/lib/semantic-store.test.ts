@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createSemanticStore, semanticStore, useSemanticStore } from "./semantic-store";
 
@@ -13,6 +13,26 @@ describe("semantic store", () => {
       core: "reachable",
       visualRuntime: "contextLost",
     });
+  });
+
+  it("dispatches multiple semantic events in one atomic store notification", () => {
+    const store = createSemanticStore();
+    const listener = vi.fn();
+    const unsubscribe = store.subscribe(listener);
+
+    store.getState().dispatchMany([
+      { type: "REPLY_SSE_CONNECTING" },
+      { type: "LIFE_SSE_CONNECTING" },
+      { type: "ESTOP_STATUS_CHECK" },
+    ]);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.getState()).toMatchObject({
+      replySse: "connecting",
+      lifeSse: "connecting",
+      safety: "stopUnknown",
+    });
+    unsubscribe();
   });
 
   it("atomically replaces the live-region announcement", () => {

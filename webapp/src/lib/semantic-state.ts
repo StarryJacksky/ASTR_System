@@ -44,14 +44,21 @@ export const initialSemanticState: SemanticState = {
 };
 
 export type SemanticEvent =
+  | { type: "STATUS_LOADING" }
   | { type: "STATUS_OK" }
   | { type: "STATUS_FAIL" }
+  | { type: "INGEST_STARTED" }
   | { type: "INGEST_ACK" }
   | { type: "INGEST_FAIL" }
+  | { type: "REPLY_TIMEOUT" }
+  | { type: "REPLY_SSE_CONNECTING" }
   | { type: "REPLY_SSE_OPEN" }
   | { type: "REPLY_SSE_ERROR" }
+  | { type: "REPLY_SSE_CLOSED" }
+  | { type: "LIFE_SSE_CONNECTING" }
   | { type: "LIFE_SSE_OPEN" }
   | { type: "LIFE_SSE_ERROR" }
+  | { type: "LIFE_SSE_CLOSED" }
   | { type: "STREAM_DELTA" }
   | { type: "STREAM_DONE" }
   | { type: "SOUL_DECISION" }
@@ -69,6 +76,9 @@ export type SemanticEvent =
   | { type: "ESTOP_ACK_TIMEOUT" }
   | { type: "ESTOP_RESET_REQUESTED" }
   | { type: "ESTOP_RESET_ACK" }
+  | { type: "ESTOP_STATUS_CHECK" }
+  | { type: "ESTOP_STATUS_CLEAR" }
+  | { type: "ESTOP_STATUS_LATCHED" }
   | { type: "TASK_SNAPSHOT"; task: TaskState }
   | { type: "TASK_EVENT"; task: TaskState };
 
@@ -78,22 +88,35 @@ export function assertNever(value: never): never {
 
 export function reduceSemanticState(state: SemanticState, event: SemanticEvent): SemanticState {
   switch (event.type) {
+    case "STATUS_LOADING":
+      return { ...state, core: "loading" };
     case "STATUS_OK":
       return { ...state, core: "reachable" };
     case "STATUS_FAIL":
       return { ...state, core: "offline" };
+    case "INGEST_STARTED":
+      return { ...state, conversation: "sending" };
     case "INGEST_ACK":
       return { ...state, conversation: "sending" };
     case "INGEST_FAIL":
+    case "REPLY_TIMEOUT":
       return { ...state, conversation: "error" };
+    case "REPLY_SSE_CONNECTING":
+      return { ...state, replySse: "connecting" };
     case "REPLY_SSE_OPEN":
       return { ...state, replySse: "open" };
     case "REPLY_SSE_ERROR":
       return { ...state, replySse: "retrying" };
+    case "REPLY_SSE_CLOSED":
+      return { ...state, replySse: "closed" };
+    case "LIFE_SSE_CONNECTING":
+      return { ...state, lifeSse: "connecting" };
     case "LIFE_SSE_OPEN":
       return { ...state, lifeSse: "open" };
     case "LIFE_SSE_ERROR":
       return { ...state, lifeSse: "retrying" };
+    case "LIFE_SSE_CLOSED":
+      return { ...state, lifeSse: "closed" };
     case "STREAM_DELTA":
       return state.conversation === "final" ? state : { ...state, conversation: "streaming" };
     case "STREAM_DONE":
@@ -128,6 +151,12 @@ export function reduceSemanticState(state: SemanticState, event: SemanticEvent):
       return { ...state, safety: "resetting" };
     case "ESTOP_RESET_ACK":
       return { ...state, safety: "normal" };
+    case "ESTOP_STATUS_CHECK":
+      return { ...state, safety: "stopUnknown" };
+    case "ESTOP_STATUS_CLEAR":
+      return { ...state, safety: "normal" };
+    case "ESTOP_STATUS_LATCHED":
+      return { ...state, safety: "stoppedLatched" };
     case "TASK_SNAPSHOT":
     case "TASK_EVENT":
       return { ...state, task: event.task };
