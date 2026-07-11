@@ -178,7 +178,10 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   let replyTimer: PresenceTimerHandle | null = null;
   let replyTimerAttemptId: string | null = null;
   let preAckTimer: PresenceTimerHandle | null = null;
-  let ingestAbortController: AbortController | null = null;
+  let inFlightIngest: {
+    readonly attemptId: string;
+    readonly controller: AbortController;
+  } | null = null;
   let safetyAbortController: AbortController | null = null;
   let safetyGeneration = 0;
   let safetyMutation: "estop" | "reset" | null = null;
@@ -219,7 +222,9 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   }
 
   function appendDiagnostic(diagnostic: PresenceControllerDiagnostic): void {
-    diagnostics = [...diagnostics, diagnostic].slice(-DIAGNOSTIC_CAPACITY);
+    diagnostics = [...diagnostics, cloneFrozenDiagnostic(diagnostic)].slice(
+      -DIAGNOSTIC_CAPACITY,
+    );
   }
 
   function copyNewConversationDiagnostics(
@@ -249,8 +254,16 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
       if (disposed || expectedAttemptId !== attemptId) return;
       const active = conversation.activeAttempt;
       if (!active || active.id !== attemptId || active.firstReplyAt !== null) return;
+      abortIngestForAttempt(attemptId);
       applyConversation({ type: "REQUEST_TIMED_OUT", attemptId, at: now() }, "REPLY_TIMEOUT");
     }, replyDeadlineMs);
+  }
+
+  function abortIngestForAttempt(attemptId: string): void {
+    const request = inFlightIngest;
+    if (!request || request.attemptId !== attemptId) return;
+    inFlightIngest = null;
+    request.controller.abort();
   }
 
   function reschedulePreAckExpiry(): void {
@@ -301,14 +314,15 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
 
   function acceptStreamEvent(event: AstrEvent): void {
     if (disposed) return;
+    const ownedEvent = cloneFrozenEvent(event);
     const revisionBefore = publishRevision;
     let lifeChanged = false;
-    if (LIFE_EVENT_TYPES.has(event.type) && rememberLifeEventId(event.id)) {
-      lifeEvents = [...lifeEvents, event].slice(-LIFE_EVENT_CAPACITY);
+    if (LIFE_EVENT_TYPES.has(ownedEvent.type) && rememberLifeEventId(ownedEvent.id)) {
+      lifeEvents = [...lifeEvents, ownedEvent].slice(-LIFE_EVENT_CAPACITY);
       lifeChanged = true;
     }
-    if (event.type === "soul.stream" || event.type === "soul.decision") {
-      applyConversation({ type: "REPLY_EVENT", event, at: now() });
+    if (ownedEvent.type === "soul.stream" || ownedEvent.type === "soul.decision") {
+      applyConversation({ type: "REPLY_EVENT", event: ownedEvent, at: now() });
     }
     if (publishRevision === revisionBefore && lifeChanged) publish();
   }
@@ -438,8 +452,9 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   }
 
   function applySafetyStatus(value: EffectorStatus): void {
-    effectorStatus = value;
-    if (value.stopped) {
+    const ownedValue = cloneFrozenEffectorStatus(value);
+    effectorStatus = ownedValue;
+    if (ownedValue.stopped) {
       safetyEvidence = "latched";
       dispatch({ type: "ESTOP_STATUS_LATCHED" });
     } else {
@@ -449,6 +464,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   }
 
   async function checkStartupSafety(): Promise<void> {
+    if (disposed) return;
     const { generation, controller } = beginSafetyOperation(null);
     try {
       const value = await options.coreClient.effectorStatus(controller.signal);
@@ -475,6 +491,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     const { generation, controller } = beginSafetyOperation(kind);
     safetyEvidence = "checking";
     dispatch({ type: kind === "estop" ? "ESTOP_REQUESTED" : "ESTOP_RESET_REQUESTED" });
+    if (!isActiveSafetyOperation(generation, controller)) return false;
 
     try {
       if (kind === "estop") await options.coreClient.estop(controller.signal);
@@ -483,10 +500,11 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
 
       const readback = await options.coreClient.effectorStatus(controller.signal);
       if (!isActiveSafetyOperation(generation, controller)) return false;
-      effectorStatus = readback;
+      const ownedReadback = cloneFrozenEffectorStatus(readback);
+      effectorStatus = ownedReadback;
 
       if (kind === "estop") {
-        if (readback.stopped) {
+        if (ownedReadback.stopped) {
           safetyEvidence = "latched";
           dispatch({ type: "ESTOP_ACK" });
           return true;
@@ -501,7 +519,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
         return false;
       }
 
-      if (!readback.stopped) {
+      if (!ownedReadback.stopped) {
         safetyEvidence = "clear";
         dispatch({ type: "ESTOP_RESET_ACK" });
         return true;
@@ -535,8 +553,9 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   };
 
   const send = async (draft: DraftSnapshot): Promise<boolean> => {
-    if (disposed || isPendingAttempt(conversation)) return false;
+    if (disposed || inFlightIngest !== null || isPendingAttempt(conversation)) return false;
     applyConversation({ type: "DRAFT_CHANGED", draft, at: now() });
+    if (disposed || inFlightIngest !== null || isPendingAttempt(conversation)) return false;
     const attemptId = idFactory("attempt");
     const localMessageId = idFactory("message");
     if (
@@ -547,16 +566,17 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     ) {
       return false;
     }
+    if (disposed) return false;
     startReplyDeadline(attemptId);
-    const request = new AbortController();
-    ingestAbortController = request;
+    const request = { attemptId, controller: new AbortController() };
+    inFlightIngest = request;
 
     try {
       const receipt = await options.coreClient.ingest(
         { text: draft.text, platform: "web" },
-        request.signal,
+        request.controller.signal,
       );
-      if (disposed || ingestAbortController !== request) return false;
+      if (disposed || inFlightIngest !== request) return false;
       const applied = applyConversation(
         { type: "INGEST_ACK", attemptId, receipt, at: now() },
         "INGEST_ACK",
@@ -567,7 +587,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
         conversation.activeAttempt.receipt?.trace_id === receipt.trace_id
       );
     } catch (error) {
-      if (disposed || ingestAbortController !== request) return false;
+      if (disposed || inFlightIngest !== request) return false;
       applyConversation(
         {
           type: "INGEST_FAILED",
@@ -579,7 +599,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
       );
       return false;
     } finally {
-      if (ingestAbortController === request) ingestAbortController = null;
+      if (inFlightIngest === request) inFlightIngest = null;
     }
   };
 
@@ -597,15 +617,26 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
       { type: "LIFE_SSE_CONNECTING" },
       { type: "ESTOP_STATUS_CHECK" },
     ]);
+    if (disposed) return;
 
     try {
-      stream = options.streamFactory({
+      const createdStream = options.streamFactory({
         onEvent: acceptStreamEvent,
         onState: acceptStreamState,
         onDiagnostic: acceptStreamDiagnostic,
       });
-      stream.start();
+      if (disposed) {
+        createdStream.close();
+        return;
+      }
+      stream = createdStream;
+      createdStream.start();
     } catch (error) {
+      if (disposed) {
+        stream?.close();
+        stream = null;
+        return;
+      }
       appendDiagnostic({
         code: "STREAM_START_FAILED",
         message: errorMessage(error, "Presence stream failed to start"),
@@ -613,7 +644,9 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
       });
       dispatchMany([{ type: "REPLY_SSE_CLOSED" }, { type: "LIFE_SSE_CLOSED" }]);
     }
+    if (disposed) return;
     void pollStatus();
+    if (disposed) return;
     void checkStartupSafety();
   };
 
@@ -624,8 +657,9 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     semanticUnsubscribe = null;
     statusAbortController?.abort();
     statusAbortController = null;
-    ingestAbortController?.abort();
-    ingestAbortController = null;
+    const ingestRequest = inFlightIngest;
+    inFlightIngest = null;
+    ingestRequest?.controller.abort();
     safetyAbortController?.abort();
     safetyAbortController = null;
     safetyGeneration += 1;

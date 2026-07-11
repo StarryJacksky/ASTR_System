@@ -224,6 +224,23 @@ describe("createPresenceController", () => {
     expect(streamFactory).toHaveBeenCalledTimes(1);
   });
 
+  it("does not create post-dispose work when a subscriber disposes during startup publish", async () => {
+    const { controller, core, semanticStore, streamFactory } = setup();
+    controller.subscribe(() => controller.dispose());
+
+    controller.start();
+    await flushAsync();
+
+    expect(streamFactory).not.toHaveBeenCalled();
+    expect(core.status).not.toHaveBeenCalled();
+    expect(core.effectorStatus).not.toHaveBeenCalled();
+    expect(semanticStore.getState()).toMatchObject({
+      replySse: "closed",
+      lifeSse: "closed",
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("maps one physical transport transition to both semantic regions atomically", async () => {
     const { controller, semanticStore, stream } = setup();
     controller.start();
@@ -259,7 +276,7 @@ describe("createPresenceController", () => {
     };
     const core = createCoreMock();
     core.effectorStatus.mockResolvedValueOnce(richEffector);
-    const { controller, stream } = setup({ core });
+    const { controller, semanticStore, stream } = setup({ core });
     controller.start();
     await flushAsync();
     expect(await controller.actions.send(draft("immutable projection"))).toBe(true);
@@ -321,12 +338,28 @@ describe("createPresenceController", () => {
       "pending summary",
     );
 
+    (originalDecision.payload as { reply_text: string }).reply_text = "changed outside";
     (originalDecision.payload.nested as { value: number }).value = 9;
+    (originalDiagnostic as { reason: string }).reason = "json";
     (richEffector.pending.job as { summary: string }).summary = "changed outside";
-    expect(controller.getSnapshot().lifeEvents[0]?.payload.nested).toEqual({ value: 1 });
-    expect(controller.getSnapshot().effectorStatus?.pending.job?.summary).toBe(
+    const mutableAuditNested = richEffector.audit_tail[0]?.nested as { value: number };
+    mutableAuditNested.value = 9;
+
+    semanticStore.getState().dispatch({ type: "WEBGL_READY" });
+    const republished = controller.getSnapshot();
+    expect(republished).not.toBe(snapshot);
+    expect(republished.lifeEvents[0]?.payload).toMatchObject({
+      reply_text: "owned answer",
+      nested: { value: 1 },
+    });
+    expect(republished.conversation.authoritativeDecision?.payload.reply_text).toBe(
+      "owned answer",
+    );
+    expect(republished.diagnostics.at(-1)).toMatchObject({ reason: "shape" });
+    expect(republished.effectorStatus?.pending.job?.summary).toBe(
       "pending summary",
     );
+    expect(republished.effectorStatus?.audit_tail[0]?.nested).toEqual({ value: 1 });
   });
 
   it("records the first status failure immediately but waits for a second failure before offline", async () => {
@@ -475,6 +508,104 @@ describe("createPresenceController", () => {
     expect(await sending).toBe(false);
     expect(controller.getSnapshot().conversation.receipt).toBeNull();
     expect(controller.getSnapshot().draft.text).toBe("timeout before ack");
+  });
+
+  it("aborts a pre-ACK ingest on timeout and never permits two live physical ingests", async () => {
+    const firstReceipt = deferred<{ event_id: string; trace_id: string }>();
+    const secondReceipt = deferred<{ event_id: string; trace_id: string }>();
+    const core = createCoreMock();
+    core.ingest
+      .mockImplementationOnce(() => firstReceipt.promise)
+      .mockImplementationOnce(() => secondReceipt.promise);
+    const { controller } = setup({ core });
+    controller.start();
+    await flushAsync();
+
+    const firstSend = controller.actions.send(draft("first physical ingest", 1));
+    const firstSignal = core.ingest.mock.calls[0]?.[1];
+    expect(firstSignal?.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(firstSignal?.aborted).toBe(true);
+    expect(controller.getSnapshot().conversation.error).toContain("No reply frame");
+
+    const retrySend = controller.actions.send(draft("retry after timeout", 2));
+    const secondSignal = core.ingest.mock.calls[1]?.[1];
+    expect(core.ingest).toHaveBeenCalledTimes(2);
+    expect(secondSignal?.aborted).toBe(false);
+    expect([firstSignal, secondSignal].filter((signal) => signal && !signal.aborted)).toHaveLength(
+      1,
+    );
+    expect(await controller.actions.send(draft("must not overlap", 3))).toBe(false);
+    expect(core.ingest).toHaveBeenCalledTimes(2);
+
+    const beforeStaleCompletion = controller.getSnapshot();
+    firstReceipt.resolve({ event_id: "stale-event", trace_id: "stale-trace" });
+    expect(await firstSend).toBe(false);
+    await flushAsync();
+    expect(controller.getSnapshot()).toBe(beforeStaleCompletion);
+    expect(controller.getSnapshot().draft.text).toBe("retry after timeout");
+    expect(controller.getSnapshot().conversation.receipt).toBeNull();
+    expect(secondSignal?.aborted).toBe(false);
+
+    controller.dispose();
+    expect(secondSignal?.aborted).toBe(true);
+    secondReceipt.resolve({ event_id: "disposed-event", trace_id: "disposed-trace" });
+    expect(await retrySend).toBe(false);
+  });
+
+  it.each([
+    ["draft publication", 1],
+    ["local-send publication", 2],
+  ] as const)(
+    "does not create timer or ingest after disposal during %s",
+    async (_label, disposeOnPublication) => {
+      const { controller, core, stream } = setup();
+      controller.start();
+      await flushAsync();
+      let sendPublications = 0;
+      controller.subscribe(() => {
+        sendPublications += 1;
+        if (sendPublications === disposeOnPublication) controller.dispose();
+      });
+
+      expect(await controller.actions.send(draft("dispose during send"))).toBe(false);
+
+      expect(sendPublications).toBeGreaterThanOrEqual(disposeOnPublication);
+      expect(core.ingest).not.toHaveBeenCalled();
+      expect(stream().close).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("yields to a reentrant send from draft publication without overlapping ingests", async () => {
+    const receipt = deferred<{ event_id: string; trace_id: string }>();
+    const core = createCoreMock();
+    core.ingest.mockImplementationOnce(() => receipt.promise);
+    const { controller } = setup({ core });
+    controller.start();
+    await flushAsync();
+    let nestedSend: Promise<boolean> | undefined;
+    let reentered = false;
+    controller.subscribe(() => {
+      if (reentered) return;
+      reentered = true;
+      nestedSend = controller.actions.send(draft("nested winner", 2));
+    });
+
+    expect(await controller.actions.send(draft("outer loser", 1))).toBe(false);
+    expect(core.ingest).toHaveBeenCalledTimes(1);
+    expect(core.ingest).toHaveBeenCalledWith(
+      { text: "nested winner", platform: "web" },
+      expect.any(AbortSignal),
+    );
+
+    const signal = core.ingest.mock.calls[0]?.[1];
+    controller.dispose();
+    expect(signal?.aborted).toBe(true);
+    receipt.resolve({ event_id: "nested-late", trace_id: "nested-trace" });
+    if (!nestedSend) throw new Error("Expected nested send");
+    expect(await nestedSend).toBe(false);
   });
 
   it("schedules a quiet pre-ACK expiry independently from the longer request deadline", async () => {
@@ -692,6 +823,42 @@ describe("createPresenceController", () => {
     core.effectorStatus.mockResolvedValueOnce(LATCHED_EFFECTOR);
     expect(await controller.actions.estop()).toBe(true);
     expect(core.estop).toHaveBeenCalledTimes(1);
+    expect(semanticStore.getState().safety).toBe("stoppedLatched");
+  });
+
+  it("does not POST or read back safety after disposal during the requested publication", async () => {
+    const { controller, core, stream } = setup();
+    controller.start();
+    await flushAsync();
+    controller.subscribe(() => controller.dispose());
+
+    expect(await controller.actions.estop()).toBe(false);
+
+    expect(core.estop).not.toHaveBeenCalled();
+    expect(core.effectorStatus).toHaveBeenCalledTimes(1);
+    expect(stream().close).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not continue a safety mutation that a requested-state listener preempts", async () => {
+    const core = createCoreMock();
+    const { controller, semanticStore } = setup({ core });
+    controller.start();
+    await flushAsync();
+    core.effectorStatus.mockResolvedValueOnce(LATCHED_EFFECTOR);
+    let preemptingEstop: Promise<boolean> | undefined;
+    let preempt = true;
+    controller.subscribe(() => {
+      if (!preempt) return;
+      preempt = false;
+      preemptingEstop = controller.actions.estop();
+    });
+
+    expect(await controller.actions.reset()).toBe(false);
+    expect(core.reset).not.toHaveBeenCalled();
+    expect(core.estop).toHaveBeenCalledTimes(1);
+    if (!preemptingEstop) throw new Error("Expected e-stop preemption");
+    expect(await preemptingEstop).toBe(true);
     expect(semanticStore.getState().safety).toBe("stoppedLatched");
   });
 
