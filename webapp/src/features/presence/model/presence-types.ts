@@ -102,6 +102,7 @@ export type ConversationEvent =
       readonly type: "LOCAL_SEND";
       readonly attemptId: string;
       readonly localMessageId: string;
+      readonly draftSnapshot: DraftSnapshot;
       readonly at: number;
     }
   | {

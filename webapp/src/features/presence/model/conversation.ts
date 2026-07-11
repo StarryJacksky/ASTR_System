@@ -97,13 +97,13 @@ function startLocalSend(
     id: event.localMessageId,
     kind: "user",
     role: "user",
-    text: state.draft.text,
+    text: event.draftSnapshot.text,
     ts: event.at,
   };
   const attempt: ConversationAttempt = {
     id: event.attemptId,
     localMessageId: event.localMessageId,
-    draftSnapshot: { ...state.draft },
+    draftSnapshot: { ...event.draftSnapshot },
     status: "sending",
     receipt: null,
     startedAt: event.at,

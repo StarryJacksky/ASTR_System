@@ -481,6 +481,92 @@ describe("createPresenceController", () => {
     ).toBe(false);
   });
 
+  it("delegates transcription through the typed Core client with the caller abort signal", async () => {
+    const core = createCoreMock();
+    core.transcribe.mockResolvedValueOnce({ text: "  literal transcript  " });
+    const { controller } = setup({ core });
+    const abort = new AbortController();
+
+    await expect(
+      controller.actions.transcribe("d2F2LWJhc2U2NA==", abort.signal),
+    ).resolves.toEqual({ text: "  literal transcript  " });
+    expect(core.transcribe).toHaveBeenCalledWith("d2F2LWJhc2U2NA==", abort.signal);
+  });
+
+  it("retries the failed captured draft in a new attempt without replacing newer editor work", async () => {
+    const core = createCoreMock();
+    core.ingest
+      .mockRejectedValueOnce(new Error("ingest unavailable"))
+      .mockResolvedValueOnce({ event_id: "retry-event", trace_id: "retry-trace" });
+    const { controller } = setup({ core });
+    controller.start();
+    await flushAsync();
+    const failedDraft = draft("retry this exact selection", 12);
+    const newerDraft = draft("new work in the editor", 13);
+
+    await expect(controller.actions.send(failedDraft)).resolves.toBe(false);
+    controller.actions.updateDraft(newerDraft);
+
+    await expect(controller.actions.retryFailed()).resolves.toBe(true);
+
+    expect(core.ingest).toHaveBeenNthCalledWith(
+      2,
+      { text: failedDraft.text, platform: "web" },
+      expect.any(AbortSignal),
+    );
+    expect(controller.getSnapshot().draft).toEqual(newerDraft);
+    expect(controller.getSnapshot().conversation.messages.at(-1)).toMatchObject({
+      role: "user",
+      text: failedDraft.text,
+    });
+    expect(controller.getSnapshot().conversation.receipt).toEqual({
+      event_id: "retry-event",
+      trace_id: "retry-trace",
+    });
+  });
+
+  it("rejects retry when there is no failed ingest attempt", async () => {
+    const { controller, core } = setup();
+
+    await expect(controller.actions.retryFailed()).resolves.toBe(false);
+    expect(core.ingest).not.toHaveBeenCalled();
+  });
+
+  it("retries a timed-out captured draft while an old-trace late final cannot finish the new attempt", async () => {
+    const core = createCoreMock();
+    core.ingest
+      .mockResolvedValueOnce({ event_id: "old-event", trace_id: "old-trace" })
+      .mockResolvedValueOnce({ event_id: "new-event", trace_id: "new-trace" });
+    const { controller, semanticStore, stream } = setup({ core });
+    controller.start();
+    await flushAsync();
+
+    await expect(controller.actions.send(draft("recover after timeout", 21))).resolves.toBe(true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(semanticStore.getState().conversation).toBe("error");
+
+    await expect(controller.actions.retryFailed()).resolves.toBe(true);
+    expect(controller.getSnapshot().conversation.receipt?.trace_id).toBe("new-trace");
+
+    stream().emitEvent(
+      event("soul.decision", "late-old-decision", "old-trace", {
+        reply_text: "late answer from old trace",
+      }),
+    );
+    expect(controller.getSnapshot().conversation.receipt?.trace_id).toBe("new-trace");
+    expect(semanticStore.getState().conversation).toBe("sending");
+
+    stream().emitEvent(
+      event("soul.decision", "new-decision", "new-trace", {
+        reply_text: "authoritative new answer",
+      }),
+    );
+    expect(semanticStore.getState().conversation).toBe("final");
+    expect(controller.getSnapshot().conversation.messages.at(-1)).toMatchObject({
+      text: "authoritative new answer",
+    });
+  });
+
   it("does not let an unbound pre-ACK frame suppress the request timeout", async () => {
     const receipt = deferred<{ event_id: string; trace_id: string }>();
     const core = createCoreMock();

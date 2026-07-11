@@ -25,6 +25,7 @@ import type {
   CoreStatusProjection,
   EffectorPendingAction,
   EffectorStatus,
+  TranscriptionResult,
 } from "@/lib/types";
 
 const DEFAULT_STATUS_POLL_MS = 4_000;
@@ -71,6 +72,11 @@ export interface PresenceControllerSnapshot {
 export interface PresenceControllerActions {
   readonly updateDraft: (draft: DraftSnapshot) => void;
   readonly send: (draft: DraftSnapshot) => Promise<boolean>;
+  readonly retryFailed: () => Promise<boolean>;
+  readonly transcribe: (
+    wavB64: string,
+    signal?: AbortSignal,
+  ) => Promise<TranscriptionResult>;
   readonly estop: () => Promise<boolean>;
   readonly reset: () => Promise<boolean>;
 }
@@ -556,15 +562,19 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     applyConversation({ type: "DRAFT_CHANGED", draft, at: now() });
   };
 
-  const send = async (draft: DraftSnapshot): Promise<boolean> => {
-    if (disposed || inFlightIngest !== null || isPendingAttempt(conversation)) return false;
-    applyConversation({ type: "DRAFT_CHANGED", draft, at: now() });
+  const runIngest = async (draftSnapshot: DraftSnapshot): Promise<boolean> => {
     if (disposed || inFlightIngest !== null || isPendingAttempt(conversation)) return false;
     const attemptId = idFactory("attempt");
     const localMessageId = idFactory("message");
     if (
       !applyConversation(
-        { type: "LOCAL_SEND", attemptId, localMessageId, at: now() },
+        {
+          type: "LOCAL_SEND",
+          attemptId,
+          localMessageId,
+          draftSnapshot,
+          at: now(),
+        },
         "INGEST_STARTED",
       )
     ) {
@@ -577,7 +587,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
 
     try {
       const receipt = await options.coreClient.ingest(
-        { text: draft.text, platform: "web" },
+        { text: draftSnapshot.text, platform: "web" },
         request.controller.signal,
       );
       if (disposed || inFlightIngest !== request) return false;
@@ -605,6 +615,26 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     } finally {
       if (inFlightIngest === request) inFlightIngest = null;
     }
+  };
+
+  const send = async (draft: DraftSnapshot): Promise<boolean> => {
+    if (disposed || inFlightIngest !== null || isPendingAttempt(conversation)) return false;
+    applyConversation({ type: "DRAFT_CHANGED", draft, at: now() });
+    return runIngest(draft);
+  };
+
+  const retryFailed = async (): Promise<boolean> => {
+    const failedAttempt = conversation.activeAttempt;
+    if (failedAttempt?.status !== "failed" && failedAttempt?.status !== "timedOut") return false;
+    return runIngest(failedAttempt.draftSnapshot);
+  };
+
+  const transcribe = (
+    wavB64: string,
+    signal?: AbortSignal,
+  ): Promise<TranscriptionResult> => {
+    if (disposed) return Promise.reject(new Error("Presence controller is unavailable"));
+    return options.coreClient.transcribe(wavB64, signal);
   };
 
   const start = (): void => {
@@ -683,6 +713,8 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   const actions: PresenceControllerActions = Object.freeze({
     updateDraft,
     send,
+    retryFailed,
+    transcribe,
     estop: () => runSafetyMutation("estop"),
     reset: () => runSafetyMutation("reset"),
   });

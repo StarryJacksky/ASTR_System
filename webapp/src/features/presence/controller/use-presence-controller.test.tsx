@@ -29,6 +29,8 @@ function createFakeController(): FakeController {
   });
   const updateDraft = vi.fn();
   const send = vi.fn(async () => true);
+  const retryFailed = vi.fn(async () => true);
+  const transcribe = vi.fn(async () => ({ text: "delegated transcript" }));
   const estop = vi.fn(async () => true);
   const reset = vi.fn(async () => true);
 
@@ -36,7 +38,7 @@ function createFakeController(): FakeController {
     subscribe,
     getSnapshot: () => snapshot,
     getServerSnapshot: () => PRESENCE_CONTROLLER_SERVER_SNAPSHOT,
-    actions: { updateDraft, send, estop, reset },
+    actions: { updateDraft, send, retryFailed, transcribe, estop, reset },
     start: vi.fn(),
     dispose: vi.fn(),
     emit: (next) => {
@@ -147,14 +149,25 @@ describe("Presence controller external owner", () => {
       selectionStart: 2,
       selectionEnd: 5,
     };
+    const abort = new AbortController();
 
     expect(owner.actions).toBe(actions);
     expect(await actions.send(value)).toBe(false);
+    expect(await actions.retryFailed()).toBe(false);
+    await expect(actions.transcribe("wav", abort.signal)).rejects.toThrow(
+      "Presence controller is unavailable",
+    );
     const release = owner.subscribe(vi.fn());
     actions.updateDraft(value);
     expect(await actions.send(value)).toBe(true);
+    expect(await actions.retryFailed()).toBe(true);
+    await expect(actions.transcribe("wav", abort.signal)).resolves.toEqual({
+      text: "delegated transcript",
+    });
     expect(controllers[0]?.actions.updateDraft).toHaveBeenCalledWith(value);
     expect(controllers[0]?.actions.send).toHaveBeenCalledWith(value);
+    expect(controllers[0]?.actions.retryFailed).toHaveBeenCalledTimes(1);
+    expect(controllers[0]?.actions.transcribe).toHaveBeenCalledWith("wav", abort.signal);
 
     release();
     await vi.runAllTimersAsync();

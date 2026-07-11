@@ -55,6 +55,10 @@ export function createPresenceControllerOwner(
       controller?.actions.updateDraft(draft);
     },
     send: (draft: DraftSnapshot) => controller?.actions.send(draft) ?? Promise.resolve(false),
+    retryFailed: () => controller?.actions.retryFailed() ?? Promise.resolve(false),
+    transcribe: (wavB64: string, signal?: AbortSignal) =>
+      controller?.actions.transcribe(wavB64, signal) ??
+      Promise.reject(new Error("Presence controller is unavailable")),
     estop: () => controller?.actions.estop() ?? Promise.resolve(false),
     reset: () => controller?.actions.reset() ?? Promise.resolve(false),
   };

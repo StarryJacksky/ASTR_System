@@ -32,7 +32,13 @@ function send(
   localMessageId = "local-1",
   at = 1,
 ) {
-  return reduce(state, { type: "LOCAL_SEND", attemptId, localMessageId, at });
+  return reduce(state, {
+    type: "LOCAL_SEND",
+    attemptId,
+    localMessageId,
+    draftSnapshot: state.draft,
+    at,
+  });
 }
 
 function acknowledge(
@@ -204,6 +210,50 @@ describe("Presence conversation model", () => {
       message: "Core unavailable",
     });
     expect(failed.error).toBe("Core unavailable");
+  });
+
+  it("starts a retry from the failed captured draft without replacing a newer editor revision", () => {
+    const failedDraft = draft("retry this exact selection", 8, 2, 9);
+    const newerDraft = draft("new work must survive", 9, 4, 7);
+    const sending = send(createConversationState(failedDraft));
+    const failed = reduce(sending, {
+      type: "INGEST_FAILED",
+      attemptId: "attempt-1",
+      message: "Core unavailable",
+      at: 2,
+    });
+    const edited = reduce(failed, {
+      type: "DRAFT_CHANGED",
+      draft: newerDraft,
+      at: 3,
+    });
+
+    const retrying = reduce(edited, {
+      type: "LOCAL_SEND",
+      attemptId: "attempt-2",
+      localMessageId: "local-2",
+      draftSnapshot: failedDraft,
+      at: 4,
+    });
+
+    expect(retrying.draft).toEqual(newerDraft);
+    expect(retrying.messages.at(-1)).toMatchObject({
+      id: "local-2",
+      text: failedDraft.text,
+    });
+    expect(retrying.activeAttempt).toMatchObject({
+      id: "attempt-2",
+      draftSnapshot: failedDraft,
+      status: "sending",
+    });
+
+    const acknowledged = reduce(retrying, {
+      type: "INGEST_ACK",
+      attemptId: "attempt-2",
+      receipt: { event_id: "retry-event", trace_id: "retry-trace" },
+      at: 5,
+    });
+    expect(acknowledged.draft).toEqual(newerDraft);
   });
 
   it("buffers pre-ACK reply frames and replays only the matching trace in arrival order", () => {
@@ -461,6 +511,7 @@ describe("Presence conversation model", () => {
       type: "LOCAL_SEND",
       attemptId: "attempt-2",
       localMessageId: "local-2",
+      draftSnapshot: first.draft,
       at: 2,
     });
 
