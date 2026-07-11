@@ -52,6 +52,28 @@ export interface IngestReceipt {
   readonly trace_id: string;
 }
 
+/** POST /v1/voice/transcribe returns the literal transcript, including an empty one. */
+export interface TranscriptionResult {
+  readonly text: string;
+}
+
+export interface EffectorPendingAction {
+  readonly summary: string;
+  readonly tool: string;
+}
+
+/** GET /v1/effector/status authoritative device evidence. */
+export interface EffectorStatus {
+  readonly stopped: boolean;
+  readonly pending: Readonly<Record<string, EffectorPendingAction>>;
+  readonly audit_tail: readonly Readonly<Record<string, unknown>>[];
+}
+
+/** Immediate endpoint acknowledgement; callers still perform an authoritative status readback. */
+export interface EffectorStopResult {
+  readonly stopped: boolean;
+}
+
 /** 聊天时间线里的一条消息。 */
 export interface ChatMessage {
   readonly id: string;
