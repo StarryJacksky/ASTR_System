@@ -425,12 +425,14 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     readonly generation: number;
     readonly controller: AbortController;
   } {
-    safetyAbortController?.abort();
+    const previousController = safetyAbortController;
     const controller = new AbortController();
+    const generation = safetyGeneration + 1;
+    safetyGeneration = generation;
     safetyAbortController = controller;
-    safetyGeneration += 1;
     safetyMutation = mutation;
-    return { generation: safetyGeneration, controller };
+    previousController?.abort();
+    return { generation, controller };
   }
 
   function isActiveSafetyOperation(
@@ -464,8 +466,9 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
   }
 
   async function checkStartupSafety(): Promise<void> {
-    if (disposed) return;
+    if (disposed || safetyAbortController !== null) return;
     const { generation, controller } = beginSafetyOperation(null);
+    if (!isActiveSafetyOperation(generation, controller)) return;
     try {
       const value = await options.coreClient.effectorStatus(controller.signal);
       if (!isActiveSafetyOperation(generation, controller)) return;
@@ -489,6 +492,7 @@ export function createPresenceController(options: PresenceControllerOptions): Pr
     if (disposed) return false;
     if (kind === "reset" && safetyMutation !== null) return false;
     const { generation, controller } = beginSafetyOperation(kind);
+    if (!isActiveSafetyOperation(generation, controller)) return false;
     safetyEvidence = "checking";
     dispatch({ type: kind === "estop" ? "ESTOP_REQUESTED" : "ESTOP_RESET_REQUESTED" });
     if (!isActiveSafetyOperation(generation, controller)) return false;

@@ -13,6 +13,7 @@ import {
   LIFE_EVENT_DEDUPE_CAPACITY,
   PRESENCE_CONTROLLER_SERVER_SNAPSHOT,
   createPresenceController,
+  type PresenceControllerSnapshot,
   type PresenceControllerStream,
   type PresenceControllerStreamCallbacks,
 } from "./create-presence-controller";
@@ -964,6 +965,124 @@ describe("createPresenceController", () => {
     expect(semanticStore.getState().safety).toBe("normal");
   });
 
+  it("does not let startup readback preempt e-stop from the initial publication", async () => {
+    const stopPost = deferred<{ stopped: boolean }>();
+    const core = createCoreMock();
+    let stopSignal: AbortSignal | undefined;
+    core.estop.mockImplementationOnce((signal) => {
+      stopSignal = signal;
+      return stopPost.promise;
+    });
+    core.effectorStatus.mockResolvedValueOnce(LATCHED_EFFECTOR);
+    const { controller, semanticStore } = setup({ core });
+    let startupEstop: Promise<boolean> | undefined;
+    let trigger = true;
+    controller.subscribe(() => {
+      if (!trigger) return;
+      trigger = false;
+      startupEstop = controller.actions.estop();
+    });
+
+    controller.start();
+
+    expect(core.estop).toHaveBeenCalledTimes(1);
+    expect(stopSignal?.aborted).toBe(false);
+    expect(core.effectorStatus).not.toHaveBeenCalled();
+    expect(semanticStore.getState().safety).toBe("stopRequested");
+
+    stopPost.resolve({ stopped: true });
+    if (!startupEstop) throw new Error("Expected startup e-stop");
+    expect(await startupEstop).toBe(true);
+    expect(core.effectorStatus).toHaveBeenCalledTimes(1);
+    expect(semanticStore.getState().safety).toBe("stoppedLatched");
+  });
+
+  it("lets a startup abort listener's reentrant e-stop own safety before reset publishes", async () => {
+    const startup = deferred<EffectorStatus>();
+    const core = createCoreMock();
+    const controllerRef: { current?: ReturnType<typeof createPresenceController> } = {};
+    let reentrantEstop: Promise<boolean> | undefined;
+    core.effectorStatus
+      .mockImplementationOnce((signal) => {
+        signal?.addEventListener(
+          "abort",
+          () => {
+            const current = controllerRef.current;
+            if (!current) throw new Error("Missing controller");
+            reentrantEstop = current.actions.estop();
+          },
+          { once: true },
+        );
+        return startup.promise;
+      })
+      .mockResolvedValueOnce(LATCHED_EFFECTOR);
+    const built = setup({ core });
+    const controller = built.controller;
+    controllerRef.current = controller;
+    controller.start();
+    const observedSafety: string[] = [];
+    const unsubscribe = built.semanticStore.subscribe((state, previous) => {
+      if (state.safety !== previous.safety) observedSafety.push(state.safety);
+    });
+
+    expect(await controller.actions.reset()).toBe(false);
+    expect(core.reset).not.toHaveBeenCalled();
+    expect(core.estop).toHaveBeenCalledTimes(1);
+    if (!reentrantEstop) throw new Error("Expected reentrant e-stop");
+    expect(await reentrantEstop).toBe(true);
+    expect(core.effectorStatus).toHaveBeenCalledTimes(2);
+    expect(observedSafety).not.toContain("resetting");
+    expect(built.semanticStore.getState().safety).toBe("stoppedLatched");
+
+    startup.resolve(CLEAR_EFFECTOR);
+    await flushAsync();
+    expect(built.semanticStore.getState().safety).toBe("stoppedLatched");
+    unsubscribe();
+  });
+
+  it("does not publish or request safety after a startup abort listener disposes", async () => {
+    const startup = deferred<EffectorStatus>();
+    const core = createCoreMock();
+    const controllerRef: { current?: ReturnType<typeof createPresenceController> } = {};
+    let snapshotAtDispose: PresenceControllerSnapshot | undefined;
+    core.effectorStatus.mockImplementationOnce((signal) => {
+      signal?.addEventListener(
+        "abort",
+        () => {
+          const current = controllerRef.current;
+          if (!current) throw new Error("Missing controller");
+          current.dispose();
+          snapshotAtDispose = current.getSnapshot();
+        },
+        { once: true },
+      );
+      return startup.promise;
+    });
+    const built = setup({ core });
+    const controller = built.controller;
+    controllerRef.current = controller;
+    controller.start();
+    const observedSafety: string[] = [];
+    const unsubscribe = built.semanticStore.subscribe((state, previous) => {
+      if (state.safety !== previous.safety) observedSafety.push(state.safety);
+    });
+
+    expect(await controller.actions.reset()).toBe(false);
+    expect(snapshotAtDispose).toBeDefined();
+    expect(controller.getSnapshot()).toBe(snapshotAtDispose);
+    expect(core.reset).not.toHaveBeenCalled();
+    expect(core.effectorStatus).toHaveBeenCalledTimes(1);
+    expect(observedSafety).not.toContain("resetting");
+    expect(built.semanticStore.getState().safety).toBe("stopUnknown");
+    expect(built.stream().close).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+
+    startup.resolve(LATCHED_EFFECTOR);
+    await flushAsync();
+    expect(controller.getSnapshot()).toBe(snapshotAtDispose);
+    unsubscribe();
+  });
+
   it("rejects reset during a mutation while e-stop preempts that mutation and always runs", async () => {
     const resetPost = deferred<{ stopped: boolean }>();
     let resetSignal: AbortSignal | undefined;
@@ -992,6 +1111,30 @@ describe("createPresenceController", () => {
     await flushAsync();
     expect(core.effectorStatus).toHaveBeenCalledTimes(2);
     expect(controller.getSnapshot().safetyEvidence).toBe("latched");
+    expect(semanticStore.getState().safety).toBe("stoppedLatched");
+  });
+
+  it("does not let stale reset settlement clear a newer active e-stop owner", async () => {
+    const resetPost = deferred<{ stopped: boolean }>();
+    const estopPost = deferred<{ stopped: boolean }>();
+    const core = createCoreMock();
+    core.reset.mockImplementationOnce(() => resetPost.promise);
+    core.estop.mockImplementationOnce(() => estopPost.promise);
+    const { controller, semanticStore } = setup({ core });
+    controller.start();
+    await flushAsync();
+    core.effectorStatus.mockResolvedValueOnce(LATCHED_EFFECTOR);
+
+    const staleReset = controller.actions.reset();
+    const activeEstop = controller.actions.estop();
+    resetPost.resolve({ stopped: false });
+    expect(await staleReset).toBe(false);
+
+    expect(await controller.actions.reset()).toBe(false);
+    expect(core.reset).toHaveBeenCalledTimes(1);
+
+    estopPost.resolve({ stopped: true });
+    expect(await activeEstop).toBe(true);
     expect(semanticStore.getState().safety).toBe("stoppedLatched");
   });
 
