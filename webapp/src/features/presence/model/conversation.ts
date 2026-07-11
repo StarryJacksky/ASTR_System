@@ -11,11 +11,13 @@ import type {
   DraftSnapshot,
   PresenceMessage,
   ProvisionalReply,
+  RetiredTimedOutTrace,
 } from "./presence-types";
 
 export const PRE_ACK_BUFFER_CAPACITY = 64;
 export const PRE_ACK_BUFFER_TTL_MS = 10_000;
 export const SEEN_EVENT_CAPACITY = 256;
+export const RETIRED_TIMED_OUT_TRACE_CAPACITY = 32;
 
 const DIAGNOSTIC_CAPACITY = 64;
 // Invalid transport/controller times collapse to zero so the reducer stays deterministic and pure.
@@ -36,6 +38,7 @@ export function createConversationState(
     activeAttempt: null,
     provisionalReplies: [],
     preAckBuffer: [],
+    retiredTimedOutTraces: [],
     seenEventIds: [],
     diagnostics: [],
     authoritativeDecision: null,
@@ -110,6 +113,11 @@ function startLocalSend(
     firstReplyAt: null,
     lateFinal: false,
   };
+  const retiredTimedOutTraces = retireSupersededTimedOutAttempt(
+    state.retiredTimedOutTraces,
+    state.activeAttempt,
+    event.at,
+  );
 
   return {
     ...state,
@@ -117,6 +125,7 @@ function startLocalSend(
     activeAttempt: attempt,
     provisionalReplies: [],
     preAckBuffer: [],
+    retiredTimedOutTraces,
     authoritativeDecision: null,
     error: null,
   };
@@ -308,7 +317,7 @@ function routeReplyFrame(
     if (attempt?.receipt?.trace_id === frame.traceId) {
       return attempt.status === "final" ? state : finalizeActiveDecision(state, frame);
     }
-    return retainExternalDecision(state, frame);
+    return resolveReleasedDecision(state, frame);
   }
 
   const attempt = state.activeAttempt;
@@ -380,6 +389,7 @@ function finalizeActiveDecision(
     eventId: frame.eventId,
     external: false,
     lateFinal,
+    replyToMessageId: attempt.localMessageId,
   };
 
   return {
@@ -421,6 +431,49 @@ function retainExternalDecision(
   };
 }
 
+function resolveReleasedDecision(
+  state: ConversationModelState,
+  frame: BufferedDecisionFrame,
+): ConversationModelState {
+  if (
+    state.messages.some(
+      (message) =>
+        message.kind === "decision" &&
+        message.lateFinal === true &&
+        message.traceId === frame.traceId,
+    )
+  ) {
+    return state;
+  }
+  const retiredIndex = state.retiredTimedOutTraces.findIndex(
+    (retired) => retired.traceId === frame.traceId,
+  );
+  if (retiredIndex < 0) return retainExternalDecision(state, frame);
+
+  const retired = state.retiredTimedOutTraces[retiredIndex];
+  if (!retired || retired.resolvedEventId !== null) return state;
+
+  const message: PresenceMessage = {
+    id: `reply:${frame.traceId}`,
+    kind: "decision",
+    role: "qiuqiu",
+    text: frame.replyText,
+    ts: eventTimestamp(frame),
+    traceId: frame.traceId,
+    eventId: frame.eventId,
+    external: false,
+    lateFinal: true,
+    replyToMessageId: retired.localMessageId,
+  };
+  return {
+    ...state,
+    messages: insertAssociatedReply(state.messages, message, retired.localMessageId),
+    retiredTimedOutTraces: state.retiredTimedOutTraces.map((candidate, index) =>
+      index === retiredIndex ? { ...candidate, resolvedEventId: frame.eventId } : candidate,
+    ),
+  };
+}
+
 function bufferPreAckFrame(
   state: ConversationModelState,
   frame: BufferedReplyFrame,
@@ -440,7 +493,7 @@ function bufferPreAckFrame(
       traceId: evicted?.traceId,
     },
   );
-  if (evicted?.kind === "decision") next = retainExternalDecision(next, evicted);
+  if (evicted?.kind === "decision") next = resolveReleasedDecision(next, evicted);
   return { ...next, preAckBuffer: [...next.preAckBuffer, frame] };
 }
 
@@ -476,7 +529,7 @@ function releaseUnboundFrame(
   state: ConversationModelState,
   frame: BufferedReplyFrame,
 ): ConversationModelState {
-  if (frame.kind === "decision") return retainExternalDecision(state, frame);
+  if (frame.kind === "decision") return resolveReleasedDecision(state, frame);
   return addDiagnostic(state, {
     code: "UNBOUND_STREAM_DROPPED",
     message: "A provisional stream frame could not be bound to the active trace.",
@@ -522,6 +575,41 @@ function upsertMessage(
   );
 }
 
+function insertAssociatedReply(
+  messages: readonly PresenceMessage[],
+  message: PresenceMessage,
+  localMessageId: string,
+): readonly PresenceMessage[] {
+  const existingIndex = messages.findIndex((candidate) => candidate.id === message.id);
+  if (existingIndex >= 0) {
+    return messages.map((candidate, index) => (index === existingIndex ? message : candidate));
+  }
+  const localIndex = messages.findIndex((candidate) => candidate.id === localMessageId);
+  if (localIndex < 0) return [...messages, message];
+  return [
+    ...messages.slice(0, localIndex + 1),
+    message,
+    ...messages.slice(localIndex + 1),
+  ];
+}
+
+function retireSupersededTimedOutAttempt(
+  retired: readonly RetiredTimedOutTrace[],
+  attempt: ConversationAttempt | null,
+  retiredAt: number,
+): readonly RetiredTimedOutTrace[] {
+  if (attempt?.status !== "timedOut" || attempt.receipt === null) return retired;
+  const entry: RetiredTimedOutTrace = {
+    attemptId: attempt.id,
+    traceId: attempt.receipt.trace_id,
+    receiptEventId: attempt.receipt.event_id,
+    localMessageId: attempt.localMessageId,
+    retiredAt,
+    resolvedEventId: null,
+  };
+  return appendBounded(retired, entry, RETIRED_TIMED_OUT_TRACE_CAPACITY);
+}
+
 function eventTimestamp(frame: BufferedDecisionFrame): number {
   const timestamp = Date.parse(frame.event.ts);
   return Number.isFinite(timestamp) ? timestamp : frame.receivedAt;
@@ -543,7 +631,17 @@ function toChatMessage(message: PresenceMessage): ChatMessage {
     text: message.text,
     ts: message.ts,
   };
-  return message.platform ? { ...projected, platform: message.platform } : projected;
+  return {
+    ...projected,
+    ...(message.platform === undefined ? {} : { platform: message.platform }),
+    ...(message.traceId === undefined ? {} : { traceId: message.traceId }),
+    ...(message.eventId === undefined ? {} : { eventId: message.eventId }),
+    ...(message.replyToMessageId === undefined
+      ? {}
+      : { replyToMessageId: message.replyToMessageId }),
+    ...(message.external === undefined ? {} : { external: message.external }),
+    ...(message.lateFinal === undefined ? {} : { lateFinal: message.lateFinal }),
+  };
 }
 
 function normalizeReducerTime(at: number): number {

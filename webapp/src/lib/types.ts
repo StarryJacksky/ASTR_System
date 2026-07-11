@@ -81,6 +81,11 @@ export interface ChatMessage {
   readonly text: string;
   readonly platform?: string;
   readonly ts: number;
+  readonly traceId?: string;
+  readonly eventId?: string;
+  readonly replyToMessageId?: string;
+  readonly external?: boolean;
+  readonly lateFinal?: boolean;
 }
 
 /** Frontend projection of the current GET /v1/status fields. */

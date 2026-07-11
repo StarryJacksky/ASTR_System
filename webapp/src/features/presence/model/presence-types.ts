@@ -38,6 +38,16 @@ export interface PresenceMessage {
   readonly eventId?: string;
   readonly external?: boolean;
   readonly lateFinal?: boolean;
+  readonly replyToMessageId?: string;
+}
+
+export interface RetiredTimedOutTrace {
+  readonly attemptId: string;
+  readonly traceId: string;
+  readonly receiptEventId: string;
+  readonly localMessageId: string;
+  readonly retiredAt: number;
+  readonly resolvedEventId: string | null;
 }
 
 export interface ProvisionalReply {
@@ -90,6 +100,7 @@ export interface ConversationModelState {
   readonly activeAttempt: ConversationAttempt | null;
   readonly provisionalReplies: readonly ProvisionalReply[];
   readonly preAckBuffer: readonly BufferedReplyFrame[];
+  readonly retiredTimedOutTraces: readonly RetiredTimedOutTrace[];
   readonly seenEventIds: readonly string[];
   readonly diagnostics: readonly ConversationDiagnostic[];
   readonly authoritativeDecision: AstrEvent | null;

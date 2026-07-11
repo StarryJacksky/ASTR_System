@@ -532,11 +532,12 @@ describe("createPresenceController", () => {
     expect(core.ingest).not.toHaveBeenCalled();
   });
 
-  it("retries a timed-out captured draft while an old-trace late final cannot finish the new attempt", async () => {
+  it("projects a pre-ACK old-trace late final beside its timed-out request without changing the retry", async () => {
+    const retryReceipt = deferred<{ event_id: string; trace_id: string }>();
     const core = createCoreMock();
     core.ingest
       .mockResolvedValueOnce({ event_id: "old-event", trace_id: "old-trace" })
-      .mockResolvedValueOnce({ event_id: "new-event", trace_id: "new-trace" });
+      .mockImplementationOnce(() => retryReceipt.promise);
     const { controller, semanticStore, stream } = setup({ core });
     controller.start();
     await flushAsync();
@@ -545,15 +546,47 @@ describe("createPresenceController", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(semanticStore.getState().conversation).toBe("error");
 
-    await expect(controller.actions.retryFailed()).resolves.toBe(true);
-    expect(controller.getSnapshot().conversation.receipt?.trace_id).toBe("new-trace");
+    const retrying = controller.actions.retryFailed();
 
     stream().emitEvent(
       event("soul.decision", "late-old-decision", "old-trace", {
         reply_text: "late answer from old trace",
       }),
     );
+    expect(controller.getSnapshot().conversation.messages).toHaveLength(2);
+
+    retryReceipt.resolve({ event_id: "new-event", trace_id: "new-trace" });
+    await expect(retrying).resolves.toBe(true);
     expect(controller.getSnapshot().conversation.receipt?.trace_id).toBe("new-trace");
+    expect(semanticStore.getState().conversation).toBe("sending");
+    expect(controller.getSnapshot().conversation.authoritativeDecision).toBeNull();
+    expect(controller.getSnapshot().conversation.messages.map(({ id }) => id)).toEqual([
+      "message-2",
+      "reply:old-trace",
+      "message-4",
+    ]);
+    const lateFinal = controller.getSnapshot().conversation.messages[1];
+    expect(lateFinal).toMatchObject({
+      text: "late answer from old trace",
+      traceId: "old-trace",
+      replyToMessageId: "message-2",
+      external: false,
+      lateFinal: true,
+    });
+    expect(Object.isFrozen(lateFinal)).toBe(true);
+
+    stream().emitEvent(
+      event("soul.decision", "second-late-old-decision", "old-trace", {
+        reply_text: "must not duplicate the retired reply",
+      }),
+    );
+    expect(
+      controller
+        .getSnapshot()
+        .conversation.messages.filter((message) => message.traceId === "old-trace"),
+    ).toHaveLength(1);
+    expect(controller.getSnapshot().conversation.receipt?.trace_id).toBe("new-trace");
+    expect(controller.getSnapshot().conversation.authoritativeDecision).toBeNull();
     expect(semanticStore.getState().conversation).toBe("sending");
 
     stream().emitEvent(
@@ -564,6 +597,9 @@ describe("createPresenceController", () => {
     expect(semanticStore.getState().conversation).toBe("final");
     expect(controller.getSnapshot().conversation.messages.at(-1)).toMatchObject({
       text: "authoritative new answer",
+      traceId: "new-trace",
+      replyToMessageId: "message-4",
+      lateFinal: false,
     });
   });
 

@@ -5,6 +5,7 @@ import type { AstrEvent, ConversationProjection } from "@/lib/types";
 import {
   PRE_ACK_BUFFER_CAPACITY,
   PRE_ACK_BUFFER_TTL_MS,
+  RETIRED_TIMED_OUT_TRACE_CAPACITY,
   SEEN_EVENT_CAPACITY,
   conversationReducer,
   createConversationState,
@@ -53,6 +54,53 @@ function acknowledge(
     receipt: { event_id: eventId, trace_id: traceId },
     at,
   });
+}
+
+function acknowledgeAttempt(
+  state: ConversationModelState,
+  attemptId: string,
+  traceId: string,
+  eventId: string,
+  at: number,
+) {
+  return reduce(state, {
+    type: "INGEST_ACK",
+    attemptId,
+    receipt: { event_id: eventId, trace_id: traceId },
+    at,
+  });
+}
+
+function startRetryAfterAcknowledgedTimeout(): ConversationModelState {
+  const captured = draft("retry this timed-out request", 9, 3, 8);
+  let state = send(createConversationState(captured), "attempt-old", "local-old", 1);
+  state = acknowledgeAttempt(state, "attempt-old", "trace-old", "event-old", 2);
+  state = reduce(state, {
+    type: "REQUEST_TIMED_OUT",
+    attemptId: "attempt-old",
+    at: 10_002,
+  });
+  return reduce(state, {
+    type: "LOCAL_SEND",
+    attemptId: "attempt-retry",
+    localMessageId: "local-retry",
+    draftSnapshot: captured,
+    at: 10_003,
+  });
+}
+
+interface RetiredTimedOutTraceTestView {
+  readonly traceId: string;
+  readonly localMessageId: string;
+  readonly resolvedEventId: string | null;
+}
+
+function retiredTimedOutTraces(state: ConversationModelState): readonly RetiredTimedOutTraceTestView[] {
+  return (
+    state as ConversationModelState & {
+      readonly retiredTimedOutTraces?: readonly RetiredTimedOutTraceTestView[];
+    }
+  ).retiredTimedOutTraces ?? [];
 }
 
 function astrEvent(
@@ -473,6 +521,12 @@ describe("Presence conversation model", () => {
       external: true,
       traceId: "trace-other",
     });
+    expect(selectConversationProjection(state).messages.at(-1)).toMatchObject({
+      eventId: "external-decision",
+      traceId: "trace-other",
+      external: true,
+      lateFinal: false,
+    });
 
     const duplicate = receive(state, external, 4);
     expect(duplicate).toBe(state);
@@ -502,6 +556,256 @@ describe("Presence conversation model", () => {
 
     const duplicate = receive(state, lateDecision, 10_005);
     expect(duplicate).toBe(state);
+  });
+
+  it("keeps a retried old-trace final attached to the timed-out user message exactly once", () => {
+    let state = startRetryAfterAcknowledgedTimeout();
+    state = acknowledgeAttempt(
+      state,
+      "attempt-retry",
+      "trace-retry",
+      "event-retry",
+      10_004,
+    );
+
+    state = receive(
+      state,
+      decisionEvent("late-old-final", "trace-old", "old request finished late"),
+      10_005,
+    );
+
+    expect(state.activeAttempt).toMatchObject({
+      id: "attempt-retry",
+      status: "acknowledged",
+      receipt: { event_id: "event-retry", trace_id: "trace-retry" },
+    });
+    expect(state.authoritativeDecision).toBeNull();
+    expect(state.messages.map(({ id }) => id)).toEqual([
+      "local-old",
+      "reply:trace-old",
+      "local-retry",
+    ]);
+    expect(state.messages[1]).toMatchObject({
+      text: "old request finished late",
+      traceId: "trace-old",
+      eventId: "late-old-final",
+      replyToMessageId: "local-old",
+      external: false,
+      lateFinal: true,
+    });
+    expect(retiredTimedOutTraces(state)).toContainEqual(
+      expect.objectContaining({
+        traceId: "trace-old",
+        localMessageId: "local-old",
+        resolvedEventId: "late-old-final",
+      }),
+    );
+    expect(selectConversationProjection(state).messages[1]).toMatchObject({
+      text: "old request finished late",
+      eventId: "late-old-final",
+      traceId: "trace-old",
+      replyToMessageId: "local-old",
+      external: false,
+      lateFinal: true,
+    });
+
+    state = receive(
+      state,
+      decisionEvent("second-old-final", "trace-old", "must not be appended"),
+      10_006,
+    );
+    expect(state.messages.filter((message) => message.traceId === "trace-old")).toHaveLength(1);
+    expect(state.messages[1]?.text).toBe("old request finished late");
+    expect(state.activeAttempt?.receipt?.trace_id).toBe("trace-retry");
+    expect(state.authoritativeDecision).toBeNull();
+  });
+
+  it.each(["ACK mismatch", "TTL expiry", "buffer overflow", "ingest failure"] as const)(
+    "resolves a buffered retired-trace decision through %s before generic external retention",
+    (releasePath) => {
+      let state = startRetryAfterAcknowledgedTimeout();
+      state = receive(
+        state,
+        decisionEvent(`late-old-${releasePath}`, "trace-old", `released by ${releasePath}`),
+        10_004,
+      );
+      expect(state.preAckBuffer).toHaveLength(1);
+
+      if (releasePath === "ACK mismatch") {
+        state = acknowledgeAttempt(
+          state,
+          "attempt-retry",
+          "trace-retry",
+          "event-retry",
+          10_005,
+        );
+      } else if (releasePath === "TTL expiry") {
+        state = reduce(state, {
+          type: "PRE_ACK_EXPIRED",
+          at: 10_004 + PRE_ACK_BUFFER_TTL_MS,
+        });
+      } else if (releasePath === "buffer overflow") {
+        for (let index = 0; index < PRE_ACK_BUFFER_CAPACITY; index += 1) {
+          state = receive(
+            state,
+            streamEvent(`overflow-${index}`, `unbound-${index}`, 1, "buffered"),
+            10_005 + index,
+          );
+        }
+      } else {
+        state = reduce(state, {
+          type: "INGEST_FAILED",
+          attemptId: "attempt-retry",
+          message: "retry ingest failed",
+          at: 10_005,
+        });
+      }
+
+      expect(state.messages.map(({ id }) => id).slice(0, 3)).toEqual([
+        "local-old",
+        "reply:trace-old",
+        "local-retry",
+      ]);
+      expect(state.messages[1]).toMatchObject({
+        traceId: "trace-old",
+        replyToMessageId: "local-old",
+        external: false,
+        lateFinal: true,
+      });
+      expect(state.messages.filter((message) => message.traceId === "trace-old")).toHaveLength(1);
+      expect(state.activeAttempt?.id).toBe("attempt-retry");
+    },
+  );
+
+  it("bounds retired timed-out trace identity while keeping the newest associations", () => {
+    const expectedCapacity = RETIRED_TIMED_OUT_TRACE_CAPACITY;
+    let state = createConversationState();
+
+    for (let index = 0; index <= expectedCapacity; index += 1) {
+      const currentDraft = draft(`timed-out-${index}`, index + 1);
+      state = reduce(state, {
+        type: "LOCAL_SEND",
+        attemptId: `attempt-${index}`,
+        localMessageId: `local-${index}`,
+        draftSnapshot: currentDraft,
+        at: index * 20_000,
+      });
+      state = acknowledgeAttempt(
+        state,
+        `attempt-${index}`,
+        `trace-${index}`,
+        `event-${index}`,
+        index * 20_000 + 1,
+      );
+      state = reduce(state, {
+        type: "REQUEST_TIMED_OUT",
+        attemptId: `attempt-${index}`,
+        at: index * 20_000 + 10_001,
+      });
+    }
+    state = reduce(state, {
+      type: "LOCAL_SEND",
+      attemptId: "attempt-next",
+      localMessageId: "local-next",
+      draftSnapshot: draft("next", expectedCapacity + 2),
+      at: (expectedCapacity + 1) * 20_000,
+    });
+
+    const retired = retiredTimedOutTraces(state);
+    expect(retired).toHaveLength(expectedCapacity);
+    expect(retired[0]).toMatchObject({
+      traceId: "trace-1",
+      localMessageId: "local-1",
+      resolvedEventId: null,
+    });
+    expect(retired.at(-1)).toMatchObject({
+      traceId: `trace-${expectedCapacity}`,
+      localMessageId: `local-${expectedCapacity}`,
+      resolvedEventId: null,
+    });
+  });
+
+  it("does not reopen a resolved late-final trace after its bounded metadata is evicted", () => {
+    let state = startRetryAfterAcknowledgedTimeout();
+    state = acknowledgeAttempt(
+      state,
+      "attempt-retry",
+      "trace-retry",
+      "event-retry",
+      10_004,
+    );
+    state = receive(
+      state,
+      decisionEvent("late-old-final", "trace-old", "the one retained old final"),
+      10_005,
+    );
+    state = receive(
+      state,
+      decisionEvent("retry-final", "trace-retry", "retry completed"),
+      10_006,
+    );
+
+    for (let index = 0; index < RETIRED_TIMED_OUT_TRACE_CAPACITY; index += 1) {
+      const attemptId = `churn-attempt-${index}`;
+      const currentDraft = draft(`churn-${index}`, 100 + index);
+      state = reduce(state, {
+        type: "LOCAL_SEND",
+        attemptId,
+        localMessageId: `churn-local-${index}`,
+        draftSnapshot: currentDraft,
+        at: 20_000 + index * 20_000,
+      });
+      state = acknowledgeAttempt(
+        state,
+        attemptId,
+        `churn-trace-${index}`,
+        `churn-event-${index}`,
+        20_001 + index * 20_000,
+      );
+      state = reduce(state, {
+        type: "REQUEST_TIMED_OUT",
+        attemptId,
+        at: 30_001 + index * 20_000,
+      });
+    }
+    state = reduce(state, {
+      type: "LOCAL_SEND",
+      attemptId: "current-attempt",
+      localMessageId: "current-local",
+      draftSnapshot: draft("current", 999),
+      at: 20_000 + RETIRED_TIMED_OUT_TRACE_CAPACITY * 20_000,
+    });
+    state = acknowledgeAttempt(
+      state,
+      "current-attempt",
+      "current-trace",
+      "current-event",
+      20_001 + RETIRED_TIMED_OUT_TRACE_CAPACITY * 20_000,
+    );
+
+    expect(retiredTimedOutTraces(state).some(({ traceId }) => traceId === "trace-old")).toBe(
+      false,
+    );
+    expect(state.messages.filter((message) => message.traceId === "trace-old")).toHaveLength(1);
+
+    state = receive(
+      state,
+      decisionEvent("different-old-event-id", "trace-old", "must stay suppressed"),
+      20_002 + RETIRED_TIMED_OUT_TRACE_CAPACITY * 20_000,
+    );
+
+    expect(state.messages.filter((message) => message.traceId === "trace-old")).toHaveLength(1);
+    expect(state.messages.find((message) => message.traceId === "trace-old")).toMatchObject({
+      eventId: "late-old-final",
+      text: "the one retained old final",
+      lateFinal: true,
+    });
+    expect(state.activeAttempt).toMatchObject({
+      id: "current-attempt",
+      status: "acknowledged",
+      receipt: { event_id: "current-event", trace_id: "current-trace" },
+    });
+    expect(state.authoritativeDecision).toBeNull();
   });
 
   it("ignores a rapid second submit while one attempt is active", () => {
@@ -556,6 +860,7 @@ describe("Presence conversation model", () => {
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
     expect(Array.isArray(state.messages)).toBe(true);
     expect(Array.isArray(state.preAckBuffer)).toBe(true);
+    expect(Array.isArray(state.retiredTimedOutTraces)).toBe(true);
     expect(Array.isArray(state.seenEventIds)).toBe(true);
     expect(initial.messages).toEqual([]);
     expect(state.messages).not.toBe(initial.messages);
