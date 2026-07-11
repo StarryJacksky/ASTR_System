@@ -16,12 +16,16 @@ export function Intro() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const seen = sessionStorage.getItem("astr-intro-seen");
-      const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!seen && !reduced) setShow(true);
-    });
-    return () => cancelAnimationFrame(frame);
+    const timer = window.setTimeout(() => {
+      try {
+        const seen = sessionStorage.getItem("astr-intro-seen");
+        const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (!seen && !reduced) setShow(true);
+      } catch {
+        // Storage can be unavailable in privacy-restricted browsing contexts.
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const dismiss = () => {

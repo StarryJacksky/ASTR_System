@@ -83,7 +83,7 @@ export function VoiceprintPanel() {
           {status === null
             ? "Core 离线，无法读取声纹状态"
             : status.enrolled
-              ? "已注册声纹 —— 语音入口只认你的声音"
+              ? "已注册声纹模板；当前网页转写入口未执行身份验证"
               : status.model_available
                 ? "未注册 —— 现在任何人对麦说话都按主人处理"
                 : "声纹模型未就位（需先 astr voiceprint download）"}

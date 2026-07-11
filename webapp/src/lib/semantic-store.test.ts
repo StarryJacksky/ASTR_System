@@ -43,6 +43,22 @@ describe("semantic store", () => {
     expect(store.getState().core).toBe("reachable");
   });
 
+  it("keeps announcement ids monotonic across clears so repeated text can be re-announced", () => {
+    const store = createSemanticStore();
+
+    store.getState().announce("状态未变化");
+    const firstId = store.getState().announcement?.id;
+    store.getState().clearAnnouncement();
+    store.getState().announce("状态未变化");
+
+    expect(firstId).toBe(1);
+    expect(store.getState().announcement).toEqual({
+      id: 2,
+      message: "状态未变化",
+      politeness: "polite",
+    });
+  });
+
   it("creates isolated stores while also exporting one app singleton and selector hook", () => {
     const first = createSemanticStore();
     const second = createSemanticStore();

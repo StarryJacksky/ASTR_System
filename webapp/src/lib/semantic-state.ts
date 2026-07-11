@@ -152,16 +152,20 @@ export function canAnimate(state: SemanticState, ownsLease: boolean): boolean {
   );
 }
 
-export function canCreateOrAdvanceTask(
+/**
+ * Preliminary UI discoverability only. This must never authorize a Task side effect:
+ * it cannot prove a device session, stop_epoch, or policy revision. W5 owns that guard.
+ */
+export function canShowTaskAdvanceEntry(
   state: SemanticState,
-  device: { authenticated: boolean; online: boolean; heartbeatFresh: boolean },
+  connectivityHints: { authenticated: boolean; online: boolean; heartbeatFresh: boolean },
 ): boolean {
   return (
     state.core === "reachable" &&
     state.safety === "normal" &&
-    device.authenticated &&
-    device.online &&
-    device.heartbeatFresh
+    connectivityHints.authenticated &&
+    connectivityHints.online &&
+    connectivityHints.heartbeatFresh
   );
 }
 

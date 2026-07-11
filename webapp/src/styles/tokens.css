@@ -27,15 +27,28 @@
   --emo-calm: #92b7ff;
   --astr-emotion-glow: var(--emo-calm);
   --touch-target: 44px;
-  --radius-small: 6px;
-  --radius-medium: 12px;
-  --radius-large: 22px;
-  --radius-jewel: 999px;
-  --corner-eclipse: 28px 5px 28px 5px;
+  --radius-small: 2px;
+  --radius-medium: 6px;
+  --radius-large: 12px;
+  --radius-jewel: 50%;
+  --corner-signature: 14px;
   --motion-instant: 120ms;
   --motion-fast: 200ms;
-  --motion-spatial: 320ms;
-  --motion-signature: 1200ms;
+  --motion-medium: 320ms;
+  --motion-ritual: 1200ms;
+  --motion-life: 4000ms;
+  --ease-standard: cubic-bezier(.2,.8,.2,1);
+  --ease-emphatic: cubic-bezier(.16,1,.3,1);
+  --layout-container-max: 1510px;
+  --layout-columns-desktop: 12;
+  --layout-columns-mobile: 4;
+  --layout-gap-min: 16px;
+  --layout-gap-max: 24px;
+  --layout-density-gap-min: 8px;
+  --layout-density-gap-max: 12px;
+  --layout-intensity-max: 30%;
+  --layout-detail-jewels-max: 1;
+  --layout-motion-jewels-max: 1;
   --dpr-desktop: 1.5;
   --dpr-mobile: 1.25;
 
@@ -48,22 +61,40 @@
   /* Display face for wordmarks, empty states, and editorial headings. */
   --font-display: "Fraunces", "Noto Serif SC", serif;
 
-  /* 字号阶梯（rem，基准 16px）*/
-  --text-xs:   0.75rem;   /* 12 — 元信息/时间戳 */
-  --text-sm:   0.875rem;  /* 14 — 次要文本 */
-  --text-base: 1rem;      /* 16 — 正文 */
-  --text-lg:   1.25rem;   /* 20 — 小标题 */
-  --text-xl:   1.75rem;   /* 28 — 区块标题 */
-  --text-2xl:  2.5rem;    /* 40 — 页面主标题 */
-  --text-3xl:  4rem;      /* 64 — 营销页 hero */
+  /* Constitutional typography scale */
+  --type--1: 11px;
+  --type-0: 13px;
+  --type-1: 16px;
+  --type-2: 20px;
+  --type-3: 28px;
+  --type-4: 48px;
+  --type-5: 72px;
   --leading-body: 1.6;
-  --leading-head: 1.2;
+  --leading-long: 1.75;
+  --leading-display: 1;
 
-  /* 间距：8pt 网格 */
-  --space-1: 4px;  --space-2: 8px;   --space-3: 12px; --space-4: 16px;
-  --space-6: 24px; --space-8: 32px;  --space-12: 48px; --space-16: 64px; --space-24: 96px;
+  /* Constitutional spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+
+  /* Backward-compatible typography aliases */
+  --text-xs: var(--type--1);
+  --text-sm: var(--type-0);
+  --text-base: var(--type-1);
+  --text-lg: var(--type-2);
+  --text-xl: var(--type-3);
+  --text-2xl: var(--type-4);
+  --text-3xl: var(--type-5);
+  --leading-head: var(--leading-display);
 
   /* Backward-compatible shape aliases */
+  --corner-eclipse: var(--corner-signature);
   --radius-sm: var(--radius-small);
   --radius-md: var(--radius-medium);
   --radius-lg: var(--radius-large);
@@ -83,15 +114,17 @@
   /* z-index 层级（锁定，禁止随手 9999）*/
   --z-base: 0; --z-panel: 10; --z-live2d: 20; --z-overlay: 100; --z-toast: 200; --z-modal: 300;
 
-  /* Backward-compatible motion aliases and extended emotional rhythms */
+  /* Backward-compatible motion aliases */
+  --motion-spatial: var(--motion-medium);
+  --motion-signature: var(--motion-ritual);
   --dur-fast: var(--motion-instant);
   --dur-base: var(--motion-fast);
-  --dur-slow: var(--motion-spatial);
-  --dur-settle: var(--motion-signature);
-  --dur-emotion: 2400ms;  /* 生命时间：情绪光迁移——"感觉到而非看到" */
-  --dur-breath:  4000ms;  /* 生命时间：呼吸循环（只属于她）*/
-  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);    /* expo-out，进场 */
-  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);   /* 对称过渡 */
+  --dur-slow: var(--motion-medium);
+  --dur-settle: var(--motion-ritual);
+  --dur-emotion: var(--motion-ritual);
+  --dur-breath: var(--motion-life);
+  --ease-out: var(--ease-emphatic);
+  --ease-inout: var(--ease-standard);
 }
 
 /* Day material inversion */

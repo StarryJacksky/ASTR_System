@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canAnimate,
-  canCreateOrAdvanceTask,
+  canShowTaskAdvanceEntry,
   canSend,
   deriveProminentStatus,
   initialSemanticState,
@@ -123,14 +123,14 @@ describe("parallel semantic state", () => {
     expect(canAnimate(ready, false)).toBe(false);
   });
 
-  it("fails closed for task side effects outside normal safety", () => {
+  it("hides the preliminary task-advance entry outside normal safety", () => {
     const state = {
       ...initialSemanticState,
       core: "reachable",
       safety: "stopUnknown",
     } satisfies SemanticState;
     expect(
-      canCreateOrAdvanceTask(state, {
+      canShowTaskAdvanceEntry(state, {
         authenticated: true,
         online: true,
         heartbeatFresh: true,
@@ -143,7 +143,7 @@ describe("parallel semantic state", () => {
     ["authentication", { authenticated: false }],
     ["device connectivity", { online: false }],
     ["heartbeat freshness", { heartbeatFresh: false }],
-  ] as const)("fails closed without %s evidence", (_label, unavailable) => {
+  ] as const)("hides the entry without the %s UI hint", (_label, unavailable) => {
     const state = {
       ...initialSemanticState,
       core: "reachable",
@@ -152,13 +152,13 @@ describe("parallel semantic state", () => {
     const device = { authenticated: true, online: true, heartbeatFresh: true };
 
     if ("core" in unavailable) {
-      expect(canCreateOrAdvanceTask({ ...state, ...unavailable }, device)).toBe(false);
+      expect(canShowTaskAdvanceEntry({ ...state, ...unavailable }, device)).toBe(false);
     } else {
-      expect(canCreateOrAdvanceTask(state, { ...device, ...unavailable })).toBe(false);
+      expect(canShowTaskAdvanceEntry(state, { ...device, ...unavailable })).toBe(false);
     }
   });
 
-  it("allows task side effects only with the full positive evidence conjunction", () => {
+  it("shows the preliminary task-advance entry from positive UI connectivity hints", () => {
     const state = {
       ...initialSemanticState,
       core: "reachable",
@@ -166,7 +166,7 @@ describe("parallel semantic state", () => {
     } satisfies SemanticState;
 
     expect(
-      canCreateOrAdvanceTask(state, {
+      canShowTaskAdvanceEntry(state, {
         authenticated: true,
         online: true,
         heartbeatFresh: true,

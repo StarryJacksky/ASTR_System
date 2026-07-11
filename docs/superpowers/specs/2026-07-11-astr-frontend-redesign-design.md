@@ -625,7 +625,8 @@ JewelLeaseController 必须保存 leaseOwner、mode、trace_id、priority、acqu
 - canFinalizeReply：decision.trace_id 与当前请求匹配，且该 decision 尚未消费。
 - canAnimate：Visibility visible、Motion full、VisualRuntime ready、当前组件持有 Jewel lease。
 - canMutateControl：Core reachable、权威值已加载且 principal 具备目标 scope；只有会启动执行或扩大副作用范围的 mutation 才额外要求 Safety normal。只读、诊断与独立 reset 流程不受该通用 guard 锁死。
-- canCreateOrAdvanceTask：actor 已认证、目标设备 online、heartbeat 未超过默认 30s TTL、Safety normal，并绑定当前 device session、stop_epoch 与 policy revision。
+- canShowTaskAdvanceEntry（W0）：仅凭 Core reachable、Safety normal 与认证/在线/heartbeat 的前端提示控制入口显隐；它不具备 device session、stop_epoch 或 policy revision，绝不能授权 Task 副作用。
+- canAuthorizeTaskAdvance（W5）：actor 已认证、目标设备 online、heartbeat 未超过默认 30s TTL、Safety normal，并绑定当前 device session、stop_epoch 与 policy revision；只有该层可授权创建或推进 Task。
 - canApproveTask：actor 已认证、目标设备 online、heartbeat 未超过默认 30s TTL、Safety normal，且 Task revision、action digest、device session、stop_epoch、policy revision 与有效期均匹配。
 - canRequestEstop：目标设备可识别，且本地或远程安全通道具备所需身份；不依赖 Core reachable、当前 Safety 或 Task 状态，同一 stop 幂等键可安全重试。即使通道不可达，控件也保持可操作并进入“未送达/送达未知”的诚实状态。
 - canResetEstop：principal 通过 reset 专属权限与新鲜二次认证，Safety 为 stoppedLatched，device session 与 expected stop_epoch 匹配，且没有未裁决的并发 stop 请求；不复用 canMutateControl 或 canApproveTask。

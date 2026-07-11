@@ -23,21 +23,24 @@ export interface SemanticStoreState extends SemanticState {
   clearAnnouncement: () => void;
 }
 
-export const createSemanticStore = () =>
-  createStore<SemanticStoreState>()((set) => ({
+export const createSemanticStore = () => {
+  let nextAnnouncementId = 0;
+
+  return createStore<SemanticStoreState>()((set) => ({
     ...initialSemanticState,
     announcement: null,
     dispatch: (event) => set((state) => ({ ...reduceSemanticState(state, event) })),
     announce: (message, politeness = "polite") =>
-      set((state) => ({
+      set({
         announcement: {
-          id: (state.announcement?.id ?? 0) + 1,
+          id: ++nextAnnouncementId,
           message,
           politeness,
         },
-      })),
+      }),
     clearAnnouncement: () => set({ announcement: null }),
   }));
+};
 
 export const semanticStore = createSemanticStore();
 

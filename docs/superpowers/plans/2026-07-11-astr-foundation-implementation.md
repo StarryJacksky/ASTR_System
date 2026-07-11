@@ -428,9 +428,9 @@ it("requires the full visual conjunction before animation", () => {
   expect(canAnimate({ ...ready, visibility: "hidden" }, true)).toBe(false);
 });
 
-it("fails closed for task side effects outside normal safety", () => {
+it("hides the preliminary task-advance entry outside normal safety", () => {
   const state = { ...initialSemanticState, core: "reachable", safety: "stopUnknown" };
-  expect(canCreateOrAdvanceTask(state, { authenticated: true, online: true, heartbeatFresh: true })).toBe(false);
+  expect(canShowTaskAdvanceEntry(state, { authenticated: true, online: true, heartbeatFresh: true })).toBe(false);
 });
 
 it("does not let visual context loss overwrite Core reachability", () => {
@@ -488,9 +488,10 @@ export function canSend(
 
 export function canAnimate(state: SemanticState, ownsLease: boolean): boolean;
 
-export function canCreateOrAdvanceTask(
+/** UI discoverability only; W5 owns the authoritative Task side-effect guard. */
+export function canShowTaskAdvanceEntry(
   state: SemanticState,
-  device: { authenticated: boolean; online: boolean; heartbeatFresh: boolean },
+  connectivityHints: { authenticated: boolean; online: boolean; heartbeatFresh: boolean },
 ): boolean;
 
 export function deriveProminentStatus(state: SemanticState):
