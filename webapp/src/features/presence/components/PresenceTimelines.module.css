@@ -1,0 +1,253 @@
+.conversationRegion,
+.lifeRegion {
+  display: flex;
+  min-block-size: 0;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: var(--astr-text);
+}
+
+.regionHeader,
+.lifeHeader {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.regionTitle,
+.lifeTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-2);
+  font-weight: 600;
+  letter-spacing: 0.035em;
+}
+
+.regionKicker,
+.meta,
+.phase,
+.platform,
+.connectionCopy,
+.activityMeta,
+.diagnosticCopy {
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  letter-spacing: 0.04em;
+}
+
+.scrollPort {
+  block-size: 100%;
+  min-block-size: 12rem;
+  min-inline-size: 0;
+  flex: 1;
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  padding: var(--space-3) var(--space-2) var(--space-5);
+  scrollbar-gutter: stable;
+}
+
+.scrollFrame {
+  position: relative;
+  min-block-size: 0;
+  min-inline-size: 0;
+  flex: 1;
+}
+
+.scrollPort:focus-visible {
+  border-radius: var(--radius-medium);
+  outline: 2px solid var(--astr-action);
+  outline-offset: 2px;
+}
+
+.timeline,
+.lifeList {
+  display: flex;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline {
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.messageItem {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.userMessage {
+  align-items: flex-end;
+}
+
+.assistantMessage {
+  align-items: flex-start;
+}
+
+.messageMeta {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.author {
+  color: var(--astr-text);
+  font-size: var(--type-0);
+  font-weight: 650;
+}
+
+.bubble {
+  max-inline-size: min(46rem, 86%);
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--astr-hairline);
+  border-radius: var(--radius-large);
+  font-size: var(--type-1);
+  line-height: var(--leading-long);
+  white-space: pre-wrap;
+}
+
+.assistantBubble {
+  border-start-start-radius: var(--radius-small);
+  background: var(--astr-surface-2);
+  box-shadow: var(--glow-her-1);
+  color: var(--astr-text);
+}
+
+.userBubble {
+  border-end-end-radius: var(--radius-small);
+  border-color: color-mix(in srgb, var(--astr-action) 48%, var(--astr-hairline));
+  background: var(--astr-action);
+  color: var(--astr-on-accent);
+}
+
+.provisionalBubble,
+.waitingBubble {
+  border-style: dashed;
+}
+
+.emptyCopy {
+  margin: auto;
+  color: var(--astr-text-2);
+  font-size: var(--type-1);
+  line-height: var(--leading-long);
+  text-align: center;
+}
+
+.returnLatest,
+.lifeToggle {
+  min-block-size: var(--touch-target);
+  min-inline-size: var(--touch-target);
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: var(--radius-large);
+  background: var(--astr-surface-2);
+  color: var(--astr-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.returnLatest {
+  position: absolute;
+  inset-inline-end: var(--space-4);
+  inset-block-end: var(--space-4);
+  z-index: var(--z-panel);
+  padding-inline: var(--space-4);
+  box-shadow: var(--shadow-2);
+}
+
+.returnLatest:focus-visible,
+.lifeToggle:focus-visible {
+  outline: 2px solid var(--astr-action);
+  outline-offset: 2px;
+}
+
+.activityBlock {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: 2px solid var(--astr-soul);
+  background: color-mix(in srgb, var(--astr-surface-2) 72%, transparent);
+}
+
+.lifePanel {
+  display: grid;
+  min-block-size: 0;
+  min-inline-size: 0;
+  gap: var(--space-3);
+}
+
+.activityLabel,
+.summaryLabel {
+  color: var(--astr-soul);
+  font-size: var(--type--1);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.activityText,
+.summaryText,
+.connectionCopy,
+.diagnosticCopy {
+  margin: 0;
+}
+
+.activityText,
+.summaryText {
+  overflow-wrap: anywhere;
+  font-size: var(--type-0);
+  line-height: var(--leading-long);
+}
+
+.lifeList {
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.lifeItem {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--astr-hairline);
+  border-radius: var(--radius-medium);
+  background: color-mix(in srgb, var(--astr-surface) 82%, transparent);
+}
+
+.lifeItemHeader {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+@media (max-width: 480px) {
+  .scrollPort {
+    padding-inline: 0;
+  }
+
+  .bubble {
+    max-inline-size: 92%;
+    padding: var(--space-3);
+  }
+
+  .returnLatest {
+    inset-inline-end: var(--space-2);
+  }
+}
