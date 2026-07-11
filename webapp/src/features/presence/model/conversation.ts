@@ -260,7 +260,9 @@ function normalizeReplyFrame(
   };
 
   if (event.type === "soul.stream") {
-    const { seq, delta = "", done = false } = payload;
+    const seq = readOwnField(payload, "seq");
+    const delta = Object.hasOwn(payload, "delta") ? readOwnField(payload, "delta") : "";
+    const done = Object.hasOwn(payload, "done") ? readOwnField(payload, "done") : false;
     if (
       !Number.isInteger(seq) ||
       (seq as number) < 1 ||
@@ -282,7 +284,7 @@ function normalizeReplyFrame(
   }
 
   if (event.type === "soul.decision") {
-    const replyText = payload.reply_text;
+    const replyText = readOwnField(payload, "reply_text");
     if (typeof replyText !== "string" || replyText.length === 0) return null;
     return {
       kind: "decision",
@@ -600,13 +602,22 @@ function cloneJsonValue(value: unknown, ancestors: readonly object[]): JsonClone
     return { valid: false };
   }
 
-  const cloned: { [key: string]: JsonValue } = {};
+  const cloned = Object.create(null) as { [key: string]: JsonValue };
   for (const key of Object.keys(value)) {
     const result = cloneJsonValue(value[key], nextAncestors);
     if (!result.valid) return result;
-    cloned[key] = result.value;
+    Object.defineProperty(cloned, key, {
+      value: result.value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return { valid: true, value: cloned };
+}
+
+function readOwnField(record: Readonly<Record<string, unknown>>, key: string): unknown {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

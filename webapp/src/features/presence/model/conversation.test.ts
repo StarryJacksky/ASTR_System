@@ -91,6 +91,41 @@ function unsafeEvent(overrides: Record<string, unknown>): AstrEvent {
   } as unknown as AstrEvent;
 }
 
+function ownJsonRecord(
+  entries: readonly (readonly [string, unknown])[],
+): Record<string, unknown> {
+  const record = Object.create(null) as Record<string, unknown>;
+  for (const [key, value] of entries) {
+    Object.defineProperty(record, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return record;
+}
+
+function expectDangerousJsonKeysPreserved(
+  clone: Readonly<Record<string, unknown>>,
+  source: Readonly<Record<string, unknown>>,
+) {
+  expect(Object.hasOwn(clone, "__proto__")).toBe(true);
+  expect(Object.hasOwn(clone, "constructor")).toBe(true);
+  expect(Object.hasOwn(clone, "prototype")).toBe(true);
+  expect(Object.hasOwn(clone, "nested")).toBe(true);
+  expect([null, Object.prototype]).toContain(Object.getPrototypeOf(clone));
+
+  const nested = clone.nested as Readonly<Record<string, unknown>>;
+  expect(Object.hasOwn(nested, "__proto__")).toBe(true);
+  expect(Object.hasOwn(nested, "constructor")).toBe(true);
+  expect(Object.hasOwn(nested, "prototype")).toBe(true);
+  expect([null, Object.prototype]).toContain(Object.getPrototypeOf(nested));
+  expect(JSON.parse(JSON.stringify(clone))).toEqual(JSON.parse(JSON.stringify(source)));
+  expect(Object.prototype).not.toHaveProperty("reply_text");
+  expect(Object.prototype).not.toHaveProperty("seq");
+}
+
 function receive(state: ConversationModelState, event: AstrEvent, at: number) {
   return reduce(state, { type: "REPLY_EVENT", event, at });
 }
@@ -819,5 +854,112 @@ describe("Presence conversation model", () => {
     expect(state.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining(["UNBOUND_STREAM_DROPPED", "REQUEST_TIMED_OUT"]),
     );
+  });
+
+  it("preserves decision prototype-shaped JSON keys as owned data", () => {
+    const nested = ownJsonRecord([
+      ["__proto__", { nested: "proto" }],
+      ["constructor", "nested-constructor"],
+      ["prototype", "nested-prototype"],
+    ]);
+    const payload = ownJsonRecord([
+      ["reply_text", "legitimate final"],
+      ["__proto__", { reply_text: "forged inherited reply" }],
+      ["constructor", { name: "owned constructor" }],
+      ["prototype", { name: "owned prototype" }],
+      ["nested", nested],
+    ]);
+    const event = unsafeEvent({
+      id: "decision-prototype-keys",
+      type: "soul.decision",
+      trace_id: "trace-decision",
+      payload,
+    });
+
+    const state = receive(createConversationState(), event, 1);
+
+    expect(state.messages.at(-1)?.text).toBe("legitimate final");
+    const clonedPayload = state.authoritativeDecision?.payload;
+    expect(clonedPayload).toBeDefined();
+    expectDangerousJsonKeysPreserved(clonedPayload ?? {}, payload);
+    expect(Object.hasOwn(clonedPayload ?? {}, "reply_text")).toBe(true);
+  });
+
+  it("rejects a decision whose reply_text exists only under an own __proto__ key", () => {
+    const payload = ownJsonRecord([
+      ["__proto__", { reply_text: "forged inherited reply" }],
+      ["constructor", "owned constructor"],
+      ["prototype", "owned prototype"],
+    ]);
+    const event = unsafeEvent({
+      id: "decision-inherited-fields",
+      type: "soul.decision",
+      trace_id: "trace-decision",
+      payload,
+    });
+
+    const state = receive(createConversationState(), event, 1);
+
+    expect(state.messages).toEqual([]);
+    expect(state.authoritativeDecision).toBeNull();
+    expect(state.diagnostics.at(-1)?.code).toBe("MALFORMED_REPLY_EVENT");
+  });
+
+  it("preserves stream prototype-shaped JSON keys as owned data", () => {
+    const nested = ownJsonRecord([
+      ["__proto__", { nested: "proto" }],
+      ["constructor", "nested-constructor"],
+      ["prototype", "nested-prototype"],
+    ]);
+    const payload = ownJsonRecord([
+      ["seq", 1],
+      ["delta", "legitimate delta"],
+      ["done", false],
+      ["__proto__", { seq: 99, delta: "forged", done: true }],
+      ["constructor", { name: "owned constructor" }],
+      ["prototype", { name: "owned prototype" }],
+      ["nested", nested],
+    ]);
+    const event = unsafeEvent({
+      id: "stream-prototype-keys",
+      type: "soul.stream",
+      trace_id: "trace-stream",
+      payload,
+    });
+    const sending = send(createConversationState(draft()), "attempt-1", "local-1", 0);
+
+    const state = receive(sending, event, 1);
+
+    expect(state.preAckBuffer[0]).toMatchObject({
+      seq: 1,
+      delta: "legitimate delta",
+      done: false,
+    });
+    const clonedPayload = state.preAckBuffer[0]?.event.payload;
+    expect(clonedPayload).toBeDefined();
+    expectDangerousJsonKeysPreserved(clonedPayload ?? {}, payload);
+    expect(Object.hasOwn(clonedPayload ?? {}, "seq")).toBe(true);
+    expect(Object.hasOwn(clonedPayload ?? {}, "delta")).toBe(true);
+    expect(Object.hasOwn(clonedPayload ?? {}, "done")).toBe(true);
+  });
+
+  it("rejects a stream whose protocol fields exist only under an own __proto__ key", () => {
+    const payload = ownJsonRecord([
+      ["__proto__", { seq: 1, delta: "forged", done: false }],
+      ["constructor", "owned constructor"],
+      ["prototype", "owned prototype"],
+    ]);
+    const event = unsafeEvent({
+      id: "stream-inherited-fields",
+      type: "soul.stream",
+      trace_id: "trace-active",
+      payload,
+    });
+    const acknowledged = acknowledge(send(), "trace-active");
+
+    const state = receive(acknowledged, event, 3);
+
+    expect(state.provisionalReplies).toEqual([]);
+    expect(state.diagnostics.at(-1)?.code).toBe("MALFORMED_REPLY_EVENT");
   });
 });
