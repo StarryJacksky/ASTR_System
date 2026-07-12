@@ -11,7 +11,7 @@ describe("static Soul presence", () => {
       <SoulPresence visualRuntime="loading" />,
     );
     const lens = container.querySelector("[data-static-soul-lens]");
-    const fallback = screen.getByText("视觉呈现正在加载；静态 Soul 持续可用。");
+    const fallback = screen.getByText("动态视觉场尚未接入；静态 Soul 持续可用。");
 
     expect(lens?.tagName).toBe("svg");
     expect(lens).toHaveAttribute("aria-hidden", "true");
@@ -41,6 +41,7 @@ describe("static Soul presence", () => {
       <SoulPresence
         activity="正在整理记忆"
         model="astr-local"
+        visualConfigured
         visualRuntime="loading"
       />,
     );
@@ -52,14 +53,24 @@ describe("static Soul presence", () => {
     expect(view.container).not.toHaveTextContent(/provenance[^\n]*\d+%/i);
 
     view.rerender(
-      <SoulPresence activity="正在整理记忆" model="astr-local" visualRuntime="contextLost" />,
+      <SoulPresence
+        activity="正在整理记忆"
+        model="astr-local"
+        visualConfigured
+        visualRuntime="contextLost"
+      />,
     );
     expect(view.container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
     expect(screen.getByText("视觉呈现暂不可用；已保持静态 Soul。"))
       .toHaveAttribute("data-visual-runtime", "contextLost");
 
     view.rerender(
-      <SoulPresence activity="正在整理记忆" model="astr-local" visualRuntime="ready" />,
+      <SoulPresence
+        activity="正在整理记忆"
+        model="astr-local"
+        visualConfigured
+        visualRuntime="ready"
+      />,
     );
     expect(view.container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
     expect(screen.getByText("视觉呈现已就绪；静态 Soul 仍作为连续性锚点。"))
@@ -75,8 +86,20 @@ describe("static Soul presence", () => {
     );
 
     expect(screen.getByTestId("reserved-visual-slot")).toBeVisible();
+    expect(screen.getByTestId("reserved-visual-slot").parentElement)
+      .not.toHaveAttribute("aria-hidden");
     expect(container.querySelector("canvas")).toBeNull();
     expect(container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
+  });
+
+  it("mounts the visual Host by default without replacing the static Soul or provenance", () => {
+    const { container } = render(<SoulPresence visualRuntime="loading" />);
+
+    expect(container.querySelector("[data-presence-visual-host]")).toBeInTheDocument();
+    expect(container.querySelector("[data-presence-visual-surface]"))
+      .toHaveAttribute("aria-hidden", "true");
+    expect(container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
+    expect(screen.getByText(/provenance：未提供/i)).toBeVisible();
   });
 
   it("declares a static token-only Soul material without continuous motion", () => {

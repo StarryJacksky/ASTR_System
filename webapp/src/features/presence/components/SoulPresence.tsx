@@ -4,11 +4,13 @@ import type { VisualRuntimeState } from "@/lib/semantic-state";
 
 import styles from "./SoulPresence.module.css";
 import { StaticSoulLens } from "./StaticSoulLens";
+import { PresenceVisualHost } from "../visual/PresenceVisualHost";
 
 export interface SoulPresenceProps {
   readonly displayName?: string;
   readonly activity?: string;
   readonly model?: string;
+  readonly visualConfigured?: boolean;
   readonly visualRuntime: VisualRuntimeState;
   readonly visualSlot?: ReactNode;
 }
@@ -18,6 +20,7 @@ const RUNTIME_COPY: Readonly<Record<VisualRuntimeState, string>> = {
   ready: "视觉呈现已就绪；静态 Soul 仍作为连续性锚点。",
   contextLost: "视觉呈现暂不可用；已保持静态 Soul。",
 };
+const UNCONFIGURED_VISUAL_COPY = "动态视觉场尚未接入；静态 Soul 持续可用。";
 
 function optionalText(value: string | undefined): string | null {
   const normalized = value?.trim();
@@ -28,6 +31,7 @@ export function SoulPresence({
   displayName,
   activity,
   model,
+  visualConfigured = false,
   visualRuntime,
   visualSlot,
 }: SoulPresenceProps) {
@@ -46,13 +50,13 @@ export function SoulPresence({
       <div className={styles.visualStage}>
         <StaticSoulLens className={styles.lens} />
         <p className={styles.runtimeCopy} data-visual-runtime={visualRuntime}>
-          {RUNTIME_COPY[visualRuntime]}
+          {visualConfigured
+            ? RUNTIME_COPY[visualRuntime]
+            : UNCONFIGURED_VISUAL_COPY}
         </p>
-        {visualSlot ? (
-          <div aria-hidden="true" className={styles.visualSlot} data-visual-slot="reserved">
-            {visualSlot}
-          </div>
-        ) : null}
+        <div className={styles.visualSlot} data-visual-slot="reserved">
+          {visualSlot ?? <PresenceVisualHost />}
+        </div>
       </div>
 
       <dl className={styles.truthLedger}>

@@ -162,6 +162,8 @@
 }
 
 .runtimeCopy {
+  position: relative;
+  z-index: 2;
   max-inline-size: 30rem;
   text-align: center;
 }
@@ -169,7 +171,47 @@
 .visualSlot {
   position: absolute;
   inset: 0;
+}
+
+.visualSlot :global([data-presence-visual-host]) {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  min-inline-size: 0;
+  place-items: center;
+}
+
+.visualSlot :global([data-presence-visual-surface]) {
+  position: absolute;
+  inset: 0;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
   pointer-events: none;
+}
+
+.visualSlot :global([data-presence-visual-surface] > canvas) {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+.visualSlot :global([data-presence-visual-retry]) {
+  position: absolute;
+  z-index: 3;
+  inset-block-end: var(--space-3);
+  inset-inline-start: 50%;
+  min-block-size: var(--touch-target);
+  min-inline-size: var(--touch-target);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--astr-hairline-strong);
+  background: var(--astr-surface-2);
+  color: var(--astr-text);
+  font: inherit;
+  pointer-events: auto;
+  transform: translateX(-50%);
 }
 
 .truthLedger {
