@@ -5,6 +5,8 @@ import {
   JewelLeaseController,
   type JewelCapabilities,
   type JewelEnvironment,
+  type JewelLeaseHandle,
+  type JewelLeaseIntent,
 } from "./jewel-lease";
 
 const READY_ENVIRONMENT: JewelEnvironment = {
@@ -17,6 +19,15 @@ function readyController(capabilities: Partial<JewelCapabilities> = {}): JewelLe
   const leases = new JewelLeaseController(capabilities);
   leases.setEnvironment(READY_ENVIRONMENT);
   return leases;
+}
+
+function acquireOrThrow(
+  leases: JewelLeaseController,
+  intent: JewelLeaseIntent,
+): JewelLeaseHandle {
+  const handle = leases.acquire(intent);
+  if (handle === null) throw new Error("expected Jewel lease acquisition to succeed");
+  return handle;
 }
 
 describe("global Jewel lease", () => {
@@ -163,27 +174,87 @@ describe("global Jewel lease", () => {
 
   it("transfers stream ownership from Lens to speech without overlap", () => {
     const leases = readyController();
-    leases.acquire({ owner: "soulLens", mode: "streamStage", traceId: "trc_1" });
+    const lensHandle = acquireOrThrow(leases, {
+      owner: "soulLens",
+      mode: "streamStage",
+      traceId: "trc_1",
+    });
 
     expect(leases.acquire({ owner: "live2d", mode: "speech", traceId: "trc_1" })).toBeNull();
     expect(leases.current()).toMatchObject({ owner: "soulLens", mode: "streamStage" });
 
-    leases.release("soulLens", "streamStage");
+    leases.complete(lensHandle);
     leases.acquire({ owner: "live2d", mode: "speech", traceId: "trc_1" });
     expect(leases.current()).toMatchObject({ owner: "live2d", mode: "speech" });
   });
 
-  it("releases only the exact owner and mode pair and remains idempotent", () => {
+  it("releases only the exact handle and remains idempotent", () => {
     const leases = readyController();
-    leases.acquire({ owner: "live2d", mode: "speech", traceId: "trc_1" });
+    const speechHandle = acquireOrThrow(leases, {
+      owner: "live2d",
+      mode: "speech",
+      traceId: "trc_1",
+    });
+    const unrelated = acquireOrThrow(readyController(), {
+      owner: "live2d",
+      mode: "speech",
+      traceId: "trc_1",
+    });
 
-    leases.release("live2d", "idle");
-    leases.release("soulLens", "speech");
+    leases.release(unrelated);
     expect(leases.current()).toMatchObject({ owner: "live2d", mode: "speech" });
 
-    leases.release("live2d", "speech");
-    leases.release("live2d", "speech");
+    leases.release(speechHandle);
+    leases.release(speechHandle);
     expect(leases.current()).toBeNull();
+  });
+
+  it("does not let stale completion or release clear a newer same-pair lease", () => {
+    const leases = readyController();
+    const oldHandle = acquireOrThrow(leases, {
+      owner: "orbitTraveler",
+      mode: "navigate",
+      traceId: "trc_old",
+      semanticEnd: "old-target",
+    });
+    const newHandle = acquireOrThrow(leases, {
+      owner: "orbitTraveler",
+      mode: "navigate",
+      traceId: "trc_new",
+      semanticEnd: "new-target",
+    });
+
+    leases.complete(oldHandle);
+    leases.release(oldHandle);
+
+    expect(leases.current()).toBe(newHandle);
+    expect(leases.current()).toMatchObject({
+      traceId: "trc_new",
+      semanticEnd: "new-target",
+    });
+
+    leases.complete(newHandle);
+    leases.complete(newHandle);
+    expect(leases.current()).toBeNull();
+  });
+
+  it("does not let a preempted handle release the higher-priority lease", () => {
+    const leases = readyController();
+    const idleHandle = acquireOrThrow(leases, {
+      owner: "live2d",
+      mode: "idle",
+      traceId: null,
+    });
+    const stopHandle = acquireOrThrow(leases, {
+      owner: "safetyBoundary",
+      mode: "stop",
+      traceId: "trc_stop",
+    });
+
+    leases.complete(idleHandle);
+    leases.release(idleHandle);
+
+    expect(leases.current()).toBe(stopHandle);
   });
 
   it.each(["hidden", "offscreen"] as const)(
@@ -258,10 +329,13 @@ describe("global Jewel lease", () => {
   it("enables each success ritual only from its own capability evidence", () => {
     const leases = readyController({ canSealApproval: true });
 
-    expect(
-      leases.acquire({ owner: "authorizationSeal", mode: "confirmed", traceId: "trc_seal" }),
-    ).toMatchObject({ owner: "authorizationSeal", mode: "confirmed" });
-    leases.release("authorizationSeal", "confirmed");
+    const sealHandle = acquireOrThrow(leases, {
+      owner: "authorizationSeal",
+      mode: "confirmed",
+      traceId: "trc_seal",
+    });
+    expect(sealHandle).toMatchObject({ owner: "authorizationSeal", mode: "confirmed" });
+    leases.release(sealHandle);
     expect(
       leases.acquire({ owner: "artifactReturn", mode: "complete", traceId: "trc_artifact" }),
     ).toBeNull();
@@ -299,6 +373,50 @@ describe("global Jewel lease", () => {
       expect(leases.current()).toBeNull();
     },
   );
+
+  it("invalidates old handles across environment revocation and re-acquisition", () => {
+    const leases = readyController();
+    const beforeHidden = acquireOrThrow(leases, {
+      owner: "live2d",
+      mode: "idle",
+      traceId: "trc_before_hidden",
+    });
+
+    leases.setEnvironment({ visibility: "hidden", motion: "full", runtime: "ready" });
+    leases.setEnvironment(READY_ENVIRONMENT);
+    const afterHidden = acquireOrThrow(leases, {
+      owner: "live2d",
+      mode: "idle",
+      traceId: "trc_after_hidden",
+    });
+
+    leases.release(beforeHidden);
+    leases.complete(beforeHidden);
+
+    expect(leases.current()).toBe(afterHidden);
+  });
+
+  it("invalidates old handles across capability revocation and re-acquisition", () => {
+    const leases = readyController({ canReturnArtifact: true });
+    const beforeRevocation = acquireOrThrow(leases, {
+      owner: "artifactReturn",
+      mode: "complete",
+      traceId: "trc_before_revocation",
+    });
+
+    leases.setCapabilities({ canReturnArtifact: false });
+    leases.setCapabilities({ canReturnArtifact: true });
+    const afterRevocation = acquireOrThrow(leases, {
+      owner: "artifactReturn",
+      mode: "complete",
+      traceId: "trc_after_revocation",
+    });
+
+    leases.complete(beforeRevocation);
+    leases.release(beforeRevocation);
+
+    expect(leases.current()).toBe(afterRevocation);
+  });
 
   it("stores a null semantic end when none is supplied", () => {
     const leases = readyController();

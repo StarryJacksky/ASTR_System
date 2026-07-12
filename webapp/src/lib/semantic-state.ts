@@ -37,7 +37,7 @@ export const initialSemanticState: SemanticState = {
   lifeSse: "closed",
   conversation: "empty",
   visualRuntime: "loading",
-  visibility: "visible",
+  visibility: "offscreen",
   motion: "full",
   safety: "normal",
   task: "none",
@@ -69,8 +69,7 @@ export type SemanticEvent =
   | { type: "REDUCE_OFF" }
   | { type: "VISUAL_PAUSE" }
   | { type: "VISUAL_RESUME" }
-  | { type: "DOCUMENT_HIDDEN" }
-  | { type: "DOCUMENT_VISIBLE" }
+  | { type: "VISIBILITY_DERIVED"; visibility: VisibilityState }
   | { type: "ESTOP_REQUESTED" }
   | { type: "ESTOP_ACK" }
   | { type: "ESTOP_ACK_TIMEOUT" }
@@ -137,10 +136,8 @@ export function reduceSemanticState(state: SemanticState, event: SemanticEvent):
       return { ...state, motion: "paused" };
     case "VISUAL_RESUME":
       return { ...state, motion: "full" };
-    case "DOCUMENT_HIDDEN":
-      return { ...state, visibility: "hidden" };
-    case "DOCUMENT_VISIBLE":
-      return { ...state, visibility: "visible" };
+    case "VISIBILITY_DERIVED":
+      return { ...state, visibility: event.visibility };
     case "ESTOP_REQUESTED":
       return { ...state, safety: "stopRequested" };
     case "ESTOP_ACK":

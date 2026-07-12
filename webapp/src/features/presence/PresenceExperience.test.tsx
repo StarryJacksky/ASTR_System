@@ -17,8 +17,27 @@ const controllerMocks = vi.hoisted(() => ({
   usePresenceController: vi.fn(),
 }));
 
+const visualBridgeMocks = vi.hoisted(() => ({
+  jewel: vi.fn((props?: unknown) => {
+    void props;
+    return null;
+  }),
+  visibility: vi.fn((props: unknown) => {
+    void props;
+    return null;
+  }),
+}));
+
 vi.mock("@/features/presence/controller/use-presence-controller", () => ({
   usePresenceController: controllerMocks.usePresenceController,
+}));
+
+vi.mock("./visual/JewelRuntimeBridge", () => ({
+  JewelRuntimeBridge: visualBridgeMocks.jewel,
+}));
+
+vi.mock("./visual/PresenceVisibilityBridge", () => ({
+  PresenceVisibilityBridge: visualBridgeMocks.visibility,
 }));
 
 import { PresenceExperience } from "./PresenceExperience";
@@ -131,6 +150,8 @@ describe("PresenceExperience", () => {
     const { container } = render(<PresenceExperience />);
 
     expect(controllerMocks.usePresenceController).toHaveBeenCalledTimes(1);
+    expect(visualBridgeMocks.jewel).toHaveBeenCalledTimes(1);
+    expect(visualBridgeMocks.visibility).toHaveBeenCalledTimes(1);
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     expect(screen.getByRole("main")).toHaveAttribute("tabindex", "-1");
@@ -154,6 +175,12 @@ describe("PresenceExperience", () => {
     expect(screen.getByRole("heading", { level: 2, name: "澄月" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "astr_internal_only" })).not.toBeInTheDocument();
     expect(container.querySelector("canvas")).toBeNull();
+    const visibilityProps = visualBridgeMocks.visibility.mock.calls[0]?.[0] as
+      | { readonly targetRef?: { readonly current: Element | null } }
+      | undefined;
+    expect(visibilityProps?.targetRef?.current).toBe(
+      container.querySelector("[data-presence-soul]"),
+    );
   });
 
   it("changes layout only from explicit deep-chat intent and never unmounts Soul", () => {
@@ -485,5 +512,7 @@ describe("PresenceExperience", () => {
     expect(runtimeSources).not.toMatch(
       /requestAnimationFrame|getContext|PIXI|pixi|Live2D|Ticker\.shared|IntersectionObserver|ResizeObserver/,
     );
+    expect(runtimeSources.match(/<JewelRuntimeBridge\s*\/>/g)).toHaveLength(1);
+    expect(runtimeSources.match(/<PresenceVisibilityBridge\b/g)).toHaveLength(1);
   });
 });

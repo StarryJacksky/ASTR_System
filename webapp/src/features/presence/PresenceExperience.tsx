@@ -16,6 +16,8 @@ import {
 } from "./components/OrbitNavigation";
 import { PresenceHeader } from "./components/PresenceHeader";
 import { SoulPresence } from "./components/SoulPresence";
+import { JewelRuntimeBridge } from "./visual/JewelRuntimeBridge";
+import { PresenceVisibilityBridge } from "./visual/PresenceVisibilityBridge";
 
 type PresenceLayout = "balanced" | "deep";
 
@@ -55,6 +57,7 @@ export function PresenceExperience() {
   const { snapshot, actions } = usePresenceController();
   const [ui, setUi] = useState<PresenceUiState>(INITIAL_UI_STATE);
   const orbitRegionRef = useRef<HTMLDivElement>(null);
+  const soulFieldRef = useRef<HTMLDivElement>(null);
   const lifeIslandRef = useRef<HTMLDivElement>(null);
   const lifeInitiatorRef = useRef<HTMLElement | null>(null);
   const returnLifeFocusRef = useRef(false);
@@ -187,6 +190,8 @@ export function PresenceExperience() {
 
   return (
     <>
+      <JewelRuntimeBridge />
+      <PresenceVisibilityBridge targetRef={soulFieldRef} />
       <a className={`astr-skip-link ${styles.composerSkip}`} href="#presence-message-input">
         跳到消息输入
       </a>
@@ -244,7 +249,11 @@ export function PresenceExperience() {
             />
           </section>
 
-          <div className={styles.soulField} data-presence-soul="true">
+          <div
+            ref={soulFieldRef}
+            className={styles.soulField}
+            data-presence-soul="true"
+          >
             <SoulPresence
               activity={snapshot.status?.activity}
               displayName={snapshot.status?.displayName}

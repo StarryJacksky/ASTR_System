@@ -66,6 +66,12 @@ export interface JewelLease {
   readonly semanticEnd: string | null;
 }
 
+const JEWEL_LEASE_GENERATION: unique symbol = Symbol("ASTR Jewel lease generation");
+
+export type JewelLeaseHandle = JewelLease & {
+  readonly [JEWEL_LEASE_GENERATION]: symbol;
+};
+
 const DEFAULT_ENVIRONMENT: JewelEnvironment = {
   visibility: "visible",
   motion: "full",
@@ -103,7 +109,7 @@ function normalizeCapabilities(
 }
 
 export class JewelLeaseController {
-  private activeLease: JewelLease | null = null;
+  private activeLease: JewelLeaseHandle | null = null;
   private environment: JewelEnvironment = { ...DEFAULT_ENVIRONMENT };
   private capabilities: JewelCapabilities;
 
@@ -111,20 +117,21 @@ export class JewelLeaseController {
     this.capabilities = normalizeCapabilities(capabilities);
   }
 
-  acquire(intent: JewelLeaseIntent): JewelLease | null {
+  acquire(intent: JewelLeaseIntent): JewelLeaseHandle | null {
     if (!this.canAnimate()) return null;
 
     const priority = resolvePriority(intent.owner, intent.mode);
     if (priority === null || !this.hasRequiredCapability(intent.owner, intent.mode)) return null;
     if (this.activeLease !== null && priority < this.activeLease.priority) return null;
 
-    const lease: JewelLease = Object.freeze({
+    const lease: JewelLeaseHandle = Object.freeze({
       owner: intent.owner,
       mode: intent.mode,
       traceId: intent.traceId,
       priority,
       acquiredAt: Date.now(),
       semanticEnd: intent.semanticEnd ?? null,
+      [JEWEL_LEASE_GENERATION]: Symbol("Jewel lease"),
     });
     this.activeLease = lease;
     return lease;
@@ -134,10 +141,14 @@ export class JewelLeaseController {
     return this.activeLease;
   }
 
-  release(owner: JewelOwner, mode: JewelMode): void {
-    if (this.activeLease?.owner === owner && this.activeLease.mode === mode) {
+  release(handle: JewelLeaseHandle): void {
+    if (this.activeLease === handle) {
       this.activeLease = null;
     }
+  }
+
+  complete(handle: JewelLeaseHandle): void {
+    this.release(handle);
   }
 
   setEnvironment(environment: JewelEnvironment): void {

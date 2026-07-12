@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { initialSemanticState } from "@/lib/semantic-state";
 import { semanticStore } from "@/lib/semantic-store";
+import type { PresenceVisibilityCoordinator } from "@/features/presence/visual/visibility-coordinator";
 
 import { SemanticRuntimeBridge } from "./SemanticRuntimeBridge";
 
@@ -58,6 +59,18 @@ function createReducedMotionQuery(initialMatches = false) {
   };
 }
 
+function createVisibilityCoordinator(): PresenceVisibilityCoordinator {
+  return {
+    getSnapshot: () => ({
+      documentVisible: true,
+      viewportOnscreen: null,
+      visibility: "offscreen",
+    }),
+    setDocumentVisible: vi.fn(),
+    setViewportOnscreen: vi.fn(),
+  };
+}
+
 describe("SemanticRuntimeBridge", () => {
   beforeEach(() => {
     setDocumentVisibility("visible");
@@ -75,25 +88,28 @@ describe("SemanticRuntimeBridge", () => {
     }
   });
 
-  it("synchronizes the current and changing document visibility", () => {
+  it("feeds current and changing document facts into the visibility coordinator", () => {
     const reducedMotion = createReducedMotionQuery();
     vi.spyOn(window, "matchMedia").mockReturnValue(reducedMotion.mediaQuery);
+    const visibilityCoordinator = createVisibilityCoordinator();
     setDocumentVisibility("hidden");
 
-    render(<SemanticRuntimeBridge />);
+    render(<SemanticRuntimeBridge visibilityCoordinator={visibilityCoordinator} />);
 
-    expect(semanticStore.getState().visibility).toBe("hidden");
+    expect(visibilityCoordinator.setDocumentVisible).toHaveBeenLastCalledWith(false);
+    expect(semanticStore.getState().visibility).toBe("offscreen");
 
     setDocumentVisibility("visible");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
 
-    expect(semanticStore.getState().visibility).toBe("visible");
+    expect(visibilityCoordinator.setDocumentVisible).toHaveBeenLastCalledWith(true);
+    expect(semanticStore.getState().visibility).toBe("offscreen");
   });
 
   it("tracks reduced-motion changes while preserving an explicit pause", () => {
     const reducedMotion = createReducedMotionQuery();
     vi.spyOn(window, "matchMedia").mockReturnValue(reducedMotion.mediaQuery);
-    render(<SemanticRuntimeBridge />);
+    render(<SemanticRuntimeBridge visibilityCoordinator={createVisibilityCoordinator()} />);
 
     reducedMotion.setMatches(true);
     expect(semanticStore.getState().motion).toBe("reduced");
@@ -111,7 +127,7 @@ describe("SemanticRuntimeBridge", () => {
   it("reapplies live reduced-motion truth whenever visual motion resumes", () => {
     const reducedMotion = createReducedMotionQuery();
     vi.spyOn(window, "matchMedia").mockReturnValue(reducedMotion.mediaQuery);
-    render(<SemanticRuntimeBridge />);
+    render(<SemanticRuntimeBridge visibilityCoordinator={createVisibilityCoordinator()} />);
 
     act(() => semanticStore.getState().dispatch({ type: "VISUAL_PAUSE" }));
     reducedMotion.setMatches(true);
@@ -130,7 +146,9 @@ describe("SemanticRuntimeBridge", () => {
     const addEventListener = vi.spyOn(document, "addEventListener");
     const removeEventListener = vi.spyOn(document, "removeEventListener");
 
-    const { container, unmount } = render(<SemanticRuntimeBridge />);
+    const { container, unmount } = render(
+      <SemanticRuntimeBridge visibilityCoordinator={createVisibilityCoordinator()} />,
+    );
 
     const visibilityRegistrations = addEventListener.mock.calls.filter(
       ([type]) => type === "visibilitychange",
@@ -167,7 +185,9 @@ describe("SemanticRuntimeBridge", () => {
       value: requestAnimationFrame,
     });
 
-    const { unmount } = render(<SemanticRuntimeBridge />);
+    const { unmount } = render(
+      <SemanticRuntimeBridge visibilityCoordinator={createVisibilityCoordinator()} />,
+    );
     reducedMotion.setMatches(true);
     setDocumentVisibility("hidden");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
