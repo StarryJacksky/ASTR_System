@@ -876,11 +876,15 @@ class FakeSemanticSource implements PresenceVisualSemanticSource {
 
 class FakeJewelOwnership implements PresenceVisualJewelOwnership {
   private owned = true;
+  private leaseToken = {};
   private readonly listeners = new Set<() => void>();
   readonly releases: PresenceVisualReleaseReason[] = [];
   readonly unsubscribe = vi.fn();
 
-  getSnapshot = () => Object.freeze({ ownsLease: this.owned });
+  getSnapshot: PresenceVisualJewelOwnership["getSnapshot"] = () =>
+    this.owned
+      ? Object.freeze({ ownsLease: true, leaseToken: this.leaseToken })
+      : Object.freeze({ ownsLease: false, leaseToken: null });
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -901,6 +905,7 @@ class FakeJewelOwnership implements PresenceVisualJewelOwnership {
 
   setOwned(owned: boolean) {
     if (this.owned === owned) return;
+    if (owned) this.leaseToken = {};
     this.owned = owned;
     for (const listener of [...this.listeners]) listener();
   }

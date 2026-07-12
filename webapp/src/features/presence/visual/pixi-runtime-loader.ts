@@ -13,7 +13,10 @@ import {
 import type { PresenceVisualRuntimeOwner } from "./presence-visual-owner";
 import { COMPACT_VISUAL_MAX_WIDTH } from "./static-visual-state";
 
-const INERT_JEWEL_SNAPSHOT = Object.freeze({ ownsLease: false });
+const INERT_JEWEL_SNAPSHOT = Object.freeze({
+  ownsLease: false as const,
+  leaseToken: null,
+});
 const PIXI_NO_RENDERER_MESSAGE = "Unable to auto-detect a suitable renderer.";
 const inertJewelOwnership: PresenceVisualJewelOwnership = Object.freeze({
   getSnapshot: () => INERT_JEWEL_SNAPSHOT,

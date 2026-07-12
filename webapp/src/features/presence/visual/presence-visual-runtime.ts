@@ -62,9 +62,13 @@ export interface PresenceVisualSemanticSource {
   readonly dispatch: (event: PresenceVisualSemanticEvent) => void;
 }
 
-export interface PresenceVisualJewelSnapshot {
-  readonly ownsLease: boolean;
-}
+export type PresenceVisualJewelSnapshot =
+  | Readonly<{ ownsLease: false; leaseToken: null }>
+  | Readonly<{
+      ownsLease: true;
+      /** Changes when an owned lease is replaced without an intervening unowned state. */
+      leaseToken: object | string | number;
+    }>;
 
 export interface PresenceVisualJewelOwnership {
   readonly getSnapshot: () => PresenceVisualJewelSnapshot;

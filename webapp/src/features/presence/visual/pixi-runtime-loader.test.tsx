@@ -254,7 +254,7 @@ function createSizedSurfaceRef(width: number, height: number) {
 }
 
 function createJewelOwnership(): PresenceVisualJewelOwnership {
-  const snapshot = Object.freeze({ ownsLease: false });
+  const snapshot = Object.freeze({ ownsLease: false as const, leaseToken: null });
   return Object.freeze({
     getSnapshot: () => snapshot,
     subscribe: () => () => undefined,

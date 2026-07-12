@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { RotateCcw, Copy, Check } from "lucide-react";
-import { useLive2D } from "@/lib/live2dStore";
+import {
+  LIVE2D_TRANSFORM_LIMITS,
+  useLive2D,
+} from "@/lib/live2dStore";
 
 function Slider({
   label,
@@ -55,9 +58,30 @@ export function Live2DControls() {
 
   return (
     <div className="space-y-3">
-      <Slider label="大小" value={scale} min={0.03} max={0.4} step={0.005} onChange={(v) => set({ scale: v })} />
-      <Slider label="左右" value={x} min={-0.5} max={0.5} step={0.01} onChange={(v) => set({ x: v })} />
-      <Slider label="上下" value={y} min={-1.5} max={1.5} step={0.02} onChange={(v) => set({ y: v })} />
+      <Slider
+        label="大小"
+        value={scale}
+        min={LIVE2D_TRANSFORM_LIMITS.scale.min}
+        max={LIVE2D_TRANSFORM_LIMITS.scale.max}
+        step={0.005}
+        onChange={(value) => set({ scale: value })}
+      />
+      <Slider
+        label="左右"
+        value={x}
+        min={LIVE2D_TRANSFORM_LIMITS.x.min}
+        max={LIVE2D_TRANSFORM_LIMITS.x.max}
+        step={0.01}
+        onChange={(value) => set({ x: value })}
+      />
+      <Slider
+        label="上下"
+        value={y}
+        min={LIVE2D_TRANSFORM_LIMITS.y.min}
+        max={LIVE2D_TRANSFORM_LIMITS.y.max}
+        step={0.02}
+        onChange={(value) => set({ y: value })}
+      />
       <div className="flex items-center justify-between pt-1">
         <button
           type="button"
@@ -71,7 +95,7 @@ export function Live2DControls() {
           onClick={copy}
           className="flex items-center gap-1 rounded-lg border border-hairline px-2.5 py-1 text-xs text-ink-2 transition-colors hover:bg-surface-2"
         >
-          {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+          {copied ? <Check size={13} className="text-[var(--astr-accent)]" /> : <Copy size={13} />}
           {copied ? "已复制" : "复制数值"}
         </button>
       </div>

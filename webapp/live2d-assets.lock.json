@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "publicBasePath": "/live2d",
+  "localRoot": "public/live2d",
+  "modelEntry": "haru/haru_greeter_t03.model3.json",
+  "modelSource": {
+    "repository": "https://github.com/guansss/pixi-live2d-display",
+    "commit": "31317b37d5e22955a44d5b11f37f421e94a11269",
+    "license": "Live2D Free Material License Agreement",
+    "licenseUrl": "https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html",
+    "sampleTermsUrl": "https://www.live2d.com/eula/live2d-sample-model-terms_en.html",
+    "samplePageUrl": "https://www.live2d.com/en/learn/sample/haru/",
+    "requiredCopyrightNotice": "This content uses sample data owned and copyrighted by Live2D Inc."
+  },
+  "coreSource": {
+    "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js",
+    "snapshotDate": "2026-07-12",
+    "versionPolicy": "Exact upstream release is not exposed by the convenience endpoint; bytes and SHA-256 below are authoritative.",
+    "license": "Live2D Proprietary Software License Agreement",
+    "licenseUrl": "https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html"
+  },
+  "knownMissingOptionalReferences": [
+    {
+      "path": "haru/haru_greeter_t03.cdi3.json",
+      "reason": "The pinned upstream model references this optional DisplayInfo file, but that file is absent at the pinned commit and returns HTTP 404."
+    }
+  ],
+  "assets": [
+    {
+      "kind": "core",
+      "path": "core/live2dcubismcore.min.js",
+      "bytes": 207155,
+      "sha256": "25ae938cb4fe282ce189b357bcc97e603d1e1f7ec78bf04150d401c23cdc792f",
+      "url": "https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"
+    },
+    {
+      "kind": "model",
+      "path": "haru/haru_greeter_t03.model3.json",
+      "bytes": 1991,
+      "sha256": "84b4f2aa5b4d9a6dde733963779b4276bcde09a6b730f91eb718455a5b8634ee",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.model3.json"
+    },
+    {
+      "kind": "moc",
+      "path": "haru/haru_greeter_t03.moc3",
+      "bytes": 384704,
+      "sha256": "aa59f7a3dc3b30b23b5f10afd9192ed755e4d01dc9a12442d99b972a418e2543",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.moc3"
+    },
+    {
+      "kind": "texture",
+      "path": "haru/haru_greeter_t03.2048/texture_00.png",
+      "bytes": 1526786,
+      "sha256": "30fce81e6b2d69fb99e8d1b5f391a6e0240f671095e491e9bbe24ddd7c7f434d",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.2048/texture_00.png"
+    },
+    {
+      "kind": "texture",
+      "path": "haru/haru_greeter_t03.2048/texture_01.png",
+      "bytes": 1188664,
+      "sha256": "e1e977447ee7e6e347f1b96b9103ae269e6f4e4a8cf38068d161537415cc51c8",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.2048/texture_01.png"
+    },
+    {
+      "kind": "physics",
+      "path": "haru/haru_greeter_t03.physics3.json",
+      "bytes": 5914,
+      "sha256": "b09a654759a0a0a49998a263757b10f310377adab4b8a281ae5c70902a8a7d1f",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.physics3.json"
+    },
+    {
+      "kind": "pose",
+      "path": "haru/haru_greeter_t03.pose3.json",
+      "bytes": 275,
+      "sha256": "452871c5d6ecfcace88b2f0935e22b5662ff379188da4af5d77f93f31450a6ee",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/haru_greeter_t03.pose3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F01.exp3.json",
+      "bytes": 142,
+      "sha256": "1a899fddee705b01085dd400d0c28f9737a9dc1a30b4164a37fa5f8c320f55c1",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F01.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F02.exp3.json",
+      "bytes": 546,
+      "sha256": "bd838388cfc206e91bf1251d367328c472349ffe411f51e4c56b7e16ca0396eb",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F02.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F03.exp3.json",
+      "bytes": 873,
+      "sha256": "73988efaa969f33e659803d720942ebc8bf8437edc176f9827200184af8ff075",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F03.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F04.exp3.json",
+      "bytes": 988,
+      "sha256": "9f96ce5afb6cf001ae3290d851d96592f5ff3431a3aa82102474ed23e390944b",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F04.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F05.exp3.json",
+      "bytes": 556,
+      "sha256": "b1cade8cd07f07b547a154d961095da73a200cfe4710bc256039ebb8dfe08b8a",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F05.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F06.exp3.json",
+      "bytes": 557,
+      "sha256": "ae3ed4dba4a3552c95805c290714d920ab9c023b5de78a0d4f7c7c4fd88ccae0",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F06.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F07.exp3.json",
+      "bytes": 1067,
+      "sha256": "27842ae5a079da27184f599234ef51764a8b75e0fc2a289c2015c9b770fa3df0",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F07.exp3.json"
+    },
+    {
+      "kind": "expression",
+      "path": "haru/expressions/F08.exp3.json",
+      "bytes": 490,
+      "sha256": "f7760764d18790c80d0f87c86de8b5f071ac607ee37f2d81515f4e5efdb32a07",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/expressions/F08.exp3.json"
+    },
+    {
+      "kind": "motion",
+      "path": "haru/motion/haru_g_idle.motion3.json",
+      "bytes": 21246,
+      "sha256": "bbfdd488133a45ce1ab5abf3d79bce2233b91dfa4780f736c22ac9f4bede5e1c",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/motion/haru_g_idle.motion3.json"
+    },
+    {
+      "kind": "motion",
+      "path": "haru/motion/haru_g_m07.motion3.json",
+      "bytes": 14821,
+      "sha256": "faa3aa7ca9c05cc395003a4a072ea8d3397c9a3480c9220e486dd70beb32bda9",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/motion/haru_g_m07.motion3.json"
+    },
+    {
+      "kind": "motion",
+      "path": "haru/motion/haru_g_m15.motion3.json",
+      "bytes": 13540,
+      "sha256": "4383147bd61a7bd2d990591512bfe29eea743f93868e8679ffed16e588628088",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/motion/haru_g_m15.motion3.json"
+    },
+    {
+      "kind": "motion",
+      "path": "haru/motion/haru_g_m14.motion3.json",
+      "bytes": 20625,
+      "sha256": "a61765c485d61169b2dbd3a4b760d409964edd6f272f3ae26ef3069e8ebc7559",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/motion/haru_g_m14.motion3.json"
+    },
+    {
+      "kind": "motion",
+      "path": "haru/motion/haru_g_m05.motion3.json",
+      "bytes": 14246,
+      "sha256": "a475ae0688e4903bf12729e4cb438a653107cce33d90db9d1a1985c52e97cdbf",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/haru/motion/haru_g_m05.motion3.json"
+    },
+    {
+      "kind": "audio",
+      "path": "shizuku/sounds/flickHead_00.mp3",
+      "bytes": 49079,
+      "sha256": "bab92d2eca27f21ff0aeb77214190b5ea1e3b024af31c833ff5b0f4a3e3205ca",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/shizuku/sounds/flickHead_00.mp3"
+    },
+    {
+      "kind": "audio",
+      "path": "shizuku/sounds/flickHead_01.mp3",
+      "bytes": 38613,
+      "sha256": "e80a3c10c8769f44647eab7a2e3d7e4eb2963d1f92cc9afdf1607d5b41d99fd3",
+      "url": "https://raw.githubusercontent.com/guansss/pixi-live2d-display/31317b37d5e22955a44d5b11f37f421e94a11269/test/assets/shizuku/sounds/flickHead_01.mp3"
+    }
+  ]
+}

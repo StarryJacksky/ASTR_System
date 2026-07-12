@@ -2,53 +2,130 @@
 
 import { create } from "zustand";
 
-/** Live2D 看板娘的取景变换（居中锚点 + 缩放 + 偏移）。用户可在设置里实时拖动，存 localStorage。 */
+/** Camera transform for the Live2D shell, expressed in model scale and viewport ratios. */
 export interface L2DTransform {
-  scale: number; // 模型缩放（模型原生 2400×4500，常用 0.06~0.2）
-  x: number; // 水平偏移，画布宽的比例（0=居中，正=右）
-  y: number; // 垂直偏移，画布高的比例（0=居中，正=下）
+  readonly scale: number;
+  readonly x: number;
+  readonly y: number;
 }
 
-// 默认值：延续 Jacksky 2026-06 的半身像取景意图，按 v2.2 新舞台几何（52vh/最宽 560px）
-// 折算回帧内。取景权仍在设置面板——拖动即覆盖此默认。
-export const L2D_DEFAULT: L2DTransform = { scale: 0.26, x: 0.03, y: 0.95 };
+export const L2D_DEFAULT: L2DTransform = Object.freeze({
+  scale: 0.26,
+  x: 0.03,
+  y: 0.95,
+});
 
-// v2（2026-07-07）：舞台几何变更，v1 存储的偏移会把她压出帧外，换键作废旧值。
-const KEY = "astr.live2d.v2";
+export const LIVE2D_TRANSFORM_LIMITS = Object.freeze({
+  scale: Object.freeze({ min: 0.03, max: 0.4 }),
+  x: Object.freeze({ min: -0.5, max: 0.5 }),
+  y: Object.freeze({ min: -1.5, max: 1.5 }),
+});
 
-function loadInitial(): L2DTransform {
-  if (typeof window === "undefined") return L2D_DEFAULT;
+export const LIVE2D_STORAGE_KEY = "astr.live2d.v2";
+
+interface StorageReader {
+  readonly getItem: (key: string) => string | null;
+}
+
+interface StorageWriter {
+  readonly setItem: (key: string, value: string) => void;
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function finiteOrDefault(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function normalizeLive2DTransform(value: unknown): L2DTransform {
+  const candidate = isRecord(value) ? value : {};
+  return Object.freeze({
+    scale: clamp(
+      finiteOrDefault(candidate.scale, L2D_DEFAULT.scale),
+      LIVE2D_TRANSFORM_LIMITS.scale.min,
+      LIVE2D_TRANSFORM_LIMITS.scale.max,
+    ),
+    x: clamp(
+      finiteOrDefault(candidate.x, L2D_DEFAULT.x),
+      LIVE2D_TRANSFORM_LIMITS.x.min,
+      LIVE2D_TRANSFORM_LIMITS.x.max,
+    ),
+    y: clamp(
+      finiteOrDefault(candidate.y, L2D_DEFAULT.y),
+      LIVE2D_TRANSFORM_LIMITS.y.min,
+      LIVE2D_TRANSFORM_LIMITS.y.max,
+    ),
+  });
+}
+
+export function loadLive2DTransform(
+  storage: StorageReader | null = browserStorage(),
+): L2DTransform {
+  if (storage === null) return L2D_DEFAULT;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return { ...L2D_DEFAULT, ...JSON.parse(raw) };
+    const raw = storage.getItem(LIVE2D_STORAGE_KEY);
+    return raw === null ? L2D_DEFAULT : normalizeLive2DTransform(JSON.parse(raw));
   } catch {
-    /* 损坏的存储忽略 */
+    return L2D_DEFAULT;
   }
-  return L2D_DEFAULT;
 }
 
-function persist(t: L2DTransform): void {
+export function persistLive2DTransform(
+  value: unknown,
+  storage: StorageWriter | null = browserStorage(),
+): L2DTransform {
+  const transform = normalizeLive2DTransform(value);
+  if (storage !== null) {
+    try {
+      storage.setItem(LIVE2D_STORAGE_KEY, JSON.stringify(transform));
+    } catch {
+      // Privacy modes and quota errors do not make the visual shell unavailable.
+    }
+  }
+  return transform;
+}
+
+function browserStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
   try {
-    localStorage.setItem(KEY, JSON.stringify(t));
+    return window.localStorage;
   } catch {
-    /* 隐私模式等写入失败忽略 */
+    return null;
   }
 }
 
 interface L2DStore extends L2DTransform {
-  set: (patch: Partial<L2DTransform>) => void;
-  reset: () => void;
+  readonly set: (patch: Partial<L2DTransform>) => void;
+  readonly reset: () => void;
 }
 
 export const useLive2D = create<L2DStore>((set, get) => ({
-  ...loadInitial(),
+  ...loadLive2DTransform(),
   set: (patch) => {
-    set(patch);
-    const { scale, x, y } = get();
-    persist({ scale, x, y });
+    const current = get();
+    const transform = persistLive2DTransform({
+      scale: patch.scale ?? current.scale,
+      x: patch.x ?? current.x,
+      y: patch.y ?? current.y,
+    });
+    set(transform);
   },
   reset: () => {
-    set(L2D_DEFAULT);
-    persist(L2D_DEFAULT);
+    const transform = persistLive2DTransform(L2D_DEFAULT);
+    set(transform);
   },
 }));
+
+export const live2DTransformSource = Object.freeze({
+  getSnapshot: (): L2DTransform => {
+    const { scale, x, y } = useLive2D.getState();
+    return Object.freeze({ scale, x, y });
+  },
+  subscribe: (listener: () => void): (() => void) => useLive2D.subscribe(listener),
+});

@@ -40,5 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Live2D 资产（Cubism Core 许可证 + 二进制体积）：不提交，用 scripts/fetch-live2d.mjs 重获取
+# Live2D binaries stay local because Cubism Core and sample assets have separate licenses.
 /public/live2d/

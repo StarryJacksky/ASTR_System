@@ -118,16 +118,6 @@ body {
    Surfaces remain stable; emotional light comes from her presence.
    ============================================================ */
 
-/* 星野（v2.1 宇宙层）：全屏最底层的 Canvas 星空。绘制逻辑见 Starfield.tsx。
-   canvas 是替换元素：inset 之外必须显式给 100% 宽高，否则停在固有 300×150。 */
-.astr-starfield {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
 /* Ambient light: a restrained emotion wash above a quiet vignette.
    Changes ease in over 2.4s while the environment breathes over 9s. */
 .astr-ambient {
