@@ -1,0 +1,401 @@
+.header {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.42fr);
+  grid-template-areas:
+    "identity identity"
+    "truth secondary";
+  gap: var(--space-2) var(--space-4);
+  min-inline-size: 0;
+  padding: var(--space-3) clamp(var(--space-4), 2.5vw, var(--space-6));
+  border-block: 1px solid var(--astr-hairline);
+  border-inline-start: 2px solid var(--astr-soul);
+  border-inline-end: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(112deg, color-mix(in srgb, var(--astr-soul) 6%, transparent), transparent 34%),
+    color-mix(in srgb, var(--astr-surface) 96%, transparent);
+  box-shadow: none;
+}
+
+.identityRail {
+  grid-area: identity;
+}
+
+.identityRail,
+.secondaryRail,
+.dialogHeader {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.identityRail,
+.secondaryRail {
+  flex-wrap: wrap;
+}
+
+.identityCopy {
+  min-inline-size: 0;
+  flex: 1 1 16rem;
+}
+
+.eyebrow,
+.truthLabel {
+  margin: 0;
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+}
+
+.title {
+  margin: var(--space-1) 0 0;
+  color: var(--astr-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.displayName {
+  max-inline-size: 100%;
+  margin: var(--space-1) 0 0;
+  color: var(--astr-soul);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.controlRail,
+.safetyActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: var(--radius-small);
+  background: var(--astr-surface-2);
+  color: var(--astr-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.control:hover {
+  border-color: var(--astr-action);
+  background: color-mix(in srgb, var(--astr-action) 8%, var(--astr-surface-2));
+}
+
+.estop {
+  border-color: color-mix(in srgb, var(--astr-danger) 72%, var(--astr-hairline));
+  background: color-mix(in srgb, var(--astr-danger) 10%, var(--astr-surface));
+}
+
+.motionSlot {
+  display: inline-flex;
+}
+
+.motionSlot :global(.astr-motion-toggle) {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  min-inline-size: var(--touch-target);
+  min-block-size: var(--touch-target);
+}
+
+.motionSlot :global(.astr-motion-toggle)::before {
+  inline-size: 14px;
+  block-size: 14px;
+  flex: none;
+  border: 1px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  content: "";
+}
+
+.truthGrid {
+  grid-area: truth;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-inline-size: 0;
+  border-block: 1px solid var(--astr-hairline);
+  border-inline: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.truthRegion {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 1px solid var(--astr-hairline);
+  background: transparent;
+}
+
+.truthRegion:first-child {
+  border-inline-start: 0;
+}
+
+.truthValue {
+  color: var(--astr-text-2);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.secondaryRail {
+  grid-area: secondary;
+  align-content: center;
+  padding-block: var(--space-1);
+  padding-inline-start: var(--space-3);
+  border-block: 1px solid var(--astr-hairline);
+}
+
+.systemDetails {
+  min-inline-size: 0;
+  color: var(--astr-text-2);
+}
+
+.systemDetails summary {
+  min-block-size: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  color: var(--astr-text);
+  cursor: pointer;
+}
+
+.detailList {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: min(100%, 30rem);
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border-inline-start: 1px solid var(--astr-soul);
+  background: var(--astr-surface-2);
+}
+
+.detailList > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.detailList dt {
+  color: var(--astr-text-3);
+}
+
+.detailList dd {
+  min-inline-size: 0;
+  margin: 0;
+  color: var(--astr-text);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding:
+    max(var(--space-4), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-4), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+  background: color-mix(in srgb, var(--astr-bg) 84%, transparent);
+}
+
+.dialog {
+  display: grid;
+  gap: var(--space-5);
+  inline-size: min(42rem, 100%);
+  max-block-size: min(46rem, calc(100dvh - (2 * var(--space-4))));
+  overflow: auto;
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: var(--radius-medium);
+  background: var(--astr-surface);
+  color: var(--astr-text);
+  box-shadow: var(--shadow-3);
+  overscroll-behavior: contain;
+}
+
+.dialogTitle {
+  margin: var(--space-1) 0 0;
+  color: var(--astr-text);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+}
+
+.settingsContent {
+  min-inline-size: 0;
+  color: var(--astr-text-2);
+}
+
+.settingsContent > :first-child {
+  margin-block-start: 0;
+}
+
+.settingsContent > :last-child {
+  margin-block-end: 0;
+}
+
+@media (max-width: 52rem) {
+  .header {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "identity"
+      "truth"
+      "secondary";
+  }
+
+  .truthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .truthRegion:nth-child(odd) {
+    border-inline-start: 0;
+  }
+
+  .secondaryRail {
+    padding-inline-start: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    grid-template-columns: minmax(0, 1fr) minmax(6.5rem, auto);
+    grid-template-areas:
+      "identity identity"
+      "truth secondary";
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .identityRail {
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+  }
+
+  .identityCopy {
+    flex: 0 1 5rem;
+  }
+
+  .eyebrow {
+    display: none;
+  }
+
+  .title {
+    margin-block-start: 0;
+    font-size: 1.25rem;
+  }
+
+  .displayName {
+    margin-block-start: 2px;
+    font-size: var(--type-0);
+  }
+
+  .controlRail {
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: var(--space-1);
+  }
+
+  .controlRail .control {
+    padding-inline: var(--space-2);
+  }
+
+  .motionSlot :global(.astr-motion-toggle) {
+    inline-size: var(--touch-target);
+    overflow: hidden;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .truthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .truthRegion {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .truthValue {
+    font-size: var(--type-0);
+    line-height: 1.3;
+  }
+
+  .secondaryRail {
+    min-inline-size: 0;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-1);
+    padding: 0 0 0 var(--space-2);
+  }
+
+  .systemDetails {
+    min-inline-size: 0;
+  }
+
+  .systemDetails summary {
+    justify-content: center;
+  }
+
+  .safetyActions {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--space-1);
+  }
+
+  .detailList > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
+
+@media (max-width: 28rem) {
+  .controlText {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition-duration: 0ms;
+  }
+}
+
+:global([data-visual-motion="paused"]) .control {
+  transition-duration: 0ms;
+}

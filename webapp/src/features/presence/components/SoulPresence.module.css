@@ -1,0 +1,230 @@
+.soulPresence {
+  --soul-shell-cut: var(--corner-signature);
+
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-block-size: 26rem;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border: 1px solid var(--astr-hairline-strong);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--astr-soul) 7%, transparent), transparent 44%),
+    var(--astr-surface);
+  box-shadow: var(--shadow-2), inset 0 1px 0 var(--astr-hairline);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--soul-shell-cut)) 0,
+    100% var(--soul-shell-cut),
+    100% 100%,
+    0 100%
+  );
+  color: var(--astr-text);
+  grid-template-rows: auto minmax(13rem, 1fr) auto;
+  gap: var(--space-5);
+}
+
+.soulPresence::before {
+  position: absolute;
+  z-index: -1;
+  inset-block-start: 17%;
+  inset-inline-end: -9%;
+  inline-size: min(62%, 16rem);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--astr-soul) 54%, var(--astr-hairline));
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 42% 50%,
+    color-mix(in srgb, var(--astr-soul) 10%, transparent),
+    transparent 64%
+  );
+  content: "";
+  pointer-events: none;
+  transform: rotate(-18deg);
+}
+
+.soulPresence::after {
+  position: absolute;
+  z-index: -1;
+  inset: var(--corner-signature) var(--space-4) auto auto;
+  inline-size: min(34%, 9rem);
+  block-size: 1px;
+  background: linear-gradient(90deg, transparent, var(--astr-soul));
+  content: "";
+}
+
+.identityHeader {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-1);
+}
+
+.kicker,
+.identity,
+.identityCopy,
+.runtimeCopy,
+.truthLedger,
+.truthRow dd {
+  margin: 0;
+}
+
+.kicker {
+  color: var(--astr-soul);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.identity {
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-size: clamp(var(--type-3), 5vw, var(--type-4));
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: var(--leading-display);
+}
+
+.identityCopy,
+.runtimeCopy {
+  color: var(--astr-text-2);
+  font-size: var(--type-0);
+  line-height: var(--leading-body);
+}
+
+.visualStage {
+  position: relative;
+  display: grid;
+  min-block-size: 13rem;
+  min-inline-size: 0;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-3);
+}
+
+.lens {
+  inline-size: min(100%, 20rem);
+  block-size: auto;
+  overflow: visible;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--astr-soul) 25%, transparent));
+}
+
+.lens :global(.lensOuter),
+.lens :global(.lensContinuity),
+.lens :global(.lensShell),
+.lens :global(.lensNotch),
+.lens :global(.lensAxis) {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.lens :global(.lensOuter) {
+  stroke: var(--astr-soul);
+  stroke-width: 1.5;
+}
+
+.lens :global(.lensNotch) {
+  stroke: var(--astr-action);
+  stroke-linecap: square;
+  stroke-linejoin: bevel;
+  stroke-width: 2;
+}
+
+.lens :global(.lensContinuity) {
+  stroke: var(--astr-hairline-strong);
+  stroke-dasharray: 2 7;
+  stroke-width: 1;
+}
+
+.lens :global(.lensShell) {
+  stroke: color-mix(in srgb, var(--astr-soul) 58%, var(--astr-hairline-strong));
+  stroke-width: 1;
+}
+
+.lens :global(.lensFacet) {
+  fill: color-mix(in srgb, var(--astr-soul) 11%, var(--astr-surface-2));
+  stroke: var(--astr-hairline-strong);
+  stroke-width: 1;
+}
+
+.lens :global(.lensCore) {
+  fill: var(--astr-soul);
+  stroke: var(--astr-text);
+  stroke-width: 1;
+}
+
+.lens :global(.lensAxis) {
+  stroke: var(--astr-text-3);
+  stroke-linecap: square;
+  stroke-width: 1;
+}
+
+.runtimeCopy {
+  max-inline-size: 30rem;
+  text-align: center;
+}
+
+.visualSlot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.truthLedger {
+  display: grid;
+  min-inline-size: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--astr-hairline);
+  gap: var(--space-2);
+}
+
+.truthRow {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(6.5rem, 0.34fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.truthRow dt {
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  letter-spacing: 0.05em;
+}
+
+.truthRow dd {
+  overflow-wrap: anywhere;
+  color: var(--astr-text-2);
+  font-size: var(--type-0);
+  line-height: var(--leading-body);
+}
+
+@media (max-width: 768px) {
+  .soulPresence {
+    min-block-size: 22rem;
+    grid-template-rows: auto minmax(10rem, 1fr) auto;
+  }
+
+  .visualStage {
+    min-block-size: 10rem;
+  }
+
+  .lens {
+    inline-size: min(76vw, 16rem);
+  }
+}
+
+@media (max-width: 390px) {
+  .soulPresence {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .truthRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}

@@ -28,15 +28,23 @@
 
 .regionKicker,
 .meta,
-.phase,
 .platform,
-.connectionCopy,
-.activityMeta,
-.diagnosticCopy {
+.activityMeta {
   color: var(--astr-text-3);
   font-family: var(--font-mono);
   font-size: var(--type--1);
   letter-spacing: 0.04em;
+}
+
+.phase,
+.connectionCopy,
+.diagnosticCopy,
+.activityUnavailable {
+  color: var(--astr-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--type-0);
+  line-height: var(--leading-body);
+  letter-spacing: 0.02em;
 }
 
 .scrollPort {

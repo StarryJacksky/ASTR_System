@@ -115,6 +115,14 @@ describe("Presence Composer", () => {
     expect(css).toMatch(/min-(?:inline-size|width):\s*var\(--touch-target\)/);
     expect(css).toMatch(/min-(?:block-size|height):\s*var\(--touch-target\)/);
     expect(tokens).toMatch(/--touch-target:\s*44px/);
+    const necessaryStateRule = css.match(
+      /\.voiceStatus,[\s\S]*?\.errorText\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(necessaryStateRule).toContain("color: var(--astr-text-2)");
+    expect(necessaryStateRule).toContain("font-size: var(--type-0)");
+    expect(necessaryStateRule).toContain("line-height: var(--leading-body)");
+    expect(necessaryStateRule).not.toContain("var(--astr-text-3)");
+    expect(necessaryStateRule).not.toContain("var(--text-xs)");
   });
 
   it("blocks native composition and legacy 229, then sends exactly once after compositionend", async () => {

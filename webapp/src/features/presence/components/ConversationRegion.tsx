@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 
 import { semanticStore, type Announcement } from "@/lib/semantic-store";
@@ -33,6 +34,7 @@ export interface ConversationRegionProps {
   readonly conversation: ConversationProjection;
   readonly assistantLabel?: string;
   readonly announceFinal?: FinalAnnouncementPublisher;
+  readonly headerAction?: ReactNode;
 }
 
 export interface BoundedIdLedger {
@@ -73,6 +75,7 @@ export function ConversationRegion({
   conversation,
   assistantLabel,
   announceFinal = defaultFinalAnnouncement,
+  headerAction,
 }: ConversationRegionProps) {
   const headingId = useId();
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -218,12 +221,10 @@ export function ConversationRegion({
   return (
     <section aria-labelledby={headingId} className={styles.conversationRegion}>
       <header className={styles.regionHeader}>
-        <div>
-          <p className={styles.regionKicker}>PRESENCE · DIALOGUE</p>
-          <h2 className={styles.regionTitle} id={headingId}>
-            对话
-          </h2>
-        </div>
+        <h2 className={styles.regionTitle} id={headingId}>
+          对话
+        </h2>
+        {headerAction}
       </header>
       <div className={styles.scrollFrame}>
         <div

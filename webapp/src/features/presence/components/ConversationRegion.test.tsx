@@ -98,6 +98,20 @@ describe("ConversationRegion", () => {
       .toBeNull();
   });
 
+  it("owns the single compact dialogue title rail and accepts its explicit layout action", () => {
+    render(
+      <ConversationRegion
+        announceFinal={vi.fn()}
+        conversation={EMPTY_CONVERSATION}
+        headerAction={<button type="button">切换深聊布局</button>}
+      />,
+    );
+
+    expect(screen.getAllByRole("heading", { level: 2, name: "对话" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "切换深聊布局" })).toBeVisible();
+    expect(screen.queryByText("PRESENCE · DIALOGUE")).not.toBeInTheDocument();
+  });
+
   it("omits invalid message time instead of fabricating a local or current timestamp", () => {
     render(
       <ConversationRegion
@@ -787,6 +801,14 @@ describe("ConversationRegion", () => {
     expect(cssSource).toMatch(/@media\s*\(max-width:\s*480px\)[\s\S]*max-inline-size:\s*92%/);
     expect(cssSource).toMatch(/min-block-size:\s*var\(--touch-target\)/);
     expect(cssSource).toMatch(/min-inline-size:\s*var\(--touch-target\)/);
+
+    const phaseRule = cssSource.match(/\.phase[\s\S]*?\{([^}]*)\}/)?.[1];
+    expect(phaseRule).toContain("color: var(--astr-text-2)");
+    expect(phaseRule).toContain("font-size: var(--type-0)");
+    expect(phaseRule).toContain("line-height: var(--leading-body)");
+    expect(phaseRule).not.toContain("var(--astr-text-3)");
+    expect(phaseRule).not.toContain("var(--type--1)");
+
     expect(cssSource).not.toMatch(/\b(?:d?vh)\b/i);
     expect(cssSource).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(cssSource).not.toMatch(/\b(?:green|lime|emerald|chartreuse)\b/i);

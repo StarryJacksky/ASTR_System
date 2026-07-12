@@ -131,6 +131,9 @@ body {
 /* Ambient light: a restrained emotion wash above a quiet vignette.
    Changes ease in over 2.4s while the environment breathes over 9s. */
 .astr-ambient {
+  --astr-ambient-opacity-min: 0.8;
+  --astr-ambient-opacity-max: 1;
+
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -147,14 +150,15 @@ body {
 @keyframes astr-aurora {
   0%,
   100% {
-    opacity: 0.8;
+    opacity: var(--astr-ambient-opacity-min);
   }
   50% {
-    opacity: 1;
+    opacity: var(--astr-ambient-opacity-max);
   }
 }
 [data-theme="light"] .astr-ambient {
-  opacity: 0.35;
+  --astr-ambient-opacity-min: 0.28;
+  --astr-ambient-opacity-max: 0.35;
 }
 
 /* 颗粒：极淡噪点，盖掉大面积渐变的 banding（胶片质感，克制到几乎不可见）。 */

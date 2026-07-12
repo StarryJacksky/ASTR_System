@@ -71,7 +71,7 @@ export function LifeRegion({
             </span>
           </div>
         ) : (
-          <p className={styles.activityMeta}>Core 未提供当前生活状态。</p>
+          <p className={styles.activityUnavailable}>Core 未提供当前生活状态。</p>
         )}
 
         <ul aria-label="生活与处理摘要" className={styles.lifeList}>

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { useState } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -46,6 +48,24 @@ describe("LifeRegion", () => {
     expect(container).not.toHaveTextContent("完整思维链");
     expect(container.querySelector("[aria-live], [role='status'], [role='alert'], [role='log']"))
       .toBeNull();
+  });
+
+  it("presents a missing current activity as necessary body copy", () => {
+    const { container } = render(
+      <ControlledLifeRegion events={[]} streamState="open" />,
+    );
+    const missing = screen.getByText("Core 未提供当前生活状态。");
+    expect(missing.className).toMatch(/activityUnavailable/);
+
+    const cssSource = readFileSync(
+      resolve(process.cwd(), "src/features/presence/components/PresenceTimelines.module.css"),
+      "utf8",
+    );
+    const rule = cssSource.match(/\.activityUnavailable\s*\{([^}]*)\}/)?.[1];
+    expect(rule).toContain("color: var(--astr-text-2)");
+    expect(rule).toContain("font-size: var(--type-0)");
+    expect(rule).toContain("line-height: var(--leading-body)");
+    expect(container.querySelector("[aria-live], [role='alert']")).toBeNull();
   });
 
   it("keeps expansion as explicit UI intent", () => {
@@ -186,5 +206,23 @@ describe("LifeRegion", () => {
 
     expect(screen.getByText("有 40 条受支持事件因内容不可读而未显示。")).toBeVisible();
     expect(screen.queryByText("有 32 条受支持事件因内容不可读而未显示。")).not.toBeInTheDocument();
+  });
+
+  it("keeps essential connection and diagnostic copy at readable body scale", () => {
+    const cssSource = readFileSync(
+      resolve(process.cwd(), "src/features/presence/components/PresenceTimelines.module.css"),
+      "utf8",
+    );
+
+    for (const selector of ["connectionCopy", "diagnosticCopy"]) {
+      const declarationBlock = cssSource.match(
+        new RegExp(`\\.${selector}[\\s\\S]*?\\{([^}]*)\\}`),
+      )?.[1];
+      expect(declarationBlock).toContain("color: var(--astr-text-2)");
+      expect(declarationBlock).toContain("font-size: var(--type-0)");
+      expect(declarationBlock).toContain("line-height: var(--leading-body)");
+      expect(declarationBlock).not.toContain("var(--astr-text-3)");
+      expect(declarationBlock).not.toContain("var(--type--1)");
+    }
   });
 });

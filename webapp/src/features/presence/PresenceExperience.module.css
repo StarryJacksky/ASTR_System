@@ -1,0 +1,223 @@
+.presence {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, var(--layout-container-max));
+  justify-content: center;
+  min-block-size: 100dvh;
+  min-inline-size: 0;
+  overflow-x: clip;
+  padding:
+    max(var(--space-3), env(safe-area-inset-top))
+    max(var(--space-3), env(safe-area-inset-right))
+    max(var(--space-5), env(safe-area-inset-bottom))
+    max(var(--space-3), env(safe-area-inset-left));
+  background: var(--astr-bg);
+  color: var(--astr-text);
+  gap: var(--space-4);
+}
+
+.presence::before {
+  position: absolute;
+  z-index: 5;
+  inset-block-start: max(var(--space-3), env(safe-area-inset-top));
+  inset-inline-end: max(var(--space-6), env(safe-area-inset-right));
+  inline-size: 14px;
+  block-size: 14px;
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: 50%;
+  background: var(--astr-bg);
+  box-shadow: -8px 6px 0 -4px var(--astr-soul);
+  content: "";
+  pointer-events: none;
+}
+
+.composerSkip {
+  inset-block-start: calc(var(--touch-target) + var(--space-4));
+}
+
+.orbitField {
+  position: relative;
+  z-index: 0;
+  min-inline-size: 0;
+  margin-block-end: calc(-1 * var(--space-3));
+}
+
+.presenceField {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 58fr) minmax(18rem, 42fr);
+  align-items: stretch;
+  gap: var(--space-4);
+  transition: grid-template-columns var(--motion-medium) var(--ease-standard);
+}
+
+.presence[data-presence-layout="deep"] .presenceField {
+  grid-template-columns: minmax(0, 72fr) minmax(14rem, 28fr);
+}
+
+.dialogueSurface {
+  position: relative;
+  display: grid;
+  min-block-size: clamp(34rem, calc(100dvh - 19rem), 52rem);
+  min-inline-size: 0;
+  overflow: hidden;
+  padding: clamp(var(--space-3), 2vw, var(--space-5));
+  border: 1px solid var(--astr-hairline-strong);
+  border-inline-start: 3px solid var(--astr-soul);
+  border-radius: var(--radius-small);
+  background: var(--astr-surface);
+  box-shadow: var(--shadow-1), inset 0 1px 0 var(--astr-hairline);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+}
+
+.dialogueSurface::after {
+  position: absolute;
+  inset: 0 0 auto auto;
+  inline-size: min(22%, 8rem);
+  block-size: 1px;
+  background: var(--astr-action);
+  content: "";
+  opacity: 0.72;
+}
+
+.layoutToggle {
+  display: inline-flex;
+  min-block-size: var(--touch-target);
+  min-inline-size: var(--touch-target);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: var(--radius-small);
+  background: var(--astr-surface-2);
+  color: var(--astr-text);
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+}
+
+.layoutToggle[aria-pressed="true"] {
+  border-color: var(--astr-action);
+  box-shadow: inset 3px 0 0 var(--astr-soul);
+}
+
+.layoutToggle:focus-visible,
+.lifeIsland:focus-visible {
+  outline: 2px solid var(--astr-action);
+  outline-offset: 2px;
+}
+
+.layoutToggleCopy {
+  font-family: var(--font-sans);
+  font-size: var(--type-0);
+}
+
+.soulField {
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.soulField > * {
+  block-size: 100%;
+}
+
+.lifeIsland {
+  position: relative;
+  z-index: 2;
+  justify-self: start;
+  inline-size: min(100%, 46rem);
+  min-inline-size: 0;
+  padding: clamp(var(--space-3), 2vw, var(--space-5));
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: var(--radius-small);
+  background: var(--astr-surface);
+  box-shadow: var(--shadow-1);
+  transition:
+    inline-size var(--motion-medium) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.lifeIsland::before {
+  position: absolute;
+  inset-block-start: calc(-1 * var(--space-5));
+  inset-inline-start: clamp(var(--space-5), 18%, 12rem);
+  block-size: var(--space-5);
+  border-inline-start: 1px solid var(--astr-soul);
+  content: "";
+  pointer-events: none;
+}
+
+.lifeIsland[data-expanded="true"] {
+  justify-self: stretch;
+  inline-size: 100%;
+  margin-block-start: calc(-1 * var(--space-5));
+  border-inline-start: 3px solid var(--astr-soul);
+  box-shadow: var(--shadow-3);
+}
+
+@media (max-width: 768px) {
+  .presence {
+    padding:
+      max(var(--space-2), env(safe-area-inset-top))
+      max(var(--space-2), env(safe-area-inset-right))
+      max(var(--space-4), env(safe-area-inset-bottom))
+      max(var(--space-2), env(safe-area-inset-left));
+  }
+
+  .presenceField,
+  .presence[data-presence-layout="deep"] .presenceField {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dialogueSurface {
+    min-block-size: clamp(30rem, calc(100dvh - 23rem), 36rem);
+  }
+
+  .soulField {
+    min-block-size: 22rem;
+  }
+
+  .lifeIsland {
+    justify-self: stretch;
+    inline-size: 100%;
+  }
+}
+
+@media (max-width: 390px) {
+  .presence {
+    gap: var(--space-3);
+  }
+
+  .dialogueSurface,
+  .lifeIsland {
+    padding: var(--space-3);
+  }
+
+  .layoutToggleCopy {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presenceField,
+  .lifeIsland {
+    transition-duration: 0ms;
+  }
+}
+
+:global([data-visual-motion="paused"]) .presenceField,
+:global([data-visual-motion="paused"]) .lifeIsland {
+  transition-duration: 0ms;
+}

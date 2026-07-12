@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { SemanticRuntimeBridge } from "./SemanticRuntimeBridge";
 import { StateAnnouncer } from "./StateAnnouncer";
-import { VisualMotionToggle } from "./VisualMotionToggle";
+import { VisualMotionControlProvider } from "./VisualMotionToggle";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -14,8 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <StateAnnouncer />
       <div aria-hidden className="astr-ambient" />
       <div aria-hidden className="astr-grain" />
-      {children}
-      <VisualMotionToggle />
+      <VisualMotionControlProvider>{children}</VisualMotionControlProvider>
     </>
   );
 }
