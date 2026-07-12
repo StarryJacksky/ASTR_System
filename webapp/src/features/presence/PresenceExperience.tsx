@@ -197,7 +197,9 @@ export function PresenceExperience() {
       </a>
       <main
         className={styles.presence}
+        data-orbit-state={ui.activeEndpoint}
         data-presence-layout={ui.layout}
+        data-sse-state={`reply:${snapshot.semantic.replySse}|life:${snapshot.semantic.lifeSse}`}
         id="main-content"
         tabIndex={-1}
       >
@@ -258,6 +260,7 @@ export function PresenceExperience() {
               activity={snapshot.status?.activity}
               displayName={snapshot.status?.displayName}
               model={snapshot.status?.model}
+              visualConfigured
               visualRuntime={snapshot.semantic.visualRuntime}
             />
           </div>

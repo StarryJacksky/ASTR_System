@@ -7,6 +7,7 @@ export function StaticSoulLens({ className }: StaticSoulLensProps) {
     <svg
       aria-hidden="true"
       className={className}
+      data-soul-lens-fallback="static"
       data-static-soul-lens="true"
       focusable="false"
       viewBox="0 0 160 160"

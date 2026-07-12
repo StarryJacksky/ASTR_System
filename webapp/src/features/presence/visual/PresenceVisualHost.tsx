@@ -17,6 +17,7 @@ import {
 } from "./presence-visual-owner";
 import type {
   PresenceVisualJewelOwnership,
+  PresenceVisualJewelSnapshot,
   PresenceVisualSceneInitializer,
   PresenceVisualSemanticEvent,
   PresenceVisualSemanticSnapshot,
@@ -41,6 +42,15 @@ const HOST_SEMANTIC_SERVER_SNAPSHOT: PresenceVisualSemanticSnapshot =
     motion: "full",
     visualRuntime: "loading",
   });
+const HOST_JEWEL_SERVER_SNAPSHOT: PresenceVisualJewelSnapshot = Object.freeze({
+  ownsLease: false,
+  leaseToken: null,
+});
+const inertHostJewelOwnership: PresenceVisualJewelOwnership = Object.freeze({
+  getSnapshot: () => HOST_JEWEL_SERVER_SNAPSHOT,
+  subscribe: () => () => undefined,
+  releaseOwned: () => undefined,
+});
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const retryAnnouncementEpisodes = new WeakMap<
   PresenceVisualRuntimeOwner,
@@ -59,12 +69,21 @@ export const presenceVisualSemanticSource: PresenceVisualSemanticSource =
       semanticStore.getState().dispatch(event),
   });
 
+/** Remains a light callback until an eligible desktop runtime invokes it. */
+export const loadPresenceVisualScene: PresenceVisualSceneInitializer = async (
+  context,
+) => {
+  const scene = await import("./visual-scene");
+  return scene.initializePresenceVisualScene(context);
+};
+
 export interface PresenceVisualHostProps {
   readonly announce?: (message: string) => void;
   readonly owner?: PresenceVisualRuntimeOwner;
   readonly semanticSource?: PresenceVisualSemanticSource;
   readonly sceneLoader?: PresenceVisualSceneInitializer;
   readonly jewelOwnership?: PresenceVisualJewelOwnership;
+  readonly statusClassName?: string;
   readonly viewportWidth?: number;
   readonly webglAvailability?: WebglAvailability;
 }
@@ -75,6 +94,7 @@ export function PresenceVisualHost({
   semanticSource = presenceVisualSemanticSource,
   sceneLoader,
   jewelOwnership,
+  statusClassName,
   viewportWidth,
   webglAvailability = "unknown",
 }: PresenceVisualHostProps) {
@@ -89,6 +109,11 @@ export function PresenceVisualHost({
     owner.subscribe,
     owner.getSnapshot,
     owner.getServerSnapshot,
+  );
+  const visualJewel = useSyncExternalStore(
+    (jewelOwnership ?? inertHostJewelOwnership).subscribe,
+    (jewelOwnership ?? inertHostJewelOwnership).getSnapshot,
+    () => HOST_JEWEL_SERVER_SNAPSHOT,
   );
   const effectiveWebglAvailability =
     ownerSnapshot.webglAvailability === "unknown"
@@ -154,6 +179,7 @@ export function PresenceVisualHost({
   return (
     <div
       data-presence-visual-host="true"
+      data-visual-jewel-active={visualJewel.ownsLease ? "true" : "false"}
       data-visual-phase={ownerSnapshot.phase}
       data-visual-status={staticState.status}
       data-webgl-availability={effectiveWebglAvailability}
@@ -164,7 +190,12 @@ export function PresenceVisualHost({
         data-presence-visual-surface="true"
         tabIndex={-1}
       />
-      <p className="sr-only" data-presence-visual-copy="true">
+      <p
+        className={statusClassName ?? "sr-only"}
+        data-presence-visual-copy="true"
+        data-visual-copy-status={staticState.status}
+        data-visual-runtime={semantic.visualRuntime}
+      >
         {staticState.copy.label}：{staticState.copy.description}
       </p>
       {staticState.retryAvailable && staticState.copy.retryLabel !== null ? (

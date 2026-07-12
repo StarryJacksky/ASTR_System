@@ -155,6 +155,11 @@ describe("PresenceExperience", () => {
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     expect(screen.getByRole("main")).toHaveAttribute("tabindex", "-1");
+    expect(screen.getByRole("main")).toHaveAttribute("data-orbit-state", "dialogue");
+    expect(screen.getByRole("main")).toHaveAttribute(
+      "data-sse-state",
+      "reply:open|life:open",
+    );
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
     expect(screen.getByRole("link", { name: "跳到消息输入" })).toHaveAttribute(
@@ -239,6 +244,7 @@ describe("PresenceExperience", () => {
     expect(lifeButton).not.toHaveAttribute("aria-current");
 
     fireEvent.click(lifeButton);
+    expect(screen.getByRole("main")).toHaveAttribute("data-orbit-state", "life");
     expect(island).toHaveAttribute("data-expanded", "true");
     expect(lifeButton).toHaveAttribute("aria-current", "page");
     expect(island).toHaveFocus();
@@ -489,6 +495,9 @@ describe("PresenceExperience", () => {
     );
     expect(experienceCss).toMatch(/prefers-reduced-motion[\s\S]*transition-duration:\s*0ms/);
     expect(experienceCss).toMatch(/data-visual-motion=["']paused["'][\s\S]*transition-duration:\s*0ms/);
+    expect(experienceCss).toMatch(
+      /data-visual-jewel-active=["']false["'][\s\S]*data-presence-visual-surface[\s\S]*opacity:\s*0/,
+    );
     expect(tokens).toMatch(/--motion-medium:\s*320ms/);
     expect(globals).toMatch(
       /\.astr-ambient\s*\{[\s\S]*?--astr-ambient-opacity-min:\s*0\.8;[\s\S]*?--astr-ambient-opacity-max:\s*1;/,

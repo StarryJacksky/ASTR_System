@@ -9,6 +9,7 @@ import type { AstrEvent, ConversationProjection } from "@/lib/types";
 
 import {
   JEWEL_RUNTIME_SERVER_SNAPSHOT,
+  createJewelOwnership,
   createJewelRuntime,
   type JewelRuntime,
 } from "./jewel-runtime";
@@ -84,6 +85,54 @@ function readyRuntime(snapshot = presence()): JewelRuntime {
 }
 
 describe("application Jewel runtime", () => {
+  it("projects owner-scoped generation tokens and rejects a stale visual release", () => {
+    const runtime = readyRuntime();
+    const lensOwnership = createJewelOwnership(runtime, ["soulLens"]);
+    const live2dOwnership = createJewelOwnership(runtime, ["live2d"]);
+    const aggregateOwnership = createJewelOwnership(runtime, ["soulLens", "live2d"]);
+
+    const first = runtime.acquire({
+      owner: "soulLens",
+      mode: "streamStage",
+      traceId: "trace-active",
+      semanticEnd: "recall",
+    });
+    expect(first).not.toBeNull();
+    const firstLensSnapshot = lensOwnership.getSnapshot();
+    expect(firstLensSnapshot.ownsLease).toBe(true);
+    if (!firstLensSnapshot.ownsLease) throw new Error("expected Lens ownership");
+    const staleToken = firstLensSnapshot.leaseToken;
+    expect(live2dOwnership.getSnapshot().ownsLease).toBe(false);
+    expect(aggregateOwnership.getSnapshot().ownsLease).toBe(true);
+
+    const newest = runtime.acquire({
+      owner: "soulLens",
+      mode: "streamStage",
+      traceId: "trace-active",
+      semanticEnd: "compose",
+    });
+    expect(newest).not.toBeNull();
+    const newestSnapshot = runtime.getSnapshot();
+    const newestLensSnapshot = lensOwnership.getSnapshot();
+    if (!newestLensSnapshot.ownsLease) throw new Error("expected newest Lens ownership");
+    const newestToken = newestLensSnapshot.leaseToken;
+    expect(newestToken).not.toBe(staleToken);
+
+    lensOwnership.releaseOwned("initialization-failed", staleToken);
+    expect(runtime.getSnapshot()).toBe(newestSnapshot);
+    expect(runtime.getSnapshot().lease).toMatchObject({
+      owner: "soulLens",
+      semanticEnd: "compose",
+    });
+
+    lensOwnership.releaseOwned("initialization-failed", newestToken);
+    expect(runtime.getSnapshot()).toMatchObject({
+      lease: null,
+      endpoint: { kind: "rest" },
+      activeDynamicJewelCount: 0,
+    });
+  });
+
   it("publishes stable, frozen external-store snapshots and ignores rejected mutations", () => {
     const runtime = createJewelRuntime();
     const listener = vi.fn();
@@ -281,6 +330,7 @@ describe("application Jewel runtime", () => {
     inheritedPayload.text = "inherited stage";
     const rejected = [
       event({ id: "heartbeat", source: "soul.heartbeat", stage: "monologue" }),
+      event({ id: "local-stage", source: "local.timer", stage: "compose" }),
       event({ id: "other-trace", traceId: "trace-other" }),
       event({ id: "wrong-type", type: "moa.report" }),
       event({ id: "blank-stage", payload: { text: "blank", stage: "   " } }),

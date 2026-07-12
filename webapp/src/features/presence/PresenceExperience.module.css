@@ -221,3 +221,9 @@
 :global([data-visual-motion="paused"]) .lifeIsland {
   transition-duration: 0ms;
 }
+
+/* A stopped lease must not leave the last WebGL frame floating over the SVG truth. */
+:global([data-visual-jewel-active="false"])
+  :global([data-presence-visual-surface]) {
+  opacity: 0;
+}

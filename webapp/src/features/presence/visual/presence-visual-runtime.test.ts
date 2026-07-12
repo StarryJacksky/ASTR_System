@@ -280,6 +280,25 @@ describe("createPresenceVisualRuntime", () => {
     expect(harness.semantic.events.at(-1)).toEqual({ type: "WEBGL_READY" });
   });
 
+  it("is the sole viewport owner and forwards resize facts to the active scene", async () => {
+    const resizeScene = vi.fn();
+    const harness = createHarness({
+      initializeScene: vi.fn(() => ({
+        destroy: vi.fn(),
+        resize: resizeScene,
+      })),
+    });
+
+    await harness.runtime.mount();
+    expect(resizeScene).toHaveBeenLastCalledWith({ width: 720, height: 480 });
+
+    harness.surface.setSize(960, 540);
+    harness.resize.emit();
+
+    expect(resizeScene).toHaveBeenLastCalledWith({ width: 960, height: 540 });
+    expect(resizeScene).toHaveBeenCalledTimes(2);
+  });
+
   it("does not fabricate zero backing dimensions when a renderer reports invalid data", async () => {
     const harness = createHarness({
       backingSize: { width: Number.NaN, height: -1 },
@@ -642,6 +661,46 @@ describe("createPresenceVisualRuntime", () => {
     expect(harness.runtime.getSnapshot()).toMatchObject({ phase: "ready", retryRequired: false });
     expect(harness.semantic.events.filter((event) => event.type === "VISUAL_RETRY")).toHaveLength(2);
     expect(harness.semantic.events.filter((event) => event.type === "WEBGL_READY")).toHaveLength(2);
+  });
+
+  it("preserves the explicit-retry gate when a second restore races pending scene initialization", async () => {
+    const restoringScene = deferred<PresenceVisualResource>();
+    const initializeScene = vi
+      .fn<PresenceVisualSceneInitializer>()
+      .mockImplementationOnce(() => createResource())
+      .mockImplementationOnce(() => restoringScene.promise)
+      .mockImplementationOnce(() => createResource());
+    const harness = createHarness({ initializeScene });
+    await harness.runtime.mount();
+    const firstApplication = harness.applications[0];
+
+    firstApplication.view.emit("webglcontextlost", createPreventableEvent().event);
+    firstApplication.view.emit("webglcontextrestored", {});
+    await vi.waitFor(() => expect(harness.applications).toHaveLength(2));
+    const restoringApplication = harness.applications[1];
+
+    restoringApplication.view.emit(
+      "webglcontextlost",
+      createPreventableEvent().event,
+    );
+    restoringApplication.view.emit("webglcontextrestored", {});
+    expect(harness.runtime.getSnapshot().retryRequired).toBe(true);
+
+    restoringScene.resolve(createResource());
+    await vi.waitFor(() => expect(initializeScene).toHaveBeenCalledTimes(2));
+    await Promise.resolve();
+
+    expect(harness.runtime.getSnapshot()).toMatchObject({
+      phase: "static",
+      retryRequired: true,
+    });
+    expect(harness.semantic.getSnapshot().visualRuntime).toBe("contextLost");
+
+    await harness.runtime.retry();
+    expect(harness.runtime.getSnapshot()).toMatchObject({
+      phase: "ready",
+      retryRequired: false,
+    });
   });
 
   it("destroys observers, window/context listeners, subscriptions, ticker and app exactly once", async () => {

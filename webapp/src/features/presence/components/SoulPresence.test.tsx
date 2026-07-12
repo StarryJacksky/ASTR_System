@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { SoulPresence } from "./SoulPresence";
@@ -43,6 +43,7 @@ describe("static Soul presence", () => {
         model="astr-local"
         visualConfigured
         visualRuntime="loading"
+        visualSlot={<span data-testid="configured-slot" />}
       />,
     );
 
@@ -58,6 +59,7 @@ describe("static Soul presence", () => {
         model="astr-local"
         visualConfigured
         visualRuntime="contextLost"
+        visualSlot={<span data-testid="configured-slot" />}
       />,
     );
     expect(view.container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
@@ -70,6 +72,7 @@ describe("static Soul presence", () => {
         model="astr-local"
         visualConfigured
         visualRuntime="ready"
+        visualSlot={<span data-testid="configured-slot" />}
       />,
     );
     expect(view.container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
@@ -100,6 +103,26 @@ describe("static Soul presence", () => {
       .toHaveAttribute("aria-hidden", "true");
     expect(container.querySelector("[data-static-soul-lens]")).toBeInTheDocument();
     expect(screen.getByText(/provenance：未提供/i)).toBeVisible();
+  });
+
+  it("configures the production scene without removing the static fallback or license truth", async () => {
+    const { container } = render(
+      <SoulPresence visualConfigured visualRuntime="loading" />,
+    );
+
+    expect(container.querySelector("[data-static-soul-lens]"))
+      .toHaveAttribute("data-soul-lens-fallback", "static");
+    expect(
+      screen.getByText(
+        "This content uses sample data owned and copyrighted by Live2D Inc.",
+      ),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(container.querySelector("[data-presence-visual-host]"))
+        .not.toHaveAttribute("data-visual-status", "notConfigured"),
+    );
+    expect(container.querySelector("[data-presence-visual-copy]"))
+      .not.toHaveClass("sr-only");
   });
 
   it("declares a static token-only Soul material without continuous motion", () => {

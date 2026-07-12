@@ -70,10 +70,19 @@ export type PresenceVisualJewelSnapshot =
       leaseToken: object | string | number;
     }>;
 
+export type PresenceVisualJewelToken = Exclude<
+  PresenceVisualJewelSnapshot["leaseToken"],
+  null
+>;
+
 export interface PresenceVisualJewelOwnership {
   readonly getSnapshot: () => PresenceVisualJewelSnapshot;
   readonly subscribe: (listener: () => void) => () => void;
-  readonly releaseOwned: (reason: PresenceVisualReleaseReason) => void;
+  /** Releases only the exact generation observed by the caller. */
+  readonly releaseOwned: (
+    reason: PresenceVisualReleaseReason,
+    expectedToken: PresenceVisualJewelToken,
+  ) => void;
 }
 
 export interface PresenceVisualEvent {
@@ -152,6 +161,7 @@ export interface PresenceVisualApplicationModule {
 export interface PresenceVisualResource {
   readonly destroy: () => void;
   readonly readMetrics?: () => PresenceVisualSceneMetrics;
+  readonly resize?: (size: PresenceVisualSize) => void;
 }
 
 export interface PresenceVisualSceneMetrics {
@@ -164,6 +174,7 @@ export interface PresenceVisualSceneContext {
   readonly application: PresenceVisualApplication;
   readonly signal: AbortSignal;
   readonly jewel: PresenceVisualJewelOwnership;
+  readonly readViewport: () => PresenceVisualSize;
   readonly registerResource: (resource: PresenceVisualResource) => void;
 }
 
@@ -358,7 +369,8 @@ export function createPresenceVisualRuntime(
   function stopAndRelease(reason: PresenceVisualReleaseReason): void {
     stopTicker();
     try {
-      if (options.jewel.getSnapshot().ownsLease) options.jewel.releaseOwned(reason);
+      const owned = options.jewel.getSnapshot();
+      if (owned.ownsLease) options.jewel.releaseOwned(reason, owned.leaseToken);
     } catch {
       // Lease cleanup is fail-safe; renderer resources must still be released.
     }
@@ -402,6 +414,11 @@ export function createPresenceVisualRuntime(
     application.renderer.resolution = profile.resolution;
     application.renderer.resize(profile.width, profile.height);
     appliedLayout = next;
+    try {
+      activeScene?.resize?.({ width: profile.width, height: profile.height });
+    } catch {
+      // A layout hint cannot take renderer ownership away from the runtime.
+    }
     const backing = application.renderer.getBackingSize?.() ?? {
       width: Math.round(profile.width * profile.resolution),
       height: Math.round(profile.height * profile.resolution),
@@ -631,6 +648,10 @@ export function createPresenceVisualRuntime(
         application: createdApplication,
         signal: candidate.controller.signal,
         jewel: options.jewel,
+        readViewport: () => {
+          const current = readProfile();
+          return { width: current.width, height: current.height };
+        },
         registerResource: (resource) => candidate.resources.own(resource),
       });
       candidate.resources.own(scene);
@@ -641,11 +662,20 @@ export function createPresenceVisualRuntime(
       ) {
         sceneReady = false;
         activeScene = null;
-        publish({ phase: "static", failureStage: null, retryRequired: false });
+        publish({ phase: "static", failureStage: null });
         return;
       }
 
       activeScene = scene;
+      try {
+        const viewport = readProfile();
+        scene.resize?.({ width: viewport.width, height: viewport.height });
+      } catch {
+        throw new PresenceVisualInitializationError(
+          "pass",
+          "Presence visual scene rejected its initial viewport.",
+        );
+      }
       sceneReady = true;
       contextLost = false;
       refreshMetrics();

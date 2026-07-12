@@ -206,7 +206,10 @@ describe("renderer-free Live2D adapter", () => {
     const adapter = await harness.create();
 
     expect(() => harness.ticker.tick(16)).not.toThrow();
-    expect(harness.jewel.releaseOwned).toHaveBeenCalledWith("initialization-failed");
+    expect(harness.jewel.releaseOwned).toHaveBeenCalledWith(
+      "initialization-failed",
+      expect.any(Object),
+    );
     expect(onRuntimeError).toHaveBeenCalledWith(updateError);
     expect(harness.model.update).toHaveBeenCalledTimes(1);
     harness.ticker.tick(16);

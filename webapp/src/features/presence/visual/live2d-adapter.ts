@@ -349,7 +349,9 @@ function attachModel(
   const failRuntime = (error: unknown): void => {
     freezeRepresentativeFrame();
     try {
-      options.jewel.releaseOwned("initialization-failed");
+      if (leaseToken !== null) {
+        options.jewel.releaseOwned("initialization-failed", leaseToken);
+      }
     } catch {
       // The frozen model is already fail-closed even if lease release is unavailable.
     }

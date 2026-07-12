@@ -6,9 +6,17 @@ import {
   type JewelLease,
   type JewelLeaseHandle,
   type JewelLeaseIntent,
+  type JewelOwner,
 } from "@/lib/jewel-lease";
 import type { SemanticState } from "@/lib/semantic-state";
 import type { AstrEvent } from "@/lib/types";
+
+import type {
+  PresenceVisualJewelOwnership,
+  PresenceVisualJewelSnapshot,
+  PresenceVisualJewelToken,
+  PresenceVisualReleaseReason,
+} from "./presence-visual-runtime";
 
 export type JewelStaticEndpoint =
   | Readonly<{ kind: "rest"; traceId: null; stage: null }>
@@ -32,6 +40,10 @@ export interface JewelRuntime {
   readonly syncPresence: (snapshot: PresenceControllerSnapshot) => void;
   readonly acquire: (intent: JewelLeaseIntent) => JewelLeaseHandle | null;
   readonly owns: (handle: JewelLeaseHandle) => boolean;
+  readonly releaseProjected: (
+    owners: readonly JewelOwner[],
+    expectedToken: PresenceVisualJewelToken,
+  ) => void;
   readonly release: (handle: JewelLeaseHandle, endpoint?: JewelStaticEndpoint) => void;
   readonly complete: (handle: JewelLeaseHandle, endpoint?: JewelStaticEndpoint) => void;
   readonly dispose: () => void;
@@ -61,7 +73,7 @@ export function createJewelRuntime({
   const leases = new JewelLeaseController(capabilities);
   const listeners = new Set<() => void>();
   let snapshot = JEWEL_RUNTIME_SERVER_SNAPSHOT;
-  let projectedLeaseSource: JewelLease | null = null;
+  let projectedLeaseSource: JewelLeaseHandle | null = null;
   let projectedLease: Readonly<JewelLease> | null = null;
   let endpoint = JEWEL_REST_ENDPOINT;
   let presencePrimed = false;
@@ -136,6 +148,22 @@ export function createJewelRuntime({
       publish();
     }
     return handle;
+  };
+
+  const releaseProjected = (
+    owners: readonly JewelOwner[],
+    expectedToken: PresenceVisualJewelToken,
+  ): void => {
+    const current = leases.current();
+    if (
+      current === null ||
+      projectedLease === null ||
+      !Object.is(projectedLease, expectedToken) ||
+      !owners.includes(current.owner)
+    ) {
+      return;
+    }
+    settle(current, JEWEL_REST_ENDPOINT, "release");
   };
 
   const resetStreamLeases = (): void => {
@@ -308,6 +336,7 @@ export function createJewelRuntime({
     syncPresence,
     acquire,
     owns: (handle: JewelLeaseHandle) => leases.current() === handle,
+    releaseProjected,
     release: (handle: JewelLeaseHandle, nextEndpoint?: JewelStaticEndpoint) =>
       settle(handle, nextEndpoint, "release"),
     complete: (handle: JewelLeaseHandle, nextEndpoint?: JewelStaticEndpoint) =>
@@ -317,6 +346,58 @@ export function createJewelRuntime({
 }
 
 export const jewelRuntime = createJewelRuntime();
+
+const UNOWNED_VISUAL_JEWEL: PresenceVisualJewelSnapshot = Object.freeze({
+  ownsLease: false,
+  leaseToken: null,
+});
+
+/**
+ * Narrows the application Jewel to one visual owner set while preserving the
+ * projected lease object's generation identity as the public token.
+ */
+export function createJewelOwnership(
+  runtime: JewelRuntime,
+  owners: readonly JewelOwner[],
+): PresenceVisualJewelOwnership {
+  const ownerSet = new Set(owners);
+  let sourceLease: Readonly<JewelLease> | null = null;
+  let snapshot = UNOWNED_VISUAL_JEWEL;
+
+  const project = (): PresenceVisualJewelSnapshot => {
+    const lease = runtime.getSnapshot().lease;
+    if (lease === sourceLease) return snapshot;
+    sourceLease = lease;
+    snapshot =
+      lease !== null && ownerSet.has(lease.owner)
+        ? Object.freeze({ ownsLease: true, leaseToken: lease })
+        : UNOWNED_VISUAL_JEWEL;
+    return snapshot;
+  };
+
+  return Object.freeze({
+    getSnapshot: project,
+    subscribe: (listener: () => void) => {
+      let previous = project();
+      return runtime.subscribe(() => {
+        const next = project();
+        if (next === previous) return;
+        previous = next;
+        listener();
+      });
+    },
+    releaseOwned: (
+      _reason: PresenceVisualReleaseReason,
+      expectedToken: PresenceVisualJewelToken,
+    ) =>
+      runtime.releaseProjected(owners, expectedToken),
+  });
+}
+
+export const presenceVisualJewelOwnership = createJewelOwnership(jewelRuntime, [
+  "soulLens",
+  "live2d",
+]);
 
 function freezeLeaseProjection(lease: JewelLease): Readonly<JewelLease> {
   return Object.freeze({
@@ -372,7 +453,7 @@ function validStage(candidate: AstrEvent, activeTraceId: string): string | null 
   if (
     candidate.type !== "agent.thought" ||
     candidate.trace_id !== activeTraceId ||
-    candidate.source === "soul.heartbeat" ||
+    candidate.source !== "soul.orchestrator" ||
     !Object.hasOwn(candidate.payload, "stage")
   ) {
     return null;

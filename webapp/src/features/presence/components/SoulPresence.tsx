@@ -4,7 +4,12 @@ import type { VisualRuntimeState } from "@/lib/semantic-state";
 
 import styles from "./SoulPresence.module.css";
 import { StaticSoulLens } from "./StaticSoulLens";
-import { PresenceVisualHost } from "../visual/PresenceVisualHost";
+import {
+  loadPresenceVisualScene,
+  PresenceVisualHost,
+} from "../visual/PresenceVisualHost";
+import { presenceVisualJewelOwnership } from "../visual/jewel-runtime";
+import { LIVE2D_REQUIRED_COPYRIGHT_NOTICE } from "../visual/live2d-legal";
 
 export interface SoulPresenceProps {
   readonly displayName?: string;
@@ -38,6 +43,7 @@ export function SoulPresence({
   const personName = optionalText(displayName) ?? "Soul";
   const currentActivity = optionalText(activity);
   const modelShell = optionalText(model);
+  const usesDefaultVisualHost = visualConfigured && visualSlot === undefined;
 
   return (
     <section className={styles.soulPresence} data-visual-runtime={visualRuntime}>
@@ -49,13 +55,25 @@ export function SoulPresence({
 
       <div className={styles.visualStage}>
         <StaticSoulLens className={styles.lens} />
-        <p className={styles.runtimeCopy} data-visual-runtime={visualRuntime}>
-          {visualConfigured
-            ? RUNTIME_COPY[visualRuntime]
-            : UNCONFIGURED_VISUAL_COPY}
-        </p>
+        {!usesDefaultVisualHost ? (
+          <p className={styles.runtimeCopy} data-visual-runtime={visualRuntime}>
+            {visualConfigured
+              ? RUNTIME_COPY[visualRuntime]
+              : UNCONFIGURED_VISUAL_COPY}
+          </p>
+        ) : null}
         <div className={styles.visualSlot} data-visual-slot="reserved">
-          {visualSlot ?? <PresenceVisualHost />}
+          {visualSlot ?? (
+            <PresenceVisualHost
+              jewelOwnership={
+                visualConfigured ? presenceVisualJewelOwnership : undefined
+              }
+              sceneLoader={visualConfigured ? loadPresenceVisualScene : undefined}
+              statusClassName={
+                visualConfigured ? styles.runtimeCopy : undefined
+              }
+            />
+          )}
         </div>
       </div>
 
@@ -72,6 +90,12 @@ export function SoulPresence({
           <dt>记忆连续性</dt>
           <dd>记忆连续性 / provenance：未提供</dd>
         </div>
+        {visualConfigured ? (
+          <div className={styles.truthRow}>
+            <dt>素材声明</dt>
+            <dd lang="en">{LIVE2D_REQUIRED_COPYRIGHT_NOTICE}</dd>
+          </div>
+        ) : null}
       </dl>
     </section>
   );

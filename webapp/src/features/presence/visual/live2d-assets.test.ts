@@ -18,6 +18,7 @@ import {
   validateLive2DModelReferences,
   verifyLive2DAssetInventory,
 } from "./live2d-assets";
+import { LIVE2D_REQUIRED_COPYRIGHT_NOTICE } from "./live2d-legal";
 
 const CORE_SRC = "/live2d/core/live2dcubismcore.min.js";
 const temporaryDirectories: string[] = [];
@@ -29,6 +30,12 @@ afterEach(() => {
 });
 
 describe("Live2D asset contract", () => {
+  it("keeps the lightweight UI notice byte-identical to the pinned asset terms", () => {
+    expect(LIVE2D_REQUIRED_COPYRIGHT_NOTICE).toBe(
+      LIVE2D_ASSET_LOCK.modelSource.requiredCopyrightNotice,
+    );
+  });
+
   it("pins every downloadable byte by immutable source, size and SHA-256", () => {
     expect(LIVE2D_ASSET_LOCK.schemaVersion).toBe(1);
     expect(LIVE2D_ASSET_LOCK.modelSource.commit).toBe(

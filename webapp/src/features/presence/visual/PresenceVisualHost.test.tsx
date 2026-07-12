@@ -13,6 +13,8 @@ import type {
 } from "./presence-visual-owner";
 import { createPresenceVisualRuntimeOwner } from "./presence-visual-owner";
 import type {
+  PresenceVisualJewelOwnership,
+  PresenceVisualJewelSnapshot,
   PresenceVisualSemanticEvent,
   PresenceVisualSemanticSnapshot,
   PresenceVisualSemanticSource,
@@ -167,6 +169,52 @@ describe("Presence visual Host", () => {
         .toHaveAttribute("data-visual-status", "notConfigured"),
     );
     expect(dynamicHarness.requests).toBe(0);
+  });
+
+  it("can expose the same compact fallback truth visibly without a second status source", async () => {
+    const semantic = createSemanticSource({ visualRuntime: "loading" });
+    const owner = createControlledOwner();
+
+    const view = render(
+      <PresenceVisualHost
+        owner={owner.owner}
+        sceneLoader={EMPTY_SCENE}
+        semanticSource={semantic.source}
+        statusClassName="visible-visual-status"
+        viewportWidth={390}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(view.container.querySelector("[data-presence-visual-copy]"))
+        .toHaveAttribute("data-visual-copy-status", "compact"),
+    );
+    expect(screen.getByText(/紧凑屏幕使用静态代表帧/)).toHaveClass(
+      "visible-visual-status",
+    );
+    expect(dynamicHarness.requests).toBe(0);
+  });
+
+  it("exposes aggregate visual ownership so stale canvas pixels can be hidden", async () => {
+    const semantic = createSemanticSource({ visualRuntime: "loading" });
+    const owner = createControlledOwner();
+    const jewel = createControlledJewelOwnership();
+    const view = render(
+      <PresenceVisualHost
+        jewelOwnership={jewel.ownership}
+        owner={owner.owner}
+        sceneLoader={EMPTY_SCENE}
+        semanticSource={semantic.source}
+        viewportWidth={1280}
+      />,
+    );
+    const host = view.container.querySelector("[data-presence-visual-host]");
+
+    expect(host).toHaveAttribute("data-visual-jewel-active", "false");
+    act(() => jewel.setOwned(true));
+    expect(host).toHaveAttribute("data-visual-jewel-active", "true");
+    act(() => jewel.setOwned(false));
+    expect(host).toHaveAttribute("data-visual-jewel-active", "false");
   });
 
   it("requests the named dynamic mount only for an eligible desktop scene", async () => {
@@ -441,6 +489,9 @@ describe("Presence visual Host", () => {
     expect(hostSource).toMatch(
       /dynamic\([\s\S]*import\("\.\/pixi-runtime-loader"\)[\s\S]*\.PresenceVisualMount[\s\S]*ssr:\s*false/,
     );
+    expect(hostSource).toMatch(
+      /loadPresenceVisualScene[\s\S]*import\("\.\/visual-scene"\)/,
+    );
     expect(hostSource).not.toMatch(
       /requestAnimationFrame|getContext|new\s+\w*Application|Ticker\.shared|ResizeObserver/,
     );
@@ -521,6 +572,31 @@ function createControlledOwner(
     retry,
     publish(next: Partial<PresenceVisualOwnerSnapshot>) {
       snapshot = Object.freeze({ ...snapshot, ...next });
+      for (const listener of [...listeners]) listener();
+    },
+  };
+}
+
+function createControlledJewelOwnership() {
+  let snapshot: PresenceVisualJewelSnapshot = Object.freeze({
+    ownsLease: false,
+    leaseToken: null,
+  });
+  const listeners = new Set<() => void>();
+  const ownership: PresenceVisualJewelOwnership = {
+    getSnapshot: () => snapshot,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    releaseOwned: vi.fn(),
+  };
+  return {
+    ownership,
+    setOwned(owned: boolean) {
+      snapshot = owned
+        ? Object.freeze({ ownsLease: true, leaseToken: {} })
+        : Object.freeze({ ownsLease: false, leaseToken: null });
       for (const listener of [...listeners]) listener();
     },
   };

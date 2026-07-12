@@ -137,7 +137,7 @@ export class JewelLeaseController {
     return lease;
   }
 
-  current(): JewelLease | null {
+  current(): JewelLeaseHandle | null {
     return this.activeLease;
   }
 
