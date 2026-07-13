@@ -61,6 +61,7 @@ const ROUTES = Object.freeze(MOBILE_DOMAINS.map((domain) => Object.freeze({
   appPath: `app/mobile/${domain}/page.js`,
   serverEntry: `.next/server/app/mobile/${domain}/page.js`,
   manifest: `.next/server/app/mobile/${domain}/page_client-reference-manifest.js`,
+  rootLayoutEntry: "src/app/layout",
   layoutEntry: "src/app/mobile/layout",
   pageEntry: `src/app/mobile/${domain}/page`,
 })));
@@ -212,7 +213,11 @@ export async function checkMobileBoundaries({ root = defaultProjectRoot } = {}) 
   violations.push(...globals.violations);
   const registry = inspectMobileRegistry(projectRoot, typescript);
   violations.push(...registry.violations);
-  const buildEvidence = inspectMobileBuildEvidence(projectRoot, findForbiddenGreenUsages);
+  const buildEvidence = inspectMobileBuildEvidence(
+    projectRoot,
+    findForbiddenGreenUsages,
+    typescript,
+  );
   violations.push(...buildEvidence.violations);
 
   const sortedViolations = dedupeViolations(violations).sort(compareViolations);
@@ -408,20 +413,55 @@ function findNetworkAccessMatches(sourceFile, typescript) {
   const matches = [];
   const visit = (node) => {
     if (typescript.isCallExpression(node)) {
-      const callee = node.expression.getText(sourceFile);
-      if (/^(?:globalThis\.)?fetch$|^(?:globalThis\.)?(?:EventSource|WebSocket)$|\.sendBeacon$/.test(callee)) {
-        matches.push(callee);
-      }
+      const path = memberExpressionPath(node.expression, typescript);
+      if (isNetworkCallPath(path)) matches.push(node.expression.getText(sourceFile));
     } else if (typescript.isNewExpression(node)) {
-      const constructor = node.expression.getText(sourceFile);
-      if (/^(?:globalThis\.)?(?:EventSource|WebSocket|XMLHttpRequest)$/.test(constructor)) {
-        matches.push(constructor);
-      }
+      const path = memberExpressionPath(node.expression, typescript);
+      if (isNetworkConstructorPath(path)) matches.push(node.expression.getText(sourceFile));
     }
     typescript.forEachChild(node, visit);
   };
   visit(sourceFile);
   return matches;
+}
+
+function memberExpressionPath(expression, typescript) {
+  const current = unwrapExpression(expression, typescript);
+  if (typescript.isIdentifier(current)) return [current.text];
+  if (typescript.isPropertyAccessExpression(current)) {
+    const parent = memberExpressionPath(current.expression, typescript);
+    return parent === null ? null : [...parent, current.name.text];
+  }
+  if (typescript.isElementAccessExpression(current)) {
+    const parent = memberExpressionPath(current.expression, typescript);
+    const argument = current.argumentExpression && unwrapExpression(
+      current.argumentExpression,
+      typescript,
+    );
+    return parent !== null && argument && typescript.isStringLiteralLike(argument)
+      ? [...parent, argument.text]
+      : null;
+  }
+  return null;
+}
+
+function isNetworkCallPath(path) {
+  if (path === null || path.length === 0) return false;
+  const api = path.at(-1);
+  if (api === "sendBeacon") return true;
+  if (!new Set(["fetch", "EventSource", "WebSocket"]).has(api)) return false;
+  return path.length === 1 || (
+    path.length === 2 && new Set(["globalThis", "window", "self"]).has(path[0])
+  );
+}
+
+function isNetworkConstructorPath(path) {
+  if (path === null || path.length === 0) return false;
+  const api = path.at(-1);
+  if (!new Set(["EventSource", "WebSocket", "XMLHttpRequest"]).has(api)) return false;
+  return path.length === 1 || (
+    path.length === 2 && new Set(["globalThis", "window", "self"]).has(path[0])
+  );
 }
 
 function hasUseClientDirective(sourceFile, typescript) {
@@ -434,8 +474,10 @@ function hasUseClientDirective(sourceFile, typescript) {
 
 function findW5SourceViolations(sourceFile, file, typescript) {
   const violations = [];
+  const stringValues = [];
   const visit = (node) => {
     if (typescript.isStringLiteralLike(node)) {
+      stringValues.push(node.text);
       for (const match of node.text.matchAll(W5_ENDPOINT_PATTERN)) {
         violations.push(createViolation(
           "mobile-w5-capability",
@@ -476,7 +518,26 @@ function findW5SourceViolations(sourceFile, file, typescript) {
     typescript.forEachChild(node, visit);
   };
   visit(sourceFile);
+  const composed = findComposedW5EndpointMatch(stringValues);
+  if (composed !== null) {
+    violations.push(createViolation(
+      "mobile-w5-capability",
+      file,
+      "Mobile may not assemble a future W5 endpoint from separated anchor and domain segments.",
+      composed,
+    ));
+  }
   return violations;
+}
+
+function findComposedW5EndpointMatch(stringValues) {
+  const anchor = stringValues.find((value) =>
+    /^\/(?:api\/(?:core\/)?(?:v1\/)?|v1\/)$/i.test(value),
+  );
+  const segment = stringValues.find((value) =>
+    /^\/?(?:tasks?|devices?|approvals?|artifacts?|dispatch|provenance|studio|knowledge)(?:\/|$)/i.test(value),
+  );
+  return anchor && segment ? `${anchor} + ${segment}` : null;
 }
 
 function staticStringValue(expression, typescript) {
@@ -621,7 +682,7 @@ function inspectGlobalsWitness(projectRoot, findForbiddenGreenUsages) {
     'body:has([data-route-surface="mobile"]) .astr-grain',
   ].sort();
   let witness = null;
-  let witnessEnd = -1;
+  let witnessIndex = -1;
   const cssRules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   for (const match of cssRules) {
     const selectors = match[1].split(",").map(normalizeCssSelector).sort();
@@ -632,7 +693,7 @@ function inspectGlobalsWitness(projectRoot, findForbiddenGreenUsages) {
         declarationValuesAreOnlyNone(match[2], "background")
       ) {
         witness = match[0];
-        witnessEnd = (match.index ?? 0) + match[0].length;
+        witnessIndex = match.index ?? -1;
         break;
       }
     }
@@ -656,9 +717,9 @@ function inspectGlobalsWitness(projectRoot, findForbiddenGreenUsages) {
       ));
     }
     for (const rule of cssRules) {
-      if ((rule.index ?? 0) < witnessEnd) continue;
+      if ((rule.index ?? -1) === witnessIndex) continue;
       const selectors = rule[1].split(",").map(normalizeCssSelector);
-      if (!selectors.some((selector) => requiredSelectors.includes(selector))) continue;
+      if (!selectors.some(isMobileAmbientOrGrainSelector)) continue;
       const overridden = ["display", "animation", "background"].some((property) => {
         const values = cssDeclarationValues(rule[2], property);
         return values.some((value) => value !== "none");
@@ -693,6 +754,12 @@ function cssDeclarationValues(declarations, property) {
 
 function normalizeCssSelector(selector) {
   return selector.trim().replace(/\s+/g, " ");
+}
+
+function isMobileAmbientOrGrainSelector(selector) {
+  const normalized = normalizeCssSelector(selector);
+  return normalized.includes(':has([data-route-surface="mobile"])') &&
+    /\.astr-(?:ambient|grain)(?![\w-])/.test(normalized);
 }
 
 function inspectMobileRegistry(projectRoot, typescript) {
@@ -751,9 +818,15 @@ function inspectMobileRegistry(projectRoot, typescript) {
         literalOnly = false;
         continue;
       }
+      if (candidate.properties.some((property) => typescript.isSpreadAssignment(property))) {
+        literalOnly = false;
+      }
+      const id = stringProperty(candidate, "id", typescript);
+      const href = stringProperty(candidate, "href", typescript);
+      if (id === null || href === null) literalOnly = false;
       definitions.push({
-        id: stringProperty(candidate, "id", typescript),
-        href: stringProperty(candidate, "href", typescript),
+        id,
+        href,
       });
     }
   }
@@ -838,16 +911,16 @@ function propertyNameText(name, typescript) {
 }
 
 function stringProperty(object, propertyName, typescript) {
-  for (const property of object.properties) {
-    if (!typescript.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.name, typescript) !== propertyName) continue;
-    const value = unwrapExpression(property.initializer, typescript);
-    return typescript.isStringLiteralLike(value) ? value.text : null;
-  }
-  return null;
+  const matches = object.properties.filter((property) =>
+    typescript.isPropertyAssignment(property) &&
+    propertyNameText(property.name, typescript) === propertyName,
+  );
+  if (matches.length !== 1) return null;
+  const value = unwrapExpression(matches[0].initializer, typescript);
+  return typescript.isStringLiteralLike(value) ? value.text : null;
 }
 
-function inspectMobileBuildEvidence(projectRoot, findForbiddenGreenUsages) {
+function inspectMobileBuildEvidence(projectRoot, findForbiddenGreenUsages, typescript) {
   const buildStampPath = resolve(projectRoot, ".next/astr-e2e-build.json");
   const buildIdPath = resolve(projectRoot, ".next/BUILD_ID");
   const missingStampEvidence = [buildStampPath, buildIdPath].filter((file) => !existsSync(file));
@@ -1030,7 +1103,7 @@ function inspectMobileBuildEvidence(projectRoot, findForbiddenGreenUsages) {
           heavy[0],
         ));
       }
-      const w5 = findW5ByteMatch(bytes);
+      const w5 = findW5ByteMatch(bytes, typescript);
       if (w5 !== null) {
         routeViolations.push(createViolation(
           "mobile-w5-capability",
@@ -1231,20 +1304,25 @@ function routeOwnedCss(manifest, descriptor) {
   if (!entryFiles || typeof entryFiles !== "object" || Array.isArray(entryFiles)) {
     return { ok: false, detail: "The RSC manifest has no entryCSSFiles object.", files: [] };
   }
+  const rootLayoutFiles = exactEntryCssFiles(entryFiles, descriptor.rootLayoutEntry);
   const layoutFiles = exactEntryCssFiles(entryFiles, descriptor.layoutEntry);
   const pageFiles = exactEntryCssFiles(entryFiles, descriptor.pageEntry);
-  if (layoutFiles === null || pageFiles === null) {
+  if (rootLayoutFiles === null || layoutFiles === null || pageFiles === null) {
     return {
       ok: false,
-      detail: "The RSC manifest must contain real Mobile layout and page CSS entry arrays.",
+      detail: "The RSC manifest must contain real root layout, Mobile layout, and page CSS entry arrays.",
       files: [],
     };
   }
-  const shared = new Set(layoutFiles);
+  const rootShared = new Set(rootLayoutFiles);
+  const mobileShared = new Set(layoutFiles);
   return {
     ok: true,
     detail: "",
-    files: [...new Set(pageFiles.filter((file) => !shared.has(file)))].sort(),
+    files: [...new Set([
+      ...layoutFiles.filter((file) => !rootShared.has(file)),
+      ...pageFiles.filter((file) => !mobileShared.has(file)),
+    ])].sort(),
   };
 }
 
@@ -1272,10 +1350,25 @@ function normalizeCssChunk(value) {
   return `.next/${normalized}`;
 }
 
-function findW5ByteMatch(bytes) {
+function findW5ByteMatch(bytes, typescript) {
   const joined = bytes.replace(/(["'`])\s*\+\s*(["'`])/g, "");
   const endpoint = joined.match(W5_ENDPOINT_PATTERN);
   if (endpoint) return endpoint[0];
+  const sourceFile = typescript.createSourceFile(
+    "mobile-route-chunk.js",
+    bytes,
+    typescript.ScriptTarget.Latest,
+    true,
+    typescript.ScriptKind.JS,
+  );
+  const stringValues = [];
+  const visit = (node) => {
+    if (typescript.isStringLiteralLike(node)) stringValues.push(node.text);
+    typescript.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  const composed = findComposedW5EndpointMatch(stringValues);
+  if (composed !== null) return composed;
   const contract = joined.match(/\b(?:Remote(?:Task|Device)|DispatchClient|ApprovalClient|ArtifactClient|ProvenanceClient)\b/);
   return contract?.[0] ?? null;
 }

@@ -177,6 +177,13 @@ describe("Mobile production boundary command", () => {
     ["CoreClient", "import { CoreClient } from '@/lib/transport'; export { CoreClient };"],
     ["Core library", "import { request } from '@/lib/core/client'; export { request };"],
     ["direct fetch", "export const load = () => fetch('/api/core/v1/status');"],
+    ["window fetch", "export const load = () => window.fetch('/api/core/v1/status');"],
+    ["element fetch", "export const load = () => globalThis['fetch']('/api/core/v1/status');"],
+    ["window WebSocket", "export const open = () => new window.WebSocket('ws://127.0.0.1');"],
+    [
+      "element XMLHttpRequest",
+      "export const open = () => new globalThis['XMLHttpRequest']();",
+    ],
   ])("rejects Shell/Nav %s access", (_label, source) => {
     const file = "src/features/mobile/shell/rogue.ts";
     const root = createFixture({ [file]: source });
@@ -191,6 +198,10 @@ describe("Mobile production boundary command", () => {
   it.each([
     ["client boundary", `"use client"; export const marker = true;`],
     ["network request", "export const load = () => fetch('/api/core/v1/status');"],
+    [
+      "element network request",
+      "export const load = () => globalThis['fetch']('/api/core/v1/status');",
+    ],
   ])("rejects Workbench/Knowledge %s", (_label, source) => {
     const file = "src/features/mobile/knowledge/rogue.ts";
     const root = createFixture({ [file]: source });
@@ -206,6 +217,22 @@ describe("Mobile production boundary command", () => {
     const file = "src/features/mobile/tasks/rogue.ts";
     const root = createFixture({
       [file]: `export const endpoint = '/v1/' + 'devices' + '/bind';`,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-w5-capability",
+      file,
+    }));
+  });
+
+  it("rejects a W5 endpoint assembled through a runtime-selected segment", () => {
+    const file = "src/features/mobile/tasks/rogue.ts";
+    const root = createFixture({
+      [file]: `
+        const domain = globalThis.mobileDomain || "devices";
+        export const endpoint = "/v1/" + domain + "/bind";
+      `,
     });
     const report = parseReport(runBoundary(root).stdout);
 
@@ -349,6 +376,25 @@ describe("Mobile production boundary command", () => {
     }));
   });
 
+  it("rejects registry object spreads that override an exact literal id and href", () => {
+    const definitions = JSON.parse(registryDefinitionsJson(DOMAINS));
+    const [presence, ...remaining] = definitions;
+    const presenceSource = `${JSON.stringify(presence).slice(0, -1)},
+      ...{ id: "dispatch", href: "/mobile/dispatch" }
+    }`;
+    const source = `
+      const domainDefinitions = [${presenceSource}, ${remaining.map(JSON.stringify).join(", ")}]
+        as const;
+      export const MOBILE_DOMAINS = domainDefinitions;
+    `;
+    const root = createFixture({ "src/features/mobile/model/mobile-domains.ts": source });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-domain-registry",
+    }));
+  });
+
   it("requires the exact Mobile ambient and grain first-paint witness", () => {
     const root = createFixture({
       "src/app/globals.css": `
@@ -387,6 +433,24 @@ describe("Mobile production boundary command", () => {
     const root = createFixture({
       "src/app/globals.css": `${globalsWitness()}
         body:has([data-route-surface="mobile"]) .astr-grain {
+          animation: orbit 9s linear infinite;
+          background: red;
+        }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-global-ambient-witness",
+    }));
+  });
+
+  it("rejects a later higher-specificity Mobile ambient and grain override", () => {
+    const root = createFixture({
+      "src/app/globals.css": `${globalsWitness()}
+        html body:has([data-route-surface="mobile"]) .astr-ambient,
+        html body:has([data-route-surface="mobile"]) .astr-grain {
+          display: block;
           animation: orbit 9s linear infinite;
           background: red;
         }
@@ -567,6 +631,22 @@ describe("Mobile production boundary command", () => {
     }));
   });
 
+  it("rejects runtime-composed W5 endpoint anchors and segments in a route-owned chunk", () => {
+    const file = ".next/static/chunks/mobile-tasks.js";
+    const root = createFixture({
+      [file]: `
+        const domain = globalThis.mobileDomain || "devices";
+        export const endpoint = "/v1/" + domain + "/bind";
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-w5-capability",
+      file,
+    }));
+  });
+
   it("unions own clientModules chunks into route validation and heavy-byte scanning", () => {
     const manifestFile = ".next/server/app/mobile/presence/page_client-reference-manifest.js";
     const hiddenChunk = ".next/static/chunks/mobile-presence-hidden.js";
@@ -631,6 +711,22 @@ describe("Mobile production boundary command", () => {
       expect.objectContaining({ rule: "no-green-hardcode", file: cssFile }),
       expect.objectContaining({ rule: "mobile-forbidden-gradient", file: cssFile }),
     ]));
+  });
+
+  it("scans Mobile-layout CSS while excluding root-layout shared CSS", () => {
+    const mobileCss = ".next/static/chunks/shared-mobile.css";
+    const rootCss = ".next/static/chunks/root-shared.css";
+    const root = createFixture({
+      [mobileCss]: ".mobile { color: green; background: linear-gradient(#111, #222); }",
+      [rootCss]: ".root { color: green; background: linear-gradient(#111, #222); }",
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rule: "no-green-hardcode", file: mobileCss }),
+      expect.objectContaining({ rule: "mobile-forbidden-gradient", file: mobileCss }),
+    ]));
+    expect(report.violations).not.toContainEqual(expect.objectContaining({ file: rootCss }));
   });
 
   it("rejects Workbench and Knowledge manifests that own another domain's business module", () => {
@@ -708,6 +804,23 @@ describe("Mobile coverage configuration contract", () => {
     const source = readFileSync(configPath, "utf8");
     expect(inspectCoverageConfig(mutate(source))).not.toEqual([]);
   });
+
+  it("rejects a later coverage spread that overrides the locked thresholds", () => {
+    const source = readFileSync(configPath, "utf8");
+    const mutated = source
+      .replace(
+        "export default defineConfig",
+        "const weakenedCoverage = { thresholds: {} };\n\nexport default defineConfig",
+      )
+      .replace(
+        "      },\n    },\n  },\n});",
+        "      },\n      ...weakenedCoverage,\n    },\n  },\n});",
+      );
+
+    expect(mutated).not.toBe(source);
+    expect(mutated).toContain("...weakenedCoverage");
+    expect(inspectCoverageConfig(mutated)).not.toEqual([]);
+  });
 });
 
 function createFixture(files = {}, options = {}) {
@@ -781,6 +894,7 @@ function createFixture(files = {}, options = {}) {
     "tsconfig.json": "{}",
     "public/.keep": "",
     ".next/static/chunks/shared-runtime.js": "export const shared = true;",
+    ".next/static/chunks/root-shared.css": ".root { color: #8bcfff; }",
     ".next/static/chunks/shared-mobile.css": ".shared { color: #8bcfff; }",
     ".next/static/chunks/mobile-presence.js": "export const presence = true;",
     ".next/static/chunks/mobile-tasks.js": "export const tasks = true;",
@@ -925,10 +1039,15 @@ globalThis.__RSC_MANIFEST[${JSON.stringify(routeKey)}] = ${JSON.stringify({
       ],
     },
     entryCSSFiles: {
+      "[project]/src/app/layout": [
+        { path: "static/chunks/root-shared.css", inlined: false },
+      ],
       "[project]/src/app/mobile/layout": [
+        { path: "static/chunks/root-shared.css", inlined: false },
         { path: "static/chunks/shared-mobile.css", inlined: false },
       ],
       [`[project]/src/app/mobile/${domain}/page`]: [
+        { path: "static/chunks/root-shared.css", inlined: false },
         { path: "static/chunks/shared-mobile.css", inlined: false },
         ...(options.ownedCss ? [{ path: options.ownedCss, inlined: false }] : []),
       ],
@@ -1011,13 +1130,22 @@ function inspectCoverageConfig(source) {
   const config = configCall && ts.isCallExpression(configCall)
     ? unwrapConfigExpression(configCall.arguments[0])
     : null;
+  if (config && ts.isObjectLiteralExpression(config) && hasUnsafeObjectOverrides(config)) {
+    violations.push("config:no-spread-or-duplicate-overrides");
+  }
   const test = config && ts.isObjectLiteralExpression(config)
     ? objectPropertyValue(config, "test")
     : null;
+  if (test && ts.isObjectLiteralExpression(test) && hasUnsafeObjectOverrides(test)) {
+    violations.push("test:no-spread-or-duplicate-overrides");
+  }
   const coverage = test && ts.isObjectLiteralExpression(test)
     ? objectPropertyValue(test, "coverage")
     : null;
   if (!coverage || !ts.isObjectLiteralExpression(coverage)) return ["coverage-object"];
+  if (hasUnsafeObjectOverrides(coverage)) {
+    violations.push("coverage:no-spread-or-duplicate-overrides");
+  }
 
   const includes = stringArray(objectPropertyValue(coverage, "include"));
   for (const required of [
@@ -1052,6 +1180,9 @@ function inspectCoverageConfig(source) {
     violations.push("thresholds:object");
     return violations.sort();
   }
+  if (hasUnsafeObjectOverrides(thresholds)) {
+    violations.push("thresholds:no-spread-or-duplicate-overrides");
+  }
   const expectedThresholds = new Map([
     [
       "src/features/mobile/**/*.{ts,tsx}",
@@ -1080,6 +1211,9 @@ function inspectCoverageConfig(source) {
       violations.push(`threshold:${glob}`);
       continue;
     }
+    if (hasUnsafeObjectOverrides(threshold)) {
+      violations.push(`threshold:${glob}:no-spread-or-duplicate-overrides`);
+    }
     for (const [metric, value] of Object.entries(expected)) {
       const actual = objectPropertyValue(threshold, metric);
       if (!actual || !ts.isNumericLiteral(actual) || Number(actual.text) !== value) {
@@ -1104,13 +1238,33 @@ function unwrapConfigExpression(expression) {
 }
 
 function objectPropertyValue(object, key) {
+  const matches = object.properties.filter((property) =>
+    ts.isPropertyAssignment(property) && objectPropertyKey(property) === key,
+  );
+  return matches.length === 1 ? unwrapConfigExpression(matches[0].initializer) : null;
+}
+
+function hasUnsafeObjectOverrides(object) {
+  const keys = new Set();
   for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    const name = property.name;
-    const propertyKey = ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-      ? name.text
-      : null;
-    if (propertyKey === key) return unwrapConfigExpression(property.initializer);
+    if (ts.isSpreadAssignment(property)) return true;
+    const key = objectPropertyKey(property);
+    if (key === null) continue;
+    if (keys.has(key)) return true;
+    keys.add(key);
+  }
+  return false;
+}
+
+function objectPropertyKey(property) {
+  const name = property.name;
+  if (!name) return null;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) return name.text;
+  if (
+    ts.isComputedPropertyName(name) &&
+    ts.isStringLiteralLike(unwrapConfigExpression(name.expression))
+  ) {
+    return unwrapConfigExpression(name.expression).text;
   }
   return null;
 }
