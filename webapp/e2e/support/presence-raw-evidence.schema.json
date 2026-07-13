@@ -144,20 +144,33 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
+                "status",
                 "renderPath",
+                "applicationOwnsSharedTicker",
                 "applicationRootCount",
+                "applicationTickerListenerCount",
                 "sharedTickerListenerCount",
                 "sharedTickerRafCount",
                 "provenance"
               ],
               "properties": {
+                "status": {
+                  "enum": ["measured", "unsupported", "not-applicable"]
+                },
                 "renderPath": { "enum": ["dynamic", "static"] },
-                "applicationRootCount": { "type": "integer", "minimum": 0 },
-                "sharedTickerListenerCount": { "type": "integer", "minimum": 0 },
-                "sharedTickerRafCount": { "type": "integer", "minimum": 0 },
+                "applicationOwnsSharedTicker": { "type": ["boolean", "null"] },
+                "applicationRootCount": { "type": ["integer", "null"], "minimum": 0 },
+                "applicationTickerListenerCount": { "type": ["integer", "null"], "minimum": 0 },
+                "sharedTickerListenerCount": { "type": ["integer", "null"], "minimum": 0 },
+                "sharedTickerRafCount": { "type": ["integer", "null"], "minimum": 0 },
                 "provenance": {
-                  "enum": ["source-verified-policy", "no-renderer"]
-                }
+                  "enum": [
+                    "production-runtime-telemetry",
+                    "telemetry-unavailable",
+                    "no-renderer"
+                  ]
+                },
+                "notes": { "type": "string", "minLength": 1 }
               }
             },
             "inactiveWindows": {

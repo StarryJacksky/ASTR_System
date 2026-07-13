@@ -17,10 +17,12 @@ import {
 
 const pixiHarness = vi.hoisted(() => ({
   applications: [] as FakeApplication[],
+  sharedTicker: { count: 0, started: false },
 }));
 
 vi.mock("pixi.js", () => ({
   RENDERER_TYPE: { WEBGL: 1 },
+  Ticker: { shared: pixiHarness.sharedTicker },
   Application: function Application(options: PresenceVisualApplicationOptions) {
     const application = new FakeApplication(options);
     pixiHarness.applications.push(application);
@@ -58,6 +60,8 @@ class FakeResizeObserver {
 
 beforeEach(() => {
   pixiHarness.applications.length = 0;
+  pixiHarness.sharedTicker.count = 0;
+  pixiHarness.sharedTicker.started = false;
   FakeResizeObserver.instances.length = 0;
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
@@ -83,6 +87,33 @@ describe("lazy Pixi runtime loader", () => {
     expect(applicationModule.isWebglUnavailableError(new Error("context failed")))
       .toBe(false);
     expect(pixiHarness.applications).toHaveLength(0);
+  });
+
+  it("reads real application/shared ticker listener and RAF ownership from public Pixi state", async () => {
+    const applicationModule = await loadPixiApplicationModule();
+    pixiHarness.sharedTicker.count = 2;
+    pixiHarness.sharedTicker.started = true;
+    const applicationTicker = { count: 3, started: true };
+
+    expect(
+      applicationModule.readSchedulerEvidence({ ticker: applicationTicker } as never),
+    ).toEqual({
+      applicationOwnsSharedTicker: false,
+      applicationTickerListenerCount: 3,
+      applicationTickerRafCount: 1,
+      sharedTickerListenerCount: 2,
+      sharedTickerRafCount: 1,
+    });
+  });
+
+  it("rejects invalid public ticker state instead of manufacturing zero evidence", async () => {
+    const applicationModule = await loadPixiApplicationModule();
+
+    expect(() =>
+      applicationModule.readSchedulerEvidence({
+        ticker: { count: Number.NaN, started: false },
+      } as never),
+    ).toThrow(/ticker count/i);
   });
 
   it("delegates Application construction and lifecycle to the single core runtime", async () => {

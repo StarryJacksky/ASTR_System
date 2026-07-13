@@ -57,7 +57,10 @@ test("keeps one external decision on ACK failure while preserving the draft", as
   await expect(timeline.getByText("外部终稿")).toHaveCount(1);
   await expect(page.getByRole("textbox", { name: "消息输入" }))
     .toHaveValue("失败后仍要保留这段草稿");
-  await expect(page.getByText("发送失败：ingest returned HTTP 503")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "对话输入" })
+      .getByText("发送失败：ingest returned HTTP 503"),
+  ).toBeVisible();
   const diagnosticDisclosure = page.getByRole("button", { name: /诊断详情/ });
   await expect(diagnosticDisclosure).toHaveAttribute("aria-expanded", "false");
   await diagnosticDisclosure.click();
@@ -126,7 +129,8 @@ test("times out when no reply frame arrives, then marks the late decision once",
   await sendMessage(page, "等待迟到终稿");
 
   await expect(
-    page.getByText("发送失败：No reply frame arrived before the request timeout."),
+    page.getByRole("region", { name: "对话输入" })
+      .getByText("发送失败：No reply frame arrived before the request timeout."),
   ).toBeVisible({ timeout: 12_000 });
   const timeline = page.getByRole("list", { name: "对话消息" });
   await expect(timeline.getByText("迟到但仍具权威性的终稿。")).toHaveCount(1, {

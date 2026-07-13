@@ -153,13 +153,17 @@ test("runtime path caps total outstanding RAF and classifies observed scheduler 
         expect(sample.backingHeight / sample.clientHeight).toBeLessThanOrEqual(1.5);
         expect(sample.dpr).toBeLessThanOrEqual(1.5);
       }
-      expect(probe.raf.scheduler).toEqual({
+      expect(probe.raf.scheduler).toMatchObject({
+        status: "measured",
         renderPath: "dynamic",
+        applicationOwnsSharedTicker: false,
         applicationRootCount: 1,
         sharedTickerListenerCount: 0,
         sharedTickerRafCount: 0,
-        provenance: "source-verified-policy",
+        provenance: "production-runtime-telemetry",
       });
+      expect(probe.raf.scheduler.applicationTickerListenerCount ?? 0)
+        .toBeGreaterThan(0);
     } else {
       expect(probe.dom.visualPhase).toBe("static");
       expect(probe.dom.canvasCount).toBe(0);
@@ -170,10 +174,13 @@ test("runtime path caps total outstanding RAF and classifies observed scheduler 
         expect(sample.dpr).toBeLessThanOrEqual(1.5);
       }
       expect(probe.raf.scheduler).toEqual({
+        status: "not-applicable",
         renderPath: "static",
-        applicationRootCount: 0,
-        sharedTickerListenerCount: 0,
-        sharedTickerRafCount: 0,
+        applicationOwnsSharedTicker: null,
+        applicationRootCount: null,
+        applicationTickerListenerCount: null,
+        sharedTickerListenerCount: null,
+        sharedTickerRafCount: null,
         provenance: "no-renderer",
       });
     }
@@ -196,10 +203,16 @@ test("production runtime policy disables Pixi shared ticker ownership", async ()
     resolve(process.cwd(), "src/features/presence/visual/presence-visual-runtime.ts"),
     "utf8",
   );
+  const loaderSource = await readFile(
+    resolve(process.cwd(), "src/features/presence/visual/pixi-runtime-loader.ts"),
+    "utf8",
+  );
 
   expect(source).toMatch(/autoStart:\s*false/);
   expect(source).toMatch(/sharedTicker:\s*false/);
-  expect(source).not.toMatch(/Ticker\.shared/);
+  expect(source).toMatch(/applicationTicker === pixi\.Ticker\.shared/);
+  expect(source).not.toMatch(/Ticker\.shared\s*\.\s*(?:add|remove|start|stop|update)\s*\(/);
+  expect(loaderSource).not.toMatch(/Ticker\.shared/);
 });
 
 async function waitForVisualAttemptToSettle(page: Page): Promise<void> {

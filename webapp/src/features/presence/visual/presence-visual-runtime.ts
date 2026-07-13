@@ -156,6 +156,60 @@ export interface PresenceVisualApplicationModule {
   readonly isWebglApplication: (application: PresenceVisualApplication) => boolean;
   /** Classifies the pinned Pixi constructor path when no renderer can be selected. */
   readonly isWebglUnavailableError: (error: unknown) => boolean;
+  /** Reads public Pixi ticker state from the exact module instance that built the Application. */
+  readonly readSchedulerEvidence: (
+    application: PresenceVisualApplication,
+  ) => PresenceVisualSchedulerEvidence;
+}
+
+export interface PresenceVisualSchedulerEvidence {
+  readonly applicationOwnsSharedTicker: boolean;
+  readonly applicationTickerListenerCount: number;
+  readonly applicationTickerRafCount: 0 | 1;
+  readonly sharedTickerListenerCount: number;
+  readonly sharedTickerRafCount: 0 | 1;
+}
+
+export interface PresenceVisualPixiSchedulerModule {
+  readonly Ticker: {
+    readonly shared: {
+      readonly count: number;
+      readonly started: boolean;
+    };
+  };
+}
+
+export function createPresenceVisualSchedulerReader(
+  pixi: PresenceVisualPixiSchedulerModule,
+): PresenceVisualApplicationModule["readSchedulerEvidence"] {
+  const readTicker = (
+    ticker: PresenceVisualPixiSchedulerModule["Ticker"]["shared"],
+  ): { readonly listeners: number; readonly raf: 0 | 1 } => {
+    if (!Number.isSafeInteger(ticker.count) || ticker.count < 0) {
+      throw new TypeError("Pixi ticker count is not a non-negative integer.");
+    }
+    if (typeof ticker.started !== "boolean") {
+      throw new TypeError("Pixi ticker started state is not boolean.");
+    }
+    return Object.freeze({
+      listeners: ticker.count,
+      raf: ticker.started && ticker.count > 0 ? 1 : 0,
+    });
+  };
+
+  return (application): PresenceVisualSchedulerEvidence => {
+    const applicationTicker = application.ticker as unknown as
+      PresenceVisualPixiSchedulerModule["Ticker"]["shared"];
+    const applicationState = readTicker(applicationTicker);
+    const sharedState = readTicker(pixi.Ticker.shared);
+    return Object.freeze({
+      applicationOwnsSharedTicker: applicationTicker === pixi.Ticker.shared,
+      applicationTickerListenerCount: applicationState.listeners,
+      applicationTickerRafCount: applicationState.raf,
+      sharedTickerListenerCount: sharedState.listeners,
+      sharedTickerRafCount: sharedState.raf,
+    });
+  };
 }
 
 export interface PresenceVisualResource {
@@ -210,6 +264,9 @@ export interface PresenceVisualRuntimeOptions {
   ) => boolean;
   readonly clock?: PresenceVisualClock;
   readonly recordMetric?: (name: RuntimeMetricName, value: number, at: number) => void;
+  readonly onSchedulerEvidence?: (
+    evidence: PresenceVisualSchedulerEvidence | null,
+  ) => void;
 }
 
 export type PresenceVisualBrowserRuntimeOptions = Omit<
@@ -268,6 +325,9 @@ export function createPresenceVisualRuntime(
   let run: VisualRun | null = null;
   let pendingInitialization: Promise<void> | null = null;
   let application: PresenceVisualApplication | null = null;
+  let readSchedulerEvidence:
+    | PresenceVisualApplicationModule["readSchedulerEvidence"]
+    | null = null;
   let sceneReady = false;
   let activeScene: PresenceVisualResource | null = null;
   let tickerRunning = false;
@@ -351,6 +411,7 @@ export function createPresenceVisualRuntime(
     tickerRunning = true;
     liveAppTickerCount += 1;
     record("app-raf", liveAppTickerCount);
+    reportSchedulerEvidence();
   }
 
   function stopTicker(): void {
@@ -363,6 +424,25 @@ export function createPresenceVisualRuntime(
         // A broken adapter must not block the shared resource destroy path.
       }
       record("app-raf", liveAppTickerCount);
+      reportSchedulerEvidence();
+    }
+  }
+
+  function reportSchedulerEvidence(): void {
+    if (options.onSchedulerEvidence === undefined) return;
+    if (application === null || readSchedulerEvidence === null) {
+      options.onSchedulerEvidence(null);
+      return;
+    }
+    try {
+      const evidence = readSchedulerEvidence(application);
+      if (!isSchedulerEvidence(evidence)) {
+        options.onSchedulerEvidence(null);
+        return;
+      }
+      options.onSchedulerEvidence(evidence);
+    } catch {
+      options.onSchedulerEvidence(null);
     }
   }
 
@@ -606,10 +686,12 @@ export function createPresenceVisualRuntime(
       if (!currentRunIs(candidate)) return;
 
       application = createdApplication;
+      readSchedulerEvidence = applicationModule.readSchedulerEvidence;
       application.ticker.maxFPS = initialProfile.fps;
       application.ticker.stop();
       tickerRunning = false;
       record("app-raf", liveAppTickerCount);
+      reportSchedulerEvidence();
       options.surface.attach(application.view);
       candidate.resources.own({
         destroy: once(() => options.surface.detach(createdApplication.view)),
@@ -838,11 +920,16 @@ export function createBrowserPresenceVisualRuntime({
       browserWindow.removeEventListener(type, listener as EventListener);
     },
   };
+  const externalSchedulerEvidence = options.onSchedulerEvidence;
 
   return createPresenceVisualRuntime({
     ...options,
     surface,
     window: runtimeWindow,
+    onSchedulerEvidence: (evidence) => {
+      writeSchedulerEvidence(target, evidence);
+      externalSchedulerEvidence?.(evidence);
+    },
     createResizeObserver: (callback) => {
       if (typeof ResizeObserver !== "function") {
         return {
@@ -860,6 +947,52 @@ export function createBrowserPresenceVisualRuntime({
       };
     },
   });
+}
+
+function isSchedulerEvidence(
+  evidence: PresenceVisualSchedulerEvidence,
+): boolean {
+  return (
+    typeof evidence.applicationOwnsSharedTicker === "boolean" &&
+    isNonnegativeInteger(evidence.applicationTickerListenerCount) &&
+    (evidence.applicationTickerRafCount === 0 ||
+      evidence.applicationTickerRafCount === 1) &&
+    isNonnegativeInteger(evidence.sharedTickerListenerCount) &&
+    (evidence.sharedTickerRafCount === 0 || evidence.sharedTickerRafCount === 1)
+  );
+}
+
+function isNonnegativeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function writeSchedulerEvidence(
+  target: HTMLDivElement,
+  evidence: PresenceVisualSchedulerEvidence | null,
+): void {
+  if (evidence === null) {
+    target.dataset.schedulerEvidence = "unsupported";
+    delete target.dataset.applicationOwnsSharedTicker;
+    delete target.dataset.applicationTickerListenerCount;
+    delete target.dataset.applicationTickerRafCount;
+    delete target.dataset.sharedTickerListenerCount;
+    delete target.dataset.sharedTickerRafCount;
+    return;
+  }
+  target.dataset.schedulerEvidence = "measured";
+  target.dataset.applicationOwnsSharedTicker = String(
+    evidence.applicationOwnsSharedTicker,
+  );
+  target.dataset.applicationTickerListenerCount = String(
+    evidence.applicationTickerListenerCount,
+  );
+  target.dataset.applicationTickerRafCount = String(
+    evidence.applicationTickerRafCount,
+  );
+  target.dataset.sharedTickerListenerCount = String(
+    evidence.sharedTickerListenerCount,
+  );
+  target.dataset.sharedTickerRafCount = String(evidence.sharedTickerRafCount);
 }
 
 interface VisualRun {

@@ -161,7 +161,10 @@ test("ingest error has no serious accessibility violations", async ({
 
   await page.getByRole("textbox", { name: "消息输入" }).fill("保留失败草稿");
   await page.getByRole("button", { name: "发送消息" }).click();
-  await expect(page.getByText("发送失败：ingest returned HTTP 503"))
+  await expect(
+    page.getByRole("region", { name: "对话输入" })
+      .getByText("发送失败：ingest returned HTTP 503"),
+  )
     .toBeVisible();
   await expectNoBlockingAxeViolations(page, "ingest error");
 });

@@ -445,6 +445,90 @@ describe("PresenceExperience", () => {
     ).toHaveLength(clearCount);
   });
 
+  it("announces an ingest failure once and assertively through the global live region", async () => {
+    const emptyConversation = {
+      messages: [],
+      receipt: null,
+      provisionalText: "",
+      provisionalActive: false,
+      authoritativeDecision: null,
+      error: null,
+    } as const;
+    let snapshot = createSnapshot({ conversation: emptyConversation });
+    controllerMocks.usePresenceController.mockImplementation(() => ({ snapshot, actions }));
+    const view = render(
+      <AppShell>
+        <PresenceExperience />
+      </AppShell>,
+    );
+
+    snapshot = createSnapshot({
+      semantic: { ...snapshot.semantic, conversation: "error" },
+      conversation: {
+        ...emptyConversation,
+        messages: [
+          {
+            id: "reply:external:decision-503",
+            role: "qiuqiu",
+            text: "未绑定 ACK 的外部权威终稿。",
+            ts: Date.UTC(2026, 6, 11, 3, 5),
+            eventId: "decision-503",
+            external: true,
+          },
+        ],
+        error: "ingest returned HTTP 503",
+      },
+      diagnostics: [
+        {
+          code: "INGEST_FAILED",
+          message: "ingest returned HTTP 503",
+          at: Date.UTC(2026, 6, 11, 3, 5),
+        },
+      ],
+    });
+    view.rerender(
+      <AppShell>
+        <PresenceExperience />
+      </AppShell>,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveAttribute("aria-live", "assertive");
+    expect(alert).toHaveTextContent("发送失败：ingest returned HTTP 503");
+    expect(view.container.querySelectorAll("[aria-live]")).toHaveLength(1);
+    expect(
+      screen.getByText("发送失败：ingest returned HTTP 503", { selector: "p" }),
+    ).toBeVisible();
+    const announcementId = alert
+      .querySelector("[data-announcement-id]")
+      ?.getAttribute("data-announcement-id");
+
+    snapshot = createSnapshot({
+      ...snapshot,
+      semantic: { ...snapshot.semantic },
+      conversation: {
+        ...snapshot.conversation,
+        messages: snapshot.conversation.messages.map((message) => ({ ...message })),
+      },
+      lifeEvents: [...snapshot.lifeEvents],
+    });
+    view.rerender(
+      <AppShell>
+        <PresenceExperience />
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "发送失败：ingest returned HTTP 503",
+    );
+    expect(
+      screen
+        .getByRole("alert")
+        .querySelector("[data-announcement-id]")
+        ?.getAttribute("data-announcement-id"),
+    ).toBe(announcementId);
+  });
+
   it("composes with AppShell without duplicating main, pause, or live-region ownership", async () => {
     const { container } = render(
       <AppShell>

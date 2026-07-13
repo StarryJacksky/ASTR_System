@@ -1,7 +1,7 @@
 import { gzipSync } from "node:zlib";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -60,6 +60,30 @@ function measuredInactiveRafStates() {
 }
 
 describe("Presence performance evidence", () => {
+  it("derives dynamic scheduler evidence from production telemetry instead of literal zeroes", async () => {
+    const source = await readFile(
+      resolve(process.cwd(), "e2e/support/performance-evidence.ts"),
+      "utf8",
+    );
+
+    expect(source).not.toMatch(/sharedTickerListenerCount:\s*0/);
+    expect(source).not.toMatch(/sharedTickerRafCount:\s*0/);
+    expect(source).toMatch(/schedulerDataset\?\.sharedTickerListenerCount/);
+    expect(source).toMatch(/schedulerDataset\?\.sharedTickerRafCount/);
+  });
+
+  it("requires measured zero-shared-ticker telemetry before dynamic certification can pass", async () => {
+    const source = await readFile(
+      resolve(process.cwd(), "e2e/presence-performance.spec.ts"),
+      "utf8",
+    );
+
+    expect(source).toMatch(/scheduler\.status === "measured"/);
+    expect(source).toMatch(/applicationOwnsSharedTicker === false/);
+    expect(source).toMatch(/sharedTickerListenerCount === 0/);
+    expect(source).toMatch(/sharedTickerRafCount === 0/);
+    expect(source).toMatch(/dynamicCertified = dynamicRendererReady && schedulerCertified/);
+  });
   it("builds strict schema evidence without converting failed dynamic certification into a pass", () => {
     const evidence = buildPresenceEvidence({
       profile: "desktop",
@@ -468,11 +492,14 @@ describe("Presence performance evidence", () => {
         raf: {
           ...probe.raf,
           scheduler: {
+            status: "measured",
             renderPath: "dynamic",
+            applicationOwnsSharedTicker: false,
             applicationRootCount: 1,
+            applicationTickerListenerCount: 3,
             sharedTickerListenerCount: 0,
             sharedTickerRafCount: 0,
-            provenance: "source-verified-policy",
+            provenance: "production-runtime-telemetry",
           },
         },
       },
@@ -481,7 +508,7 @@ describe("Presence performance evidence", () => {
     expect(() => assertPresenceRawDiagnosticsSchema(raw)).not.toThrow();
 
     const legacy = structuredClone(raw);
-    legacy.probe.raf.scheduler.provenance = "observed-production-policy";
+    legacy.probe.raf.scheduler.provenance = "source-verified-policy";
     expect(() => assertPresenceRawDiagnosticsSchema(legacy)).toThrow(/provenance/i);
   });
 
@@ -590,10 +617,13 @@ function rawDiagnosticsProbe(): PresencePerformanceProbeSnapshot {
         { stack: "at Ticker._tick", classification: "pixi-application" },
       ],
       scheduler: {
+        status: "not-applicable",
         renderPath: "static",
-        applicationRootCount: 0,
-        sharedTickerListenerCount: 0,
-        sharedTickerRafCount: 0,
+        applicationOwnsSharedTicker: null,
+        applicationRootCount: null,
+        applicationTickerListenerCount: null,
+        sharedTickerListenerCount: null,
+        sharedTickerRafCount: null,
         provenance: "no-renderer",
       },
       inactiveWindows: {

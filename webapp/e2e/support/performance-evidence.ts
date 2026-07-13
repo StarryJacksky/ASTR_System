@@ -131,11 +131,18 @@ export interface PresencePerformanceProbeSnapshot {
       readonly classification: "pixi-application" | "application" | "other";
     }[];
     readonly scheduler: {
+      readonly status: "measured" | "unsupported" | "not-applicable";
       readonly renderPath: "dynamic" | "static";
-      readonly applicationRootCount: number;
-      readonly sharedTickerListenerCount: number;
-      readonly sharedTickerRafCount: number;
-      readonly provenance: "source-verified-policy" | "no-renderer";
+      readonly applicationOwnsSharedTicker: boolean | null;
+      readonly applicationRootCount: number | null;
+      readonly applicationTickerListenerCount: number | null;
+      readonly sharedTickerListenerCount: number | null;
+      readonly sharedTickerRafCount: number | null;
+      readonly provenance:
+        | "production-runtime-telemetry"
+        | "telemetry-unavailable"
+        | "no-renderer";
+      readonly notes?: string;
     };
     readonly inactiveWindows: Readonly<
       Record<
@@ -1352,11 +1359,39 @@ export function installPresencePerformanceProbe(): void {
         "[data-presence-visual-surface] canvas",
       ).length;
       const dynamicRenderer = visualPhase === "ready" && canvasCount === 1;
-      const applicationRootCount = new Set(
-        schedulerStacks
-          .filter((sample) => sample.classification === "pixi-application")
-          .map((sample) => sample.stack),
-      ).size;
+      const visualSurface = document.querySelector<HTMLElement>(
+        "[data-presence-visual-surface]",
+      );
+      const schedulerDataset = visualSurface?.dataset;
+      const nonnegativeInteger = (value: string | undefined): number | null => {
+        if (value === undefined || value.trim() === "") return null;
+        const parsed = Number(value);
+        return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+      };
+      const booleanValue = (value: string | undefined): boolean | null =>
+        value === "true" ? true : value === "false" ? false : null;
+      const applicationOwnsSharedTicker = booleanValue(
+        schedulerDataset?.applicationOwnsSharedTicker,
+      );
+      const applicationTickerListenerCount = nonnegativeInteger(
+        schedulerDataset?.applicationTickerListenerCount,
+      );
+      const applicationTickerRafCount = nonnegativeInteger(
+        schedulerDataset?.applicationTickerRafCount,
+      );
+      const sharedTickerListenerCount = nonnegativeInteger(
+        schedulerDataset?.sharedTickerListenerCount,
+      );
+      const sharedTickerRafCount = nonnegativeInteger(
+        schedulerDataset?.sharedTickerRafCount,
+      );
+      const schedulerMeasured =
+        schedulerDataset?.schedulerEvidence === "measured" &&
+        applicationOwnsSharedTicker !== null &&
+        applicationTickerListenerCount !== null &&
+        applicationTickerRafCount !== null &&
+        sharedTickerListenerCount !== null &&
+        sharedTickerRafCount !== null;
       return {
         support: {
           raf: {
@@ -1417,18 +1452,37 @@ export function installPresencePerformanceProbe(): void {
           missedTicks: [...rafMissedTicks],
           schedulerStacks: schedulerStacks.map((sample) => ({ ...sample })),
           scheduler: dynamicRenderer
-            ? {
-                renderPath: "dynamic",
-                applicationRootCount,
-                sharedTickerListenerCount: 0,
-                sharedTickerRafCount: 0,
-                provenance: "source-verified-policy",
-              }
+            ? schedulerMeasured
+              ? {
+                  status: "measured",
+                  renderPath: "dynamic",
+                  applicationOwnsSharedTicker,
+                  applicationRootCount: applicationTickerRafCount,
+                  applicationTickerListenerCount,
+                  sharedTickerListenerCount,
+                  sharedTickerRafCount,
+                  provenance: "production-runtime-telemetry",
+                }
+              : {
+                  status: "unsupported",
+                  renderPath: "dynamic",
+                  applicationOwnsSharedTicker: null,
+                  applicationRootCount: null,
+                  applicationTickerListenerCount: null,
+                  sharedTickerListenerCount: null,
+                  sharedTickerRafCount: null,
+                  provenance: "telemetry-unavailable",
+                  notes:
+                    "Dynamic renderer was ready without complete production Pixi scheduler telemetry.",
+                }
             : {
+                status: "not-applicable",
                 renderPath: "static",
-                applicationRootCount: 0,
-                sharedTickerListenerCount: 0,
-                sharedTickerRafCount: 0,
+                applicationOwnsSharedTicker: null,
+                applicationRootCount: null,
+                applicationTickerListenerCount: null,
+                sharedTickerListenerCount: null,
+                sharedTickerRafCount: null,
                 provenance: "no-renderer",
               },
           inactiveWindows: Object.fromEntries(
@@ -1777,29 +1831,74 @@ export function assertPresenceRawDiagnosticsSchema(
   assertExactKeys(
     scheduler,
     [
+      "status",
       "renderPath",
+      "applicationOwnsSharedTicker",
       "applicationRootCount",
+      "applicationTickerListenerCount",
       "sharedTickerListenerCount",
       "sharedTickerRafCount",
       "provenance",
+      "notes",
     ],
     "raw evidence.probe.raf.scheduler",
+    ["notes"],
   );
   if (scheduler.renderPath !== "dynamic" && scheduler.renderPath !== "static") {
     throw new TypeError("raw evidence.probe.raf.scheduler.renderPath is invalid.");
   }
-  for (const key of [
-    "applicationRootCount",
-    "sharedTickerListenerCount",
-    "sharedTickerRafCount",
-  ] as const) {
-    assertNonNegativeInteger(
-      scheduler[key],
-      `raw evidence.probe.raf.scheduler.${key}`,
-    );
+  if (scheduler.status === "measured") {
+    if (scheduler.applicationOwnsSharedTicker !== true &&
+        scheduler.applicationOwnsSharedTicker !== false) {
+      throw new TypeError(
+        "raw evidence.probe.raf.scheduler.applicationOwnsSharedTicker must be boolean.",
+      );
+    }
+    for (const key of [
+      "applicationRootCount",
+      "applicationTickerListenerCount",
+      "sharedTickerListenerCount",
+      "sharedTickerRafCount",
+    ] as const) {
+      assertNonNegativeInteger(
+        scheduler[key],
+        `raw evidence.probe.raf.scheduler.${key}`,
+      );
+    }
+    if (scheduler.provenance !== "production-runtime-telemetry") {
+      throw new TypeError("raw evidence.probe.raf.scheduler.provenance is invalid.");
+    }
+  } else if (
+    scheduler.status === "unsupported" ||
+    scheduler.status === "not-applicable"
+  ) {
+    for (const key of [
+      "applicationOwnsSharedTicker",
+      "applicationRootCount",
+      "applicationTickerListenerCount",
+      "sharedTickerListenerCount",
+      "sharedTickerRafCount",
+    ] as const) {
+      if (scheduler[key] !== null) {
+        throw new TypeError(`raw evidence.probe.raf.scheduler.${key} must be null.`);
+      }
+    }
+    const expectedProvenance = scheduler.status === "unsupported"
+      ? "telemetry-unavailable"
+      : "no-renderer";
+    if (scheduler.provenance !== expectedProvenance) {
+      throw new TypeError("raw evidence.probe.raf.scheduler.provenance is invalid.");
+    }
+  } else {
+    throw new TypeError("raw evidence.probe.raf.scheduler.status is invalid.");
+  }
+  if ("notes" in scheduler &&
+      (typeof scheduler.notes !== "string" || scheduler.notes.length === 0)) {
+    throw new TypeError("raw evidence.probe.raf.scheduler.notes must be non-empty.");
   }
   if (
-    scheduler.provenance !== "source-verified-policy" &&
+    scheduler.provenance !== "production-runtime-telemetry" &&
+    scheduler.provenance !== "telemetry-unavailable" &&
     scheduler.provenance !== "no-renderer"
   ) {
     throw new TypeError("raw evidence.probe.raf.scheduler.provenance is invalid.");

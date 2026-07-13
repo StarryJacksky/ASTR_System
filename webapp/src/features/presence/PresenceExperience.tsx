@@ -35,6 +35,7 @@ interface PresenceAnnouncedFacts {
   readonly visualRuntime: string;
   readonly safety: string;
   readonly safetyEvidence: string;
+  readonly conversationError: string | null;
 }
 
 const INITIAL_UI_STATE: PresenceUiState = {
@@ -51,6 +52,7 @@ const INITIAL_ANNOUNCED_FACTS: PresenceAnnouncedFacts = {
   visualRuntime: "loading",
   safety: "normal",
   safetyEvidence: "checking",
+  conversationError: null,
 };
 
 export function PresenceExperience() {
@@ -85,6 +87,7 @@ export function PresenceExperience() {
       visualRuntime: snapshot.semantic.visualRuntime,
       safety: snapshot.semantic.safety,
       safetyEvidence: snapshot.safetyEvidence,
+      conversationError: snapshot.conversation.error,
     };
     const announcements: Array<readonly [string, "polite" | "assertive"]> = [];
 
@@ -134,6 +137,12 @@ export function PresenceExperience() {
     ) {
       resetVerificationPendingRef.current = false;
     }
+    if (
+      next.conversationError !== null &&
+      next.conversationError !== previous.conversationError
+    ) {
+      announcements.push([`发送失败：${next.conversationError}`, "assertive"]);
+    }
 
     announcedFactsRef.current = next;
     for (const [message, politeness] of announcements) {
@@ -146,6 +155,7 @@ export function PresenceExperience() {
     snapshot.semantic.safety,
     snapshot.semantic.visualRuntime,
     snapshot.safetyEvidence,
+    snapshot.conversation.error,
   ]);
 
   const navigateOrbit = (endpoint: Exclude<PresenceOrbitEndpoint, "task">) => {

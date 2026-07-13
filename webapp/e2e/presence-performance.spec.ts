@@ -261,8 +261,17 @@ function buildProfileEvidence(
   const activeJewelCount = probe.dom.activeJewelCountSamples.length === 0
     ? [0]
     : probe.dom.activeJewelCountSamples;
-  const dynamicCertified = probe.dom.visualPhase === "ready" && probe.dom.canvasCount === 1;
-  const renderPath = dynamicCertified ? "dynamic" : "static-fallback";
+  const dynamicRendererReady =
+    probe.dom.visualPhase === "ready" && probe.dom.canvasCount === 1;
+  const schedulerCertified =
+    probe.raf.scheduler.status === "measured" &&
+    probe.raf.scheduler.applicationOwnsSharedTicker === false &&
+    probe.raf.scheduler.applicationRootCount === 1 &&
+    (probe.raf.scheduler.applicationTickerListenerCount ?? 0) > 0 &&
+    probe.raf.scheduler.sharedTickerListenerCount === 0 &&
+    probe.raf.scheduler.sharedTickerRafCount === 0;
+  const dynamicCertified = dynamicRendererReady && schedulerCertified;
+  const renderPath = dynamicRendererReady ? "dynamic" : "static-fallback";
   expect(probe.support.raf).toMatchObject({
     supported: true,
     installed: true,
@@ -275,7 +284,7 @@ function buildProfileEvidence(
   });
   expect(probe.support.canvas.installed).toBe(true);
   const backingDprSamples = probe.canvasBackingSizeSamples.map(({ dpr }) => dpr);
-  if (dynamicCertified) {
+  if (dynamicRendererReady) {
     expect(probe.support.canvas.observed).toBe(true);
     expect(probe.canvasBackingSizeSamples.length).toBeGreaterThan(0);
     expect(backingDprSamples.length).toBeGreaterThan(0);
@@ -328,7 +337,7 @@ function buildProfileEvidence(
     samples: {
       "webgl-context-count": probe.webgl.contextCountSamples,
       "active-raf-count": probe.raf.samples,
-      ...(dynamicCertified
+      ...(dynamicRendererReady
         ? { "device-pixel-ratio": backingDprSamples }
         : {}),
       "draw-calls": probe.webgl.drawCallSamples,
@@ -342,10 +351,10 @@ function buildProfileEvidence(
         : { "stream-long-task-duration-ms": longTaskSamples }),
     },
     inactiveRafStates,
-    ...(!dynamicCertified || longTaskSamples === undefined
+    ...(!dynamicRendererReady || longTaskSamples === undefined
       ? {
           unavailable: {
-            ...(!dynamicCertified
+            ...(!dynamicRendererReady
               ? {
                   "device-pixel-ratio": {
                     status: "not-applicable" as const,
@@ -373,10 +382,16 @@ function buildProfileEvidence(
             notes: "Compact static path intentionally does not initialize Live2D.",
           }
         : dynamicCertified
-          ? { status: "passed", notes: "Live2D and Lens reached the ready phase." }
+          ? {
+              status: "passed",
+              notes:
+                "Live2D/Lens reached ready with measured one-owner application ticker and zero shared ticker listeners/RAF.",
+            }
           : {
               status: "failed",
-              notes: `Dynamic visual did not certify: phase=${probe.dom.visualPhase}, canvas=${probe.dom.canvasCount}. Static-path measurements remain real.`,
+              notes: dynamicRendererReady
+                ? `Dynamic scheduler did not certify: status=${probe.raf.scheduler.status}, ownsShared=${probe.raf.scheduler.applicationOwnsSharedTicker}, appRoots=${probe.raf.scheduler.applicationRootCount}, appListeners=${probe.raf.scheduler.applicationTickerListenerCount}, sharedListeners=${probe.raf.scheduler.sharedTickerListenerCount}, sharedRaf=${probe.raf.scheduler.sharedTickerRafCount}.`
+                : `Dynamic visual did not certify: phase=${probe.dom.visualPhase}, canvas=${probe.dom.canvasCount}. Static-path measurements remain real.`,
             },
   });
   return evidence;

@@ -4,6 +4,7 @@ import { useEffect, type RefObject } from "react";
 
 import {
   createBrowserPresenceVisualRuntime,
+  createPresenceVisualSchedulerReader,
   type PresenceVisualApplication,
   type PresenceVisualApplicationModule,
   type PresenceVisualJewelOwnership,
@@ -46,6 +47,7 @@ export async function loadPixiApplicationModule(): Promise<PresenceVisualApplica
       pixi.RENDERER_TYPE.WEBGL,
     isWebglUnavailableError: (error: unknown) =>
       readErrorMessage(error) === PIXI_NO_RENDERER_MESSAGE,
+    readSchedulerEvidence: createPresenceVisualSchedulerReader(pixi),
   });
 }
 

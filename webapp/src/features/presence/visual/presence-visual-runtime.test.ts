@@ -21,6 +21,7 @@ import {
   type PresenceVisualReleaseReason,
   type PresenceVisualResizeObserver,
   type PresenceVisualResource,
+  type PresenceVisualSchedulerEvidence,
   type PresenceVisualSceneInitializer,
   type PresenceVisualSemanticEvent,
   type PresenceVisualSemanticSource,
@@ -83,6 +84,13 @@ describe("createPresenceVisualRuntime", () => {
       } as unknown as PresenceVisualApplicationModule["Application"],
       isWebglApplication: () => true,
       isWebglUnavailableError: () => false,
+      readSchedulerEvidence: () => ({
+        applicationOwnsSharedTicker: false,
+        applicationTickerListenerCount: 0,
+        applicationTickerRafCount: 0,
+        sharedTickerListenerCount: 0,
+        sharedTickerRafCount: 0,
+      }),
     };
     const runtime = createBrowserPresenceVisualRuntime({
       target,
@@ -161,6 +169,25 @@ describe("createPresenceVisualRuntime", () => {
     expect(metrics).toContainEqual(
       expect.objectContaining({ name: "canvas-backing-height", value: 540 }),
     );
+  });
+
+  it("publishes scheduler evidence read from the owned production Application module", async () => {
+    const onSchedulerEvidence = vi.fn();
+    const schedulerEvidence: PresenceVisualSchedulerEvidence = {
+      applicationOwnsSharedTicker: false,
+      applicationTickerListenerCount: 3,
+      applicationTickerRafCount: 1,
+      sharedTickerListenerCount: 0,
+      sharedTickerRafCount: 0,
+    };
+    const harness = createHarness({ onSchedulerEvidence, schedulerEvidence });
+
+    await harness.runtime.mount();
+    await vi.waitFor(() => expect(harness.runtime.getSnapshot().phase).toBe("ready"));
+
+    expect(harness.applicationModule.readSchedulerEvidence)
+      .toHaveBeenCalledWith(harness.applications[0]);
+    expect(onSchedulerEvidence).toHaveBeenLastCalledWith(schedulerEvidence);
   });
 
   it("does not advertise ready after Application construction until the required scene resolves", async () => {
@@ -802,6 +829,10 @@ interface HarnessOptions {
   readonly applicationError?: Error;
   readonly recordMetric?: (name: RuntimeMetricName, value: number, at: number) => void;
   readonly live?: { applications: number; observers: number; listeners: number };
+  readonly onSchedulerEvidence?: (
+    evidence: PresenceVisualSchedulerEvidence | null,
+  ) => void;
+  readonly schedulerEvidence?: PresenceVisualSchedulerEvidence;
 }
 
 function createHarness(options: HarnessOptions = {}) {
@@ -813,6 +844,13 @@ function createHarness(options: HarnessOptions = {}) {
   const resize = new FakeResizeHarness(live);
   const applications: FakeApplication[] = [];
   const applicationModuleGate = deferred<PresenceVisualApplicationModule>();
+  const defaultSchedulerEvidence: PresenceVisualSchedulerEvidence = {
+    applicationOwnsSharedTicker: false,
+    applicationTickerListenerCount: 0,
+    applicationTickerRafCount: 0,
+    sharedTickerListenerCount: 0,
+    sharedTickerRafCount: 0,
+  };
   const factory = {
     create: vi.fn((applicationOptions: PresenceVisualApplicationOptions) => {
       void applicationOptions;
@@ -834,6 +872,9 @@ function createHarness(options: HarnessOptions = {}) {
     isWebglUnavailableError: (error) =>
       error instanceof Error &&
       error.message === "Unable to auto-detect a suitable renderer.",
+    readSchedulerEvidence: vi.fn(() =>
+      options.schedulerEvidence ?? defaultSchedulerEvidence,
+    ),
   };
   const loadModule = vi.fn(async () => {
     if (options.failureStage === "module") throw new Error("module failed");
@@ -862,6 +903,9 @@ function createHarness(options: HarnessOptions = {}) {
     initializeScene,
     activityAllowed: options.activityAllowed,
     recordMetric: options.recordMetric,
+    ...(options.onSchedulerEvidence === undefined
+      ? {}
+      : { onSchedulerEvidence: options.onSchedulerEvidence }),
     clock: { now: () => (now += 1) },
   });
   harnessRuntimes.add(runtime);

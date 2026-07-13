@@ -39,7 +39,10 @@ test("preserves the exact draft and selection after ingest returns HTTP 503", as
   ).toEqual({ start: 3, end: 10 });
   await page.getByRole("button", { name: "发送消息" }).click();
 
-  await expect(page.getByText("发送失败：ingest returned HTTP 503")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "对话输入" })
+      .getByText("发送失败：ingest returned HTTP 503"),
+  ).toBeVisible();
   await expect(composer).toHaveValue(draft);
   await expect(composer).toBeFocused();
   await expect

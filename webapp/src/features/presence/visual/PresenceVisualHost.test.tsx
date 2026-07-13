@@ -499,7 +499,11 @@ describe("Presence visual Host", () => {
     expect(loaderSource).not.toMatch(
       /requestAnimationFrame|getContext|new\s+\w*Application|Ticker\.shared/,
     );
+    expect(loaderSource).toMatch(/createPresenceVisualSchedulerReader\(pixi\)/);
     expect(coreSource).toMatch(/new\s+applicationModule\.Application/);
+    expect(coreSource).toMatch(
+      /createPresenceVisualSchedulerReader[\s\S]*Ticker\.shared/,
+    );
   });
 });
 
