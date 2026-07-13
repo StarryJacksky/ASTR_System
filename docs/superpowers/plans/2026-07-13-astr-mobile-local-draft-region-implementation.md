@@ -46,7 +46,7 @@ import { resolve } from "node:path";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -510,7 +510,9 @@ describe("LocalTaskDraftRegion", () => {
     await user.click(await screen.findByRole("button", { name: "继续编辑第 1 条草稿" }));
     await user.click(await screen.findByRole("button", { name: "删除第 1 条本地草稿" }));
 
-    expect(screen.getByText("保留我")).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "此浏览器中的草稿" })).getByText("保留我"),
+    ).toBeVisible();
     expect(screen.getByRole("textbox", { name: "本地任务草稿" })).toHaveValue("保留我");
     expect(screen.getByText("删除失败，未持久化")).toBeVisible();
   });
@@ -621,6 +623,7 @@ describe("LocalTaskDraftRegion", () => {
     );
 
     expect(source).not.toMatch(/fetch\s*\(|navigator\.clipboard|sessionStorage|\/v1\/|queued|running|completed|task_id/);
+    expect(source).not.toMatch(/defaultValue/);
     expect(source.indexOf("window.localStorage")).toBeGreaterThan(
       source.indexOf("useEffect(() =>"),
     );
