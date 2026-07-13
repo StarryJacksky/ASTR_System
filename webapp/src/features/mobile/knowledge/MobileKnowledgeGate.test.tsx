@@ -3,9 +3,28 @@ import { resolve } from "node:path";
 import { renderToString } from "react-dom/server";
 
 import { render, screen } from "@testing-library/react";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { MobileKnowledgeGate } from "./MobileKnowledgeGate";
+
+function staticImportSpecifiers(source: string, fileName: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+
+  return sourceFile.statements.flatMap((statement) => {
+    if (ts.isImportEqualsDeclaration(statement)) return ["<import-equals>"];
+    if (!ts.isImportDeclaration(statement)) return [];
+    return ts.isStringLiteralLike(statement.moduleSpecifier)
+      ? [statement.moduleSpecifier.text]
+      : ["<non-literal-import>"];
+  });
+}
 
 function expectNoFakeControls(container: HTMLElement): void {
   expect(screen.queryAllByRole("button")).toHaveLength(0);
@@ -67,9 +86,7 @@ describe("MobileKnowledgeGate", () => {
       ),
       "utf8",
     );
-    const imports = [...source.matchAll(/^import .+ from "([^"]+)";$/gm)].map(
-      (match) => match[1],
-    );
+    const imports = staticImportSpecifiers(source, "MobileKnowledgeGate.tsx");
 
     expect((html.match(/<h1/g) ?? [])).toHaveLength(1);
     expect(html).not.toMatch(/<(?:button|form|input|textarea|a)\b/);
