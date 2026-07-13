@@ -25,6 +25,7 @@
     "test:e2e:real": "node scripts/real-core-smoke.mjs",
     "test:presence-evidence": "vitest run e2e/support/budget-evaluator.test.ts e2e/support/performance-evidence.test.ts",
     "check:presence-boundaries": "node scripts/check-presence-boundaries.mjs",
+    "check:control-boundaries": "node scripts/check-control-boundaries.mjs",
     "check:presence-assets": "node scripts/check-presence-assets.mjs",
     "check:presence-assets:dynamic": "node scripts/check-presence-assets.mjs --require-dynamic",
     "check:presence-budgets": "node scripts/check-presence-budgets.mjs",

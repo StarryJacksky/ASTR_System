@@ -2,7 +2,7 @@
 
 ASTR Web is the frontend for 星枢: a Presence-first interface that keeps functional AI work, emotional continuity, Soul identity, Life context, and safety evidence in one coherent system.
 
-The current workstream delivers the `/` Presence route. It uses the existing Core contract only; it does not invent backend Task, artifact, approval, device, provenance, or remote-computer APIs. The unavailable Task point in the orbit is an explicit capability boundary, not a placeholder success state.
+The frontend currently delivers the `/` Presence route and the `/admin` Control archive. Both use existing Core contracts only. Control exposes only Effector as available; its other 17 modules remain explicitly planned. Neither surface invents backend Task, artifact, approval, device, model-router, plugin, memory, training, migration, provenance, or remote-computer APIs.
 
 ## Run locally
 
@@ -46,6 +46,7 @@ npm run lint
 npm run typecheck
 npm run build
 npm run test:e2e
+npm run check:control-boundaries
 npm run test:e2e:real
 ```
 
@@ -59,7 +60,7 @@ npm run presence:soak
 
 `check:presence-budgets` performs its own fresh production-browser collection and must run before the fail-closed build boundary check. `test:e2e:no-build` refuses stale Core/build/source identity. `test:e2e:real` is read-only and writes `not-run` evidence unless `ASTR_REAL_CORE_URL` is explicitly provided. The default asset gate accepts the truthful static fallback while reporting `dynamicCertified=false`; the strict dynamic command fails until every locked Live2D byte is present and verified.
 
-See [Presence verification](docs/presence-verification.md) for exact desktop/mobile budgets, evidence semantics, real-Core setup, fixed-hardware profiles, soak rules, and manual AT/device rows. See [Live2D assets](docs/live2d-assets.md) for source, lock, and license details.
+See [Presence verification](docs/presence-verification.md) for exact desktop/mobile budgets, evidence semantics, real-Core setup, fixed-hardware profiles, soak rules, and manual AT/device rows. See [Control verification](docs/control-verification.md) for the six allowed Effector endpoints, planned-module boundary, build evidence order, and Control screenshot matrix. See [Live2D assets](docs/live2d-assets.md) for source, lock, and license details.
 
 ## Repository boundaries
 

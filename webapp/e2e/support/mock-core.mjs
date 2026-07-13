@@ -48,6 +48,8 @@ function createDefaultState() {
       resetAck: false,
       resetReadback: false,
     },
+    policy: createDefaultPolicy(),
+    audit: createDefaultAudit(),
     voiceprint: {
       enrolled: false,
       model_available: false,
@@ -56,6 +58,61 @@ function createDefaultState() {
     },
     counts: Object.create(null),
     emitted: [],
+  };
+}
+
+function createDefaultPolicy() {
+  return {
+    approval_mode: "ask",
+    headless_scope: "cwd",
+    headless_cwd: "D:/ASTR_System",
+    headless_folders: ["D:/ASTR_System"],
+    app_whitelist: ["notepad.exe"],
+    login_sites_whitelist: ["arxiv.org"],
+    dangerous_categories: ["credential", "destructive"],
+    dangerous_keywords: ["format disk", "rm -rf"],
+    max_steps_per_task: 25,
+    sandbox_dir: "D:/ASTR/effector/sandbox",
+    core_dangerous_categories: ["credential", "destructive"],
+    core_dangerous_keywords: ["format disk", "rm -rf"],
+    locked: ["untrusted_wrapping", "normalize_before_match", "sandbox_dir", "audit"],
+    overlay_path: "D:/ASTR/data/effector/guard_policy.local.yaml",
+  };
+}
+
+function createDefaultAudit() {
+  return {
+    dates: ["2026-07-12", "2026-07-13"],
+    entriesByDate: {
+      "2026-07-12": [
+        {
+          ts: "2026-07-12T00:01:00.000Z",
+          trace_id: "mock-audit-trace-1",
+          track: "desktop",
+          description: "mock audited action 1",
+          decision: "ask",
+          dangerous: true,
+        },
+        {
+          ts: "2026-07-12T00:02:00.000Z",
+          trace_id: "mock-audit-trace-2",
+          track: "headless",
+          description: "mock audited action 2",
+          decision: "allow",
+          dangerous: false,
+        },
+      ],
+      "2026-07-13": [
+        {
+          ts: "2026-07-13T00:01:00.000Z",
+          trace_id: "mock-audit-trace-3",
+          track: "desktop",
+          description: "mock audited action 3",
+          decision: "deny",
+          dangerous: true,
+        },
+      ],
+    },
   };
 }
 
@@ -94,7 +151,7 @@ function resetState() {
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     Vary: "Origin",
   };
@@ -126,6 +183,119 @@ async function readJson(request) {
   }
   if (chunks.length === 0) return {};
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function validStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function validatePolicyPatch(patch) {
+  if (patch === null || typeof patch !== "object" || Array.isArray(patch)) {
+    return "policy patch must be an object";
+  }
+  const allowedFields = new Set([
+    "approval_mode",
+    "headless_scope",
+    "headless_cwd",
+    "headless_folders",
+    "app_whitelist",
+    "login_sites_whitelist",
+    "dangerous_categories",
+    "dangerous_keywords",
+    "max_steps_per_task",
+  ]);
+  for (const [key, value] of Object.entries(patch)) {
+    if (!allowedFields.has(key)) return `unsupported policy field: ${key}`;
+    if (value === null) continue;
+    if (
+      key === "approval_mode" &&
+      !["ask", "audited", "auto"].includes(value)
+    ) {
+      return "invalid approval_mode";
+    }
+    if (
+      key === "headless_scope" &&
+      !["cwd", "folders", "full"].includes(value)
+    ) {
+      return "invalid headless_scope";
+    }
+    if (key === "headless_cwd" && typeof value !== "string") {
+      return "headless_cwd must be a string";
+    }
+    if (
+      [
+        "headless_folders",
+        "app_whitelist",
+        "login_sites_whitelist",
+        "dangerous_categories",
+        "dangerous_keywords",
+      ].includes(key) &&
+      !validStringArray(value)
+    ) {
+      return `${key} must be a string array`;
+    }
+    if (
+      key === "max_steps_per_task" &&
+      (!Number.isInteger(value) || value < 1 || value > 100)
+    ) {
+      return "max_steps_per_task must be an integer from 1 through 100";
+    }
+  }
+  return null;
+}
+
+function applyPolicyPatch(patch) {
+  const nextPolicy = { ...state.policy };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null) continue;
+    if (key === "dangerous_categories") {
+      nextPolicy[key] = [
+        ...new Set([...value, ...state.policy.core_dangerous_categories]),
+      ].sort();
+    } else if (key === "dangerous_keywords") {
+      nextPolicy[key] = [
+        ...new Set([...value, ...state.policy.core_dangerous_keywords]),
+      ].sort();
+    } else {
+      nextPolicy[key] = Array.isArray(value) ? [...value] : value;
+    }
+  }
+  state.policy = nextPolicy;
+  return cloneJson(nextPolicy);
+}
+
+function parseAuditLimit(value) {
+  if (value === null) return 100;
+  if (!/^[+-]?\d+$/.test(value)) return null;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed)) return null;
+  return Math.max(1, Math.min(500, parsed));
+}
+
+function auditPayload(url) {
+  const date = url.searchParams.get("date") ?? state.audit.dates.at(-1) ?? null;
+  const limit = parseAuditLimit(url.searchParams.get("limit"));
+  if (limit === null) return null;
+  const entries = date === null ? [] : state.audit.entriesByDate[date] ?? [];
+  if (!Object.hasOwn(state.audit.entriesByDate, date)) {
+    return {
+      dates: [...state.audit.dates],
+      date,
+      entries: [],
+      chain_valid: null,
+    };
+  }
+  return {
+    dates: [...state.audit.dates],
+    date,
+    entries: cloneJson(entries.slice(-limit)),
+    total: entries.length,
+    chain_valid: true,
+  };
 }
 
 function createEvent(type, traceId, payload, source = "soul.orchestrator") {
@@ -412,6 +582,41 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/v1/ingest" && request.method === "POST") {
       await handleIngest(request, response);
+      return;
+    }
+    if (
+      url.pathname === "/v1/admin/effector/policy" &&
+      request.method === "GET"
+    ) {
+      count("effector-policy");
+      sendJson(response, 200, cloneJson(state.policy));
+      return;
+    }
+    if (
+      url.pathname === "/v1/admin/effector/policy" &&
+      request.method === "PUT"
+    ) {
+      count("effector-policy-update");
+      const patch = await readJson(request);
+      const detail = validatePolicyPatch(patch);
+      if (detail !== null) {
+        sendJson(response, 422, { detail });
+        return;
+      }
+      sendJson(response, 200, applyPolicyPatch(patch));
+      return;
+    }
+    if (
+      url.pathname === "/v1/admin/effector/audit" &&
+      request.method === "GET"
+    ) {
+      count("effector-audit");
+      const payload = auditPayload(url);
+      if (payload === null) {
+        sendJson(response, 422, { detail: "limit must be an integer" });
+        return;
+      }
+      sendJson(response, 200, payload);
       return;
     }
     if (url.pathname === "/v1/voice/transcribe" && request.method === "POST") {
