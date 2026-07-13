@@ -37,3 +37,183 @@
   font-size: var(--type--1);
   letter-spacing: 0.14em;
 }
+
+.domain {
+  display: grid;
+  min-inline-size: 0;
+  gap: clamp(var(--space-4), 4vw, var(--space-6));
+  color: var(--astr-text);
+}
+
+.hero {
+  position: relative;
+  min-inline-size: 0;
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--astr-hairline-strong);
+}
+
+.titleRail,
+.titleRail h1,
+.titleRail p {
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.titleRail {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.titleRail h1 {
+  max-inline-size: 12ch;
+  font-family: var(--font-display);
+  font-size: clamp(var(--type-3), 9vw, var(--type-5));
+  font-weight: 600;
+  line-height: var(--leading-display);
+  letter-spacing: -0.035em;
+}
+
+.activity {
+  max-inline-size: 42rem;
+  color: var(--astr-text-2);
+  font-size: var(--type-1);
+  line-height: var(--leading-long);
+}
+
+.soulMark {
+  position: relative;
+  flex: none;
+  inline-size: clamp(3.75rem, 12vw, 5rem);
+  block-size: 3.75rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sCurve,
+.lens {
+  position: absolute;
+  inline-size: 100%;
+}
+
+.sCurve {
+  inset: -2.25rem 0 auto;
+  block-size: 7rem;
+}
+
+.sCurve path {
+  fill: none;
+  stroke: var(--astr-action);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.lens {
+  inset: -0.25rem 0 auto auto;
+  inline-size: clamp(3.25rem, 10vw, 4.25rem);
+  block-size: auto;
+}
+
+.lens :global(.lensOuter),
+.lens :global(.lensContinuity),
+.lens :global(.lensShell),
+.lens :global(.lensNotch),
+.lens :global(.lensAxis) {
+  fill: none;
+  stroke: var(--astr-hairline-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.lens :global(.lensFacet) {
+  fill: var(--astr-surface-2);
+  stroke: var(--astr-soul);
+  stroke-width: 1;
+}
+
+.lens :global(.lensCore) {
+  fill: var(--astr-soul);
+  stroke: var(--astr-text);
+  stroke-width: 1;
+}
+
+.statusRail {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-block: 1px solid var(--astr-hairline-strong);
+}
+
+.statusRail > div {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+}
+
+.statusRail > div + div {
+  border-inline-start: 1px solid var(--astr-hairline);
+}
+
+.statusRail dt,
+.statusRail dd {
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.statusRail dt {
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  letter-spacing: 0.08em;
+}
+
+.statusRail dd {
+  color: var(--astr-text);
+  font-size: var(--type-1);
+}
+
+.dialogueSurface {
+  --astr-composer-max-block-size: min(42%, 21rem);
+  --astr-composer-overflow-y: auto;
+  position: relative;
+  display: grid;
+  min-block-size: 0;
+  min-inline-size: 0;
+  block-size: clamp(
+    34rem,
+    calc(
+      100dvh
+      - var(--mobile-nav-block-size, 5.25rem)
+      - env(safe-area-inset-bottom)
+      - 14rem
+    ),
+    52rem
+  );
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: visible;
+  gap: var(--space-3);
+  padding: clamp(var(--space-3), 3vw, var(--space-5));
+  border-block-start: 1px solid var(--astr-action);
+  border-block-end: 1px solid var(--astr-hairline-strong);
+  border-inline-start: 3px solid var(--astr-soul);
+  background: var(--astr-surface);
+}
+
+@media (max-width: 44rem) {
+  .statusRail > div {
+    padding: var(--space-2);
+  }
+}
+
+@media (max-width: 25rem) {
+  .statusRail dt {
+    letter-spacing: 0.03em;
+  }
+
+  .dialogueSurface {
+    padding-inline: var(--space-2);
+  }
+}

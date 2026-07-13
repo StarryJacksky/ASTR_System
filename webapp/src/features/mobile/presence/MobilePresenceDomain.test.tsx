@@ -89,7 +89,14 @@ describe("MobilePresenceDomain", () => {
     await remote.unmount();
   });
 
-  it("locks the authority gate to a solid asymmetric surface", () => {
+  it("locks the authority gate and trusted Presence to the Mobile CSS constitution", () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/features/mobile/presence/TrustedMobilePresenceDomain.tsx",
+      ),
+      "utf8",
+    );
     const css = readFileSync(
       resolve(
         process.cwd(),
@@ -97,7 +104,39 @@ describe("MobilePresenceDomain", () => {
       ),
       "utf8",
     );
+    const composerCss = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/features/presence/components/Composer.module.css",
+      ),
+      "utf8",
+    );
+    const timelineCss = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/features/presence/components/PresenceTimelines.module.css",
+      ),
+      "utf8",
+    );
     const gateRule = css.match(/\.gate\s*\{([^}]*)\}/)?.[1];
+    const dialogueRule = css.match(/\.dialogueSurface\s*\{([^}]*)\}/)?.[1];
+    const soulMarkRule = css.match(/\.soulMark\s*\{([^}]*)\}/)?.[1];
+
+    expect(source).toContain(
+      'from "@/features/presence/components/ConversationRegion"',
+    );
+    expect(source).toContain(
+      'from "@/features/presence/components/Composer"',
+    );
+    expect(source).not.toMatch(/MessageTimeline|projectConversationTimeline/);
+    expect(source).not.toMatch(
+      /PresenceExperience|SoulPresence|PresenceVisualHost|PresenceVisibilityBridge|JewelRuntime|pixi|live2d|three|webgl|framer-motion|canvas|getContext|requestAnimationFrame/i,
+    );
+    expect(source).not.toMatch(
+      /internalHandle|model|costTodayUsd|dailyBudgetUsd/,
+    );
+    expect(source).not.toMatch(/safety|guard|task|dispatch|device|approval/i);
+
     expect(gateRule).toBeDefined();
     expect(gateRule).toContain("min-inline-size: 0");
     expect(gateRule).toContain("max-inline-size: 52rem");
@@ -109,9 +148,62 @@ describe("MobilePresenceDomain", () => {
     );
     expect(gateRule).toContain("background: var(--astr-surface)");
     expect(gateRule).not.toMatch(/border-radius|box-shadow/);
-    expect(css).not.toMatch(
-      /gradient|backdrop-filter|filter\s*:|@keyframes|animation\s*:|\bgreen\b|\blime\b|\bemerald\b|\bchartreuse\b/i,
+    expect(dialogueRule).toBeDefined();
+    expect(soulMarkRule).toBeDefined();
+    expect(soulMarkRule).toContain("position: relative");
+    expect(soulMarkRule).toContain("flex: none");
+    expect(soulMarkRule).not.toMatch(/\binset(?:-|\s*:)|z-index|transform/);
+    expect(dialogueRule).toMatch(/block-size:\s*clamp\([\s\S]*100dvh/);
+    expect(dialogueRule).toMatch(
+      /grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/,
     );
+    expect(dialogueRule).toContain("min-block-size: 0");
+    expect(dialogueRule).toContain("min-inline-size: 0");
+    expect(dialogueRule).toContain("overflow: visible");
+    expect(dialogueRule).toContain(
+      "var(--mobile-nav-block-size, 5.25rem)",
+    );
+    expect(dialogueRule).toContain("env(safe-area-inset-bottom)");
+    expect(dialogueRule).toContain(
+      "--astr-composer-max-block-size: min(42%, 21rem)",
+    );
+    expect(dialogueRule).toContain("--astr-composer-overflow-y: auto");
+    expect(css).toMatch(
+      /\.lens\s+:global\(\.lensOuter\)[\s\S]*fill:\s*none/,
+    );
+    expect(css).toMatch(
+      /\.lens\s+:global\(\.lensFacet\)[\s\S]*fill:\s*var\(--astr-surface-2\)/,
+    );
+    expect(css).toMatch(
+      /\.lens\s+:global\(\.lensCore\)[\s\S]*fill:\s*var\(--astr-soul\)/,
+    );
+    expect(css).not.toMatch(
+      /gradient|backdrop-filter|filter\s*:|box-shadow|@keyframes|animation\s*:|\bgreen\b|\blime\b|\bemerald\b|\bchartreuse\b/i,
+    );
+    expect(composerCss).not.toMatch(/gradient/i);
+    expect(composerCss).toMatch(
+      /box-shadow:\s*var\(\s*--astr-composer-shadow,\s*none\s*\)/,
+    );
+    expect(composerCss).toMatch(
+      /max-block-size:\s*var\(\s*--astr-composer-max-block-size,\s*none\s*\)/,
+    );
+    expect(composerCss).toMatch(
+      /overflow-y:\s*var\(\s*--astr-composer-overflow-y,\s*visible\s*\)/,
+    );
+    expect(timelineCss).toMatch(
+      /box-shadow:\s*var\(\s*--astr-timeline-assistant-shadow,\s*none\s*\)/,
+    );
+    expect(timelineCss).toMatch(
+      /box-shadow:\s*var\(\s*--astr-timeline-return-shadow,\s*none\s*\)/,
+    );
+    expect(css).toMatch(
+      /\.statusRail\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(css).not.toMatch(
+      /\.statusRail\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+    expect(css).toMatch(/@media\s*\(max-width:\s*44rem\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*25rem\)/);
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i);
   });
 });
