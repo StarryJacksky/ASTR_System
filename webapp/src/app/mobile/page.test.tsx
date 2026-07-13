@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import ts from "typescript";
@@ -86,5 +86,57 @@ describe("Mobile index route", () => {
     expect(source).not.toMatch(
       /^\s*["']use client["'];|@\/features\/|<(?:main|div|section|span)\b/m,
     );
+  });
+
+  it("publishes five explicit domain pages without a barrel or dynamic route", () => {
+    const domainImports = new Map([
+      ["presence", "@/features/mobile/presence/MobilePresenceDomain"],
+      ["tasks", "@/features/mobile/tasks/LocalTaskDraftRegion"],
+      ["workbench", "@/features/mobile/workbench/MobileWorkbenchGate"],
+      ["knowledge", "@/features/mobile/knowledge/MobileKnowledgeGate"],
+      ["safety", "@/features/mobile/safety/MobileLocalSafetyDomain"],
+    ]);
+
+    for (const [domain, expectedImport] of domainImports) {
+      const pagePath = resolve(
+        process.cwd(),
+        "src/app/mobile",
+        domain,
+        "page.tsx",
+      );
+      expect(existsSync(pagePath), `${domain} page is missing`).toBe(true);
+
+      const source = readFileSync(pagePath, "utf8");
+      const sourceFile = ts.createSourceFile(
+        `${domain}/page.tsx`,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const imports = sourceFile.statements.flatMap((statement) => {
+        if (!ts.isImportDeclaration(statement)) return [];
+        return ts.isStringLiteralLike(statement.moduleSpecifier)
+          ? [statement.moduleSpecifier.text]
+          : ["<non-literal-import>"];
+      });
+      const dynamicImports: ts.Node[] = [];
+
+      function visit(node: ts.Node): void {
+        if (node.kind === ts.SyntaxKind.ImportKeyword) dynamicImports.push(node);
+        ts.forEachChild(node, visit);
+      }
+      ts.forEachChild(sourceFile, visit);
+
+      expect(imports, `${domain} import ownership`).toEqual([expectedImport]);
+      expect(dynamicImports, `${domain} dynamic import ownership`).toHaveLength(0);
+    }
+
+    expect(
+      existsSync(resolve(process.cwd(), "src/features/mobile/index.ts")),
+    ).toBe(false);
+    expect(
+      existsSync(resolve(process.cwd(), "src/app/mobile/[domain]")),
+    ).toBe(false);
   });
 });
