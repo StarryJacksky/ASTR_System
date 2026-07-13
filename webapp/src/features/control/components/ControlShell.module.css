@@ -459,6 +459,15 @@
   padding: clamp(38px, 7vw, 104px) clamp(20px, 6vw, 96px);
 }
 
+.effectorDossier {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 1640px);
+  min-height: min(820px, calc(100dvh - 104px));
+  margin-inline: auto;
+  padding: clamp(28px, 5vw, 76px) clamp(18px, 4vw, 64px) clamp(56px, 8vw, 112px);
+}
+
 .dossierHeader {
   max-width: 1120px;
   padding-bottom: clamp(36px, 6vw, 82px);

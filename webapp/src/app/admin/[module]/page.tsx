@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ModuleDossier } from "@/features/control/components/ModuleDossier";
+import { EffectorWorkspace } from "@/features/control/components/EffectorWorkspace";
 import {
   CONTROL_MODULES,
   getControlModule,
@@ -21,5 +22,8 @@ export default async function ControlModulePage({
   const moduleDefinition = getControlModule(moduleId);
   if (moduleDefinition === undefined) notFound();
 
+  if (moduleDefinition.id === "effector") {
+    return <EffectorWorkspace module={moduleDefinition} />;
+  }
   return <ModuleDossier module={moduleDefinition} />;
 }
