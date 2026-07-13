@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 
 import { ThemeToggle } from "@/components/astr/ThemeToggle";
 import { VisualMotionRouteSlot } from "@/components/system/VisualMotionToggle";
@@ -208,9 +209,9 @@ export function PresenceHeader({
             <span aria-hidden="true">⌘</span>
             <span className={styles.controlText}>设置</span>
           </button>
-          <a className={styles.control} style={TOUCH_TARGET_STYLE} href="/admin">
+          <Link className={styles.control} style={TOUCH_TARGET_STYLE} href="/admin">
             Control
-          </a>
+          </Link>
         </nav>
       </div>
 
