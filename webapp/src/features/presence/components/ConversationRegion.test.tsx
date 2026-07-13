@@ -444,6 +444,50 @@ describe("ConversationRegion", () => {
     expect(viewports[1]).toHaveAttribute("tabindex", "0");
   });
 
+  it("does not let a lagging subset viewport replay a shared final", () => {
+    const announce = vi.fn();
+    const ledger = getFinalAnnouncementLedgerForScope({});
+    const first = message({
+      id: "reply:shared-subset-a",
+      role: "qiuqiu",
+      text: "共享终稿 A",
+      eventId: "decision-shared-subset-a",
+    });
+    const second = message({
+      id: "reply:shared-subset-b",
+      role: "qiuqiu",
+      text: "共享终稿 B",
+      eventId: "decision-shared-subset-b",
+    });
+
+    const viewportA = render(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [first, second] })}
+      />,
+    );
+    const viewportB = render(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [{ ...first }] })}
+      />,
+    );
+
+    viewportA.rerender(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [{ ...first }, { ...second }] })}
+      />,
+    );
+
+    expect(announce).toHaveBeenCalledTimes(2);
+    viewportA.unmount();
+    viewportB.unmount();
+  });
+
   it("reconciles only the newest 256 finals so a remount cannot cascade-replay evicted history", () => {
     const announce = vi.fn();
     const scope = {};
@@ -492,6 +536,71 @@ describe("ConversationRegion", () => {
     );
     expect(announce).toHaveBeenCalledTimes(256);
     second.unmount();
+  });
+
+  it("announces a newly inserted late final outside the unchanged tail window", () => {
+    const announce = vi.fn();
+    const ledger = getFinalAnnouncementLedgerForScope({});
+    const oldUser = message({
+      id: "user:late-window",
+      role: "user",
+      text: "旧请求",
+    });
+    const finals = Array.from({ length: 256 }, (_, index) =>
+      message({
+        id: "reply:late-window-" + index,
+        role: "qiuqiu",
+        text: "尾部终稿 " + index,
+        eventId: "decision:late-window-" + index,
+      }),
+    );
+    const { rerender } = render(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [oldUser, ...finals] })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(256);
+
+    const lateFinal = message({
+      id: "reply:late-window-inserted",
+      role: "qiuqiu",
+      text: "旧请求迟到终稿",
+      eventId: "decision:late-window-inserted",
+      lateFinal: true,
+      replyToMessageId: oldUser.id,
+    });
+    rerender(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: [{ ...oldUser }, lateFinal, ...finals.map((item) => ({ ...item }))],
+        })}
+      />,
+    );
+
+    expect(announce).toHaveBeenCalledTimes(257);
+    expect(announce).toHaveBeenLastCalledWith(
+      "Soul 的迟到终稿：旧请求迟到终稿",
+      "polite",
+    );
+
+    rerender(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: [
+            { ...oldUser },
+            { ...lateFinal },
+            ...finals.map((item) => ({ ...item })),
+          ],
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(257);
   });
 
   it("counts a distinct authoritative fallback inside the same 256-event window", () => {

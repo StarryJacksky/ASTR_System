@@ -69,9 +69,14 @@ export function createBoundedIdLedger(
     reconcileWindow(nextIds: readonly string[]) {
       const nextOrder = boundedDistinctWindow(nextIds, capacity);
       const unseen = nextOrder.filter((id) => !ids.has(id));
+      const nextIdSet = new Set(nextOrder);
+      const mergedOrder = [
+        ...order.filter((id) => !nextIdSet.has(id)),
+        ...nextOrder,
+      ].slice(-capacity);
       ids.clear();
       order.length = 0;
-      for (const id of nextOrder) {
+      for (const id of mergedOrder) {
         ids.add(id);
         order.push(id);
       }
@@ -132,6 +137,8 @@ export function ConversationRegion({
   const resolvedAnnouncementLedger =
     announcementLedger ?? localAnnouncementLedger;
   const previousAnnouncementLedgerRef = useRef(resolvedAnnouncementLedger);
+  const previousProjectedEventIdsRef = useRef<ReadonlySet<string> | null>(null);
+  const previousDistinctFallbackIdRef = useRef<string | null>(null);
   const entries = useMemo(
     () => projectConversationTimeline(conversation),
     [conversation],
@@ -183,6 +190,8 @@ export function ConversationRegion({
       return;
     }
     previousAnnouncementLedgerRef.current = resolvedAnnouncementLedger;
+    previousProjectedEventIdsRef.current = null;
+    previousDistinctFallbackIdRef.current = null;
     previousEntriesRef.current = null;
     scrollToLatest();
   }, [resolvedAnnouncementLedger, scrollToLatest]);
@@ -227,6 +236,8 @@ export function ConversationRegion({
   }, [entries, scrollToLatest, syncScrollUi]);
 
   useEffect(() => {
+    const previousProjectedEventIds = previousProjectedEventIdsRef.current;
+    const previousDistinctFallbackId = previousDistinctFallbackIdRef.current;
     const projectedEventIds = new Set<string>();
     for (const message of conversation.messages) {
       if (message.role === "qiuqiu" && isNonBlankString(message.eventId)) {
@@ -239,17 +250,51 @@ export function ConversationRegion({
     );
     const distinctFallback =
       fallback && !projectedEventIds.has(fallback.id) ? fallback : null;
+    const distinctFallbackId = distinctFallback?.id ?? null;
+    const projectedWindowChanged =
+      previousProjectedEventIds === null ||
+      previousProjectedEventIds.size !== projectedEventIds.size ||
+      [...projectedEventIds].some(
+        (eventId) => !previousProjectedEventIds.has(eventId),
+      );
+    const announcementWindowChanged =
+      projectedWindowChanged ||
+      previousDistinctFallbackId !== distinctFallbackId;
     const messageWindowCapacity =
       FINAL_ANNOUNCEMENT_ID_CAPACITY - (distinctFallback ? 1 : 0);
-    const messageCandidates: Array<{
+    const selectedMessageCandidates = new Map<string, {
       readonly eventId: string;
       readonly copy: string;
-    }> = [];
-    const windowEventIds = new Set<string>();
+      readonly index: number;
+    }>();
+
+    if (previousProjectedEventIds !== null) {
+      for (
+        let index = conversation.messages.length - 1;
+        index >= 0 && selectedMessageCandidates.size < messageWindowCapacity;
+        index -= 1
+      ) {
+        const message = conversation.messages[index];
+        if (
+          message === undefined ||
+          message.role !== "qiuqiu" ||
+          !isNonBlankString(message.eventId) ||
+          previousProjectedEventIds.has(message.eventId) ||
+          selectedMessageCandidates.has(message.eventId)
+        ) {
+          continue;
+        }
+        selectedMessageCandidates.set(message.eventId, {
+          eventId: message.eventId,
+          copy: finalAnnouncementCopy(message, visibleAssistantLabel),
+          index,
+        });
+      }
+    }
 
     for (
       let index = conversation.messages.length - 1;
-      index >= 0 && messageCandidates.length < messageWindowCapacity;
+      index >= 0 && selectedMessageCandidates.size < messageWindowCapacity;
       index -= 1
     ) {
       const message = conversation.messages[index];
@@ -257,17 +302,19 @@ export function ConversationRegion({
         message === undefined ||
         message.role !== "qiuqiu" ||
         !isNonBlankString(message.eventId) ||
-        windowEventIds.has(message.eventId)
+        selectedMessageCandidates.has(message.eventId)
       ) {
         continue;
       }
-      windowEventIds.add(message.eventId);
-      messageCandidates.push({
+      selectedMessageCandidates.set(message.eventId, {
         eventId: message.eventId,
         copy: finalAnnouncementCopy(message, visibleAssistantLabel),
+        index,
       });
     }
-    messageCandidates.reverse();
+    const messageCandidates = [...selectedMessageCandidates.values()]
+      .sort((left, right) => left.index - right.index)
+      .map(({ eventId, copy }) => ({ eventId, copy }));
 
     const candidates = [...messageCandidates];
     if (distinctFallback) {
@@ -277,13 +324,20 @@ export function ConversationRegion({
       });
     }
 
+    previousProjectedEventIdsRef.current = projectedEventIds;
+    previousDistinctFallbackIdRef.current = distinctFallbackId;
     const unseenEventIds = new Set(
       resolvedAnnouncementLedger.reconcileWindow(
         candidates.map((candidate) => candidate.eventId),
       ),
     );
     for (const candidate of candidates) {
-      if (!unseenEventIds.has(candidate.eventId)) continue;
+      if (
+        !announcementWindowChanged ||
+        !unseenEventIds.has(candidate.eventId)
+      ) {
+        continue;
+      }
       announceFinal(candidate.copy, "polite");
     }
   }, [
