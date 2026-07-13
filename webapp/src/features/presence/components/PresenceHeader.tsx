@@ -86,6 +86,9 @@ function nonblank(value: string | undefined): string | null {
 }
 
 function safetyCopy(semanticSafety: SafetyState, evidence: SafetyEvidence): string {
+  if (semanticSafety === "stopUnknown" && evidence === "checking") {
+    return SAFETY_EVIDENCE_COPY.checking;
+  }
   return SAFETY_OVERRIDE_COPY[semanticSafety] ?? SAFETY_EVIDENCE_COPY[evidence];
 }
 

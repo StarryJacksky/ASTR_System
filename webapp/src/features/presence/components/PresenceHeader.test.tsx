@@ -219,6 +219,23 @@ describe("PresenceHeader", () => {
     ).toBeVisible();
   });
 
+  it("keeps startup checking visible while the conservative semantic state is unknown", () => {
+    renderHeader({
+      semantic: makeSemantic({ safety: "stopUnknown" }),
+      safetyEvidence: "checking",
+      effectorStatus: null,
+    });
+
+    expect(
+      within(screen.getByRole("group", { name: "执行安全状态" })).getByText(
+        "安全状态核验中",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("安全操作结果未知，执行层状态可能不一致"),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps e-stop enabled offline with unknown evidence and calls only the controller action", async () => {
     const user = userEvent.setup();
     const actions = makeActions();

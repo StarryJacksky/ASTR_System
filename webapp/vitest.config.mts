@@ -10,6 +10,11 @@ export default defineConfig({
     },
   },
   test: {
+    include: [
+      "src/**/*.test.{ts,tsx}",
+      "scripts/**/*.test.{js,mjs,ts}",
+      "e2e/support/**/*.test.ts",
+    ],
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],

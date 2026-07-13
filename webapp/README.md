@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 星枢 ASTR Web
 
-## Getting Started
+ASTR Web is the frontend for 星枢: a Presence-first interface that keeps functional AI work, emotional continuity, Soul identity, Life context, and safety evidence in one coherent system.
 
-First, run the development server:
+The current workstream delivers the `/` Presence route. It uses the existing Core contract only; it does not invent backend Task, artifact, approval, device, provenance, or remote-computer APIs. The unavailable Task point in the orbit is an explicit capability boundary, not a placeholder success state.
 
-```bash
+## Run locally
+
+Requirements:
+
+- Node `^20.19.0 || ^22.13.0 || >=24.0.0`
+- npm `10.8.2`
+- ASTR Core at `http://127.0.0.1:8300`, or an explicit `ASTR_CORE_URL`
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3100`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The frontend proxy uses `ASTR_CORE_URL`; the browser SSE client uses `NEXT_PUBLIC_ASTR_CORE`. When changing the latter for a production run, rebuild Next because public environment variables are embedded at build time.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Presence architecture
 
-## Learn More
+- Chat is the primary working field, with balanced and explicit deep-dialogue layouts.
+- Soul remains mounted while chat and Life states change.
+- The fixed S-shaped orbit expresses navigation state without fabricating empty data.
+- `soul.stream` is provisional; only `soul.decision` is authoritative.
+- ACK, stream, decision, timeout, late final, SSE gaps, Core reachability, and safety readback remain distinct UI facts.
+- One owned Pixi runtime may create the visual context and ticker. Mobile, reduced-motion, hidden, offscreen, paused, context-lost, and invalid-asset paths fail closed to the static Soul Lens.
+- Day and night themes invert material treatment while preserving geometry and semantic state.
+- The visual palette is blue/violet/black; the constitutional no-green scanner is an automated boundary.
 
-To learn more about Next.js, take a look at the following resources:
+## Verification
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The complete automated gate is intentionally sequential:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```powershell
+npm run test:run
+npm run test:coverage
+npm run check:presence-assets
+npm run check:presence-budgets
+npm run check:presence-boundaries
+npm run lint
+npm run typecheck
+npm run build
+npm run test:e2e
+npm run test:e2e:real
+```
 
-## Deploy on Vercel
+Useful focused commands:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```powershell
+npm run test:e2e:no-build
+npm run check:presence-assets:dynamic
+npm run presence:soak
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`check:presence-budgets` performs its own fresh production-browser collection and must run before the fail-closed build boundary check. `test:e2e:no-build` refuses stale Core/build/source identity. `test:e2e:real` is read-only and writes `not-run` evidence unless `ASTR_REAL_CORE_URL` is explicitly provided. The default asset gate accepts the truthful static fallback while reporting `dynamicCertified=false`; the strict dynamic command fails until every locked Live2D byte is present and verified.
+
+See [Presence verification](docs/presence-verification.md) for exact desktop/mobile budgets, evidence semantics, real-Core setup, fixed-hardware profiles, soak rules, and manual AT/device rows. See [Live2D assets](docs/live2d-assets.md) for source, lock, and license details.
+
+## Repository boundaries
+
+- `src/features/presence/` — Presence model, controller, UI, and the single visual runtime.
+- `src/components/system/` — app-wide semantic, theme, motion, and announcement bridges.
+- `e2e/` — Playwright acceptance profiles and the protocol-faithful mock Core.
+- `scripts/check-presence-*.mjs` — source/build/asset certification gates.
+- `live2d-assets.lock.json` — immutable asset inventory; local binaries remain ignored.
+
+Do not copy private Core data, secrets, or unlicensed visual assets into browser fixtures. Mock evidence proves deterministic frontend behavior only; it is never a substitute for real-Core, real-device, assistive-technology, or fixed-hardware evidence.

@@ -163,6 +163,72 @@
   color: var(--astr-danger);
 }
 
+.diagnosticPanel {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.diagnosticToggle {
+  display: inline-flex;
+  min-inline-size: var(--touch-target);
+  min-block-size: var(--touch-target);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--astr-hairline);
+  border-radius: var(--radius-small);
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--astr-text-2);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--type-0);
+  line-height: var(--leading-body);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.diagnosticToggle:hover {
+  border-color: var(--astr-action);
+  color: var(--astr-text);
+  background: color-mix(in srgb, var(--astr-action) 4%, transparent);
+}
+
+.diagnosticToggle:focus-visible {
+  outline: 2px solid var(--astr-action);
+  outline-offset: 3px;
+}
+
+.diagnosticList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diagnosticItem {
+  display: grid;
+  gap: 3px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid var(--astr-hairline);
+}
+
+.diagnosticCode,
+.diagnosticMessage {
+  overflow-wrap: anywhere;
+  color: var(--astr-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--type-0);
+  line-height: var(--leading-body);
+}
+
+.diagnosticCode {
+  color: var(--astr-danger);
+}
+
 @media (max-width: 540px) {
   .composer {
     padding-inline: 12px;

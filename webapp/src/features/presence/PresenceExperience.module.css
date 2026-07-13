@@ -34,6 +34,7 @@
 
 .composerSkip {
   inset-block-start: calc(var(--touch-target) + var(--space-4));
+  transform: translateY(calc(-180% - var(--touch-target) - var(--space-4)));
 }
 
 .orbitField {

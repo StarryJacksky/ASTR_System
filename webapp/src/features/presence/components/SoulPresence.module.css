@@ -198,6 +198,25 @@
   pointer-events: none;
 }
 
+.visualSlot :global([data-presence-visual-copy]) {
+  position: absolute;
+  z-index: 2;
+  inset-block-end: var(--space-2);
+  inset-inline: var(--space-2);
+  max-inline-size: calc(100% - (2 * var(--space-2)));
+  margin-inline: auto;
+  padding: 6px var(--space-2);
+  border-block-start: 1px solid var(--astr-hairline);
+  background: color-mix(in srgb, var(--astr-surface) 88%, transparent);
+  text-align: center;
+}
+
+.visualSlot
+  :global([data-presence-visual-host]:has([data-presence-visual-retry]))
+  :global([data-presence-visual-copy]) {
+  inset-block-end: calc(var(--touch-target) + var(--space-4));
+}
+
 .visualSlot :global([data-presence-visual-retry]) {
   position: absolute;
   z-index: 3;

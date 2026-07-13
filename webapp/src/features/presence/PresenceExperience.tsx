@@ -104,13 +104,18 @@ export function PresenceExperience() {
     if (next.safety !== previous.safety) {
       if (next.safety === "stopRequested") {
         announcements.push(["急停请求已发送，正在核验执行层", "assertive"]);
-      } else if (next.safety === "stopUnknown") {
-        announcements.push(["安全操作结果未知，执行层状态可能不一致", "assertive"]);
       } else if (next.safety === "stoppedLatched") {
         announcements.push(["急停已闩锁", "assertive"]);
       } else if (next.safety === "resetting") {
         announcements.push(["正在核验急停复位结果", "polite"]);
       }
+    }
+    if (
+      next.safety === "stopUnknown" &&
+      next.safetyEvidence === "unknown" &&
+      (next.safety !== previous.safety || previous.safetyEvidence !== "unknown")
+    ) {
+      announcements.push(["安全操作结果未知，执行层状态可能不一致", "assertive"]);
     }
 
     if (next.safety === "resetting") {

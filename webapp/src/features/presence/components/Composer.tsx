@@ -53,6 +53,7 @@ export function Composer({
   maxRecordingMs,
 }: ComposerProps) {
   const feedbackId = useId();
+  const diagnosticsId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const compositionRef = useRef(false);
   const submissionRef = useRef(false);
@@ -64,6 +65,7 @@ export function Composer({
   const [submitting, setSubmitting] = useState(false);
   const [localFailure, setLocalFailure] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
 
   useLayoutEffect(() => {
     draftRef.current = snapshot.draft;
@@ -208,24 +210,28 @@ export function Composer({
   }, [actions]);
 
   const visibleError = snapshot.conversation.error ?? localFailure;
-  const diagnostic = useMemo(
-    () =>
-      latestRecoverableDiagnostic(snapshot.diagnostics) ??
-      (localFailure
-        ? ({ code: "INGEST_FAILED", message: localFailure, at: 0 } satisfies RecoverableDiagnostic)
-        : null),
+  const diagnostics = useMemo(
+    () => {
+      const related = recentRecoverableDiagnostics(snapshot.diagnostics);
+      if (related.length > 0) return related;
+      return localFailure
+        ? ([
+            { code: "INGEST_FAILED", message: localFailure, at: 0 },
+          ] satisfies readonly RecoverableDiagnostic[])
+        : [];
+    },
     [localFailure, snapshot.diagnostics],
   );
 
   const copyDiagnostic = useCallback(async () => {
-    if (!diagnostic) return;
+    if (diagnostics.length === 0) return;
     try {
-      await copyText(formatDiagnostic(diagnostic));
+      await copyText(diagnostics.map(formatDiagnostic).join("\n\n"));
       setCopyFeedback("诊断已复制");
     } catch {
       setCopyFeedback("诊断复制失败");
     }
-  }, [copyText, diagnostic]);
+  }, [copyText, diagnostics]);
 
   const acceptTranscript = useCallback(
     (transcript: string) => {
@@ -297,7 +303,7 @@ export function Composer({
         />
 
         <div className={styles.sendActions}>
-          {visibleError && diagnostic && (
+          {visibleError && diagnostics.length > 0 && (
             <>
               <button
                 type="button"
@@ -336,6 +342,33 @@ export function Composer({
       <p id={feedbackId} className={visibleError ? styles.errorText : styles.feedback}>
         {feedback}
       </p>
+
+      {visibleError && diagnostics.length > 0 && (
+        <div className={styles.diagnosticPanel}>
+          <button
+            type="button"
+            className={styles.diagnosticToggle}
+            aria-expanded={diagnosticsExpanded}
+            aria-controls={diagnosticsId}
+            onClick={() => setDiagnosticsExpanded((expanded) => !expanded)}
+          >
+            诊断详情 · {diagnostics.length}
+          </button>
+          <div id={diagnosticsId} hidden={!diagnosticsExpanded}>
+            <ul className={styles.diagnosticList} aria-label="最近相关诊断">
+              {diagnostics.map((diagnostic, index) => (
+                <li
+                  key={`${diagnostic.code}:${diagnostic.at}:${index}`}
+                  className={styles.diagnosticItem}
+                >
+                  <code className={styles.diagnosticCode}>{diagnostic.code}</code>
+                  <span className={styles.diagnosticMessage}>{diagnostic.message}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </section>
   );
 
@@ -351,43 +384,85 @@ function isConversationPending(semantic: SemanticState): boolean {
   return semantic.conversation === "sending" || semantic.conversation === "streaming";
 }
 
-function latestRecoverableDiagnostic(
+function recentRecoverableDiagnostics(
   diagnostics: readonly PresenceControllerDiagnostic[],
-): RecoverableDiagnostic | null {
+): readonly RecoverableDiagnostic[] {
+  let latestFailureIndex = -1;
   for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
-    const diagnostic = diagnostics[index];
-    if (
-      diagnostic &&
-      (diagnostic.code === "INGEST_FAILED" || diagnostic.code === "REQUEST_TIMED_OUT") &&
-      "message" in diagnostic &&
-      typeof diagnostic.message === "string"
-    ) {
-      return {
-        code: diagnostic.code,
-        message: diagnostic.message,
-        at: diagnostic.at,
-      };
+    if (isFailureDiagnostic(diagnostics[index])) {
+      latestFailureIndex = index;
+      break;
     }
   }
-  return null;
+  if (latestFailureIndex < 0) return [];
+
+  let previousFailureIndex = -1;
+  for (let index = latestFailureIndex - 1; index >= 0; index -= 1) {
+    if (isFailureDiagnostic(diagnostics[index])) {
+      previousFailureIndex = index;
+      break;
+    }
+  }
+
+  return diagnostics
+    .slice(previousFailureIndex + 1, latestFailureIndex + 1)
+    .filter(isRecoverableDiagnostic)
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      message: diagnostic.message,
+      at: diagnostic.at,
+      ...(typeof diagnostic.eventId === "string"
+        ? { eventId: diagnostic.eventId }
+        : {}),
+      ...(typeof diagnostic.traceId === "string"
+        ? { traceId: diagnostic.traceId }
+        : {}),
+    }));
+}
+
+function isFailureDiagnostic(
+  diagnostic: PresenceControllerDiagnostic | undefined,
+): diagnostic is PresenceControllerDiagnostic & RecoverableDiagnostic {
+  return (
+    diagnostic !== undefined &&
+    (diagnostic.code === "INGEST_FAILED" || diagnostic.code === "REQUEST_TIMED_OUT") &&
+    typeof diagnostic.message === "string"
+  );
+}
+
+function isRecoverableDiagnostic(
+  diagnostic: PresenceControllerDiagnostic,
+): diagnostic is PresenceControllerDiagnostic & RecoverableDiagnostic {
+  return (
+    (diagnostic.code === "INGEST_FAILED" ||
+      diagnostic.code === "REQUEST_TIMED_OUT" ||
+      diagnostic.code === "UNBOUND_STREAM_DROPPED") &&
+    typeof diagnostic.message === "string"
+  );
 }
 
 interface RecoverableDiagnostic {
-  readonly code: "INGEST_FAILED" | "REQUEST_TIMED_OUT";
+  readonly code: "INGEST_FAILED" | "REQUEST_TIMED_OUT" | "UNBOUND_STREAM_DROPPED";
   readonly message: string;
   readonly at: number;
+  readonly eventId?: string;
+  readonly traceId?: string;
 }
 
 function formatDiagnostic(diagnostic: {
   readonly code: string;
   readonly message: string;
   readonly at: number;
+  readonly eventId?: string;
+  readonly traceId?: string;
 }): string {
   return [
     "ASTR Presence diagnostic",
     `code: ${diagnostic.code}`,
     `message: ${diagnostic.message}`,
     `at: ${Number.isFinite(diagnostic.at) ? diagnostic.at : "unknown"}`,
+    ...(diagnostic.eventId ? [`eventId: ${diagnostic.eventId}`] : []),
+    ...(diagnostic.traceId ? [`traceId: ${diagnostic.traceId}`] : []),
   ].join("\n");
 }
 

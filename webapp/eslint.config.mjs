@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "public/live2d/**",
     "public/pixi-live2d-display.js",
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 

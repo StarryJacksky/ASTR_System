@@ -237,6 +237,60 @@ describe("Presence Composer", () => {
     expect(screen.getByText(/发送失败：ingest unavailable/)).toHaveTextContent("诊断已复制");
   });
 
+  it("discloses and copies the recent ACK failure diagnostics without announcing details by default", async () => {
+    const user = userEvent.setup();
+    const copyText = vi.fn(async () => undefined);
+    const { container } = render(
+      <Harness
+        conversationState="error"
+        error="ingest returned HTTP 503"
+        diagnostics={[
+          {
+            code: "UNBOUND_STREAM_DROPPED",
+            message: "A provisional stream frame could not be bound to the active trace.",
+            at: 122,
+            eventId: "pre-ack-stream",
+            traceId: "unbound-trace",
+          },
+          { code: "INGEST_FAILED", message: "ingest returned HTTP 503", at: 123 },
+        ]}
+        copyText={copyText}
+      />,
+    );
+
+    const disclosure = screen.getByRole("button", { name: /诊断详情/ });
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    disclosure.focus();
+    expect(disclosure).toHaveFocus();
+    expect(screen.queryByRole("list", { name: "最近相关诊断" })).not.toBeInTheDocument();
+    expect(container.querySelector("[aria-live], [role='status'], [role='alert']")).toBeNull();
+
+    await user.click(disclosure);
+
+    const diagnostics = screen.getByRole("list", { name: "最近相关诊断" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(diagnostics).toHaveTextContent("UNBOUND_STREAM_DROPPED");
+    expect(diagnostics).toHaveTextContent(
+      "A provisional stream frame could not be bound to the active trace.",
+    );
+    expect(diagnostics).toHaveTextContent("INGEST_FAILED");
+    expect(diagnostics).toHaveTextContent("ingest returned HTTP 503");
+
+    await user.click(screen.getByRole("button", { name: "复制诊断" }));
+
+    expect(copyText).toHaveBeenCalledWith(expect.stringContaining("UNBOUND_STREAM_DROPPED"));
+    expect(copyText).toHaveBeenCalledWith(expect.stringContaining("INGEST_FAILED"));
+    expect(copyText).toHaveBeenCalledWith(expect.stringContaining("eventId: pre-ack-stream"));
+    expect(copyText).toHaveBeenCalledWith(expect.stringContaining("traceId: unbound-trace"));
+    const css = readFileSync(
+      resolve(process.cwd(), "src/features/presence/components/Composer.module.css"),
+      "utf8",
+    );
+    const disclosureRule = css.match(/\.diagnosticToggle\s*\{([^}]*)\}/)?.[1];
+    expect(disclosureRule).toContain("min-inline-size: var(--touch-target)");
+    expect(disclosureRule).toContain("min-block-size: var(--touch-target)");
+  });
+
   it("orders error, final, offline, pending, and retained receipt feedback truthfully", () => {
     const receipt = { event_id: "event-1", trace_id: "trace-1" };
     const final = render(

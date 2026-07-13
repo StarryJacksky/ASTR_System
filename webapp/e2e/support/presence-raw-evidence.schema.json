@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astr.local/schemas/presence-raw-evidence.schema.json",
+  "title": "ASTR Presence raw performance diagnostics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profile", "renderPath", "capturedAt", "probe"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "profile": { "enum": ["desktop", "mobile"] },
+    "renderPath": { "enum": ["dynamic", "static-fallback"] },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "probe": { "$ref": "#/$defs/probe" }
+  },
+  "$defs": {
+    "nonNegativeSamples": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "installed", "observed"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "installed": { "type": "boolean" },
+        "observed": { "type": "boolean" }
+      }
+    },
+    "inactiveRafWindow": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "startTime", "endTime", "samples"],
+          "properties": {
+            "status": { "const": "measured" },
+            "startTime": { "type": "number", "minimum": 0 },
+            "endTime": { "type": "number", "minimum": 0 },
+            "samples": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "notes"],
+          "properties": {
+            "status": { "enum": ["unsupported", "not-run"] },
+            "notes": { "type": "string", "minLength": 1 }
+          }
+        }
+      ]
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "support",
+        "environment",
+        "raf",
+        "webgl",
+        "canvasDprSamples",
+        "canvasBackingSizeSamples",
+        "longTaskDurationMs",
+        "longTasks",
+        "longTaskWindow",
+        "performance",
+        "resources",
+        "dom"
+      ],
+      "properties": {
+        "support": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "raf",
+            "canvas",
+            "webgl",
+            "longTask",
+            "largestContentfulPaint",
+            "eventTiming",
+            "layoutShift"
+          ],
+          "properties": {
+            "raf": { "$ref": "#/$defs/capability" },
+            "canvas": { "$ref": "#/$defs/capability" },
+            "webgl": { "$ref": "#/$defs/capability" },
+            "longTask": { "$ref": "#/$defs/capability" },
+            "largestContentfulPaint": { "$ref": "#/$defs/capability" },
+            "eventTiming": { "$ref": "#/$defs/capability" },
+            "layoutShift": { "$ref": "#/$defs/capability" }
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform", "hardwareConcurrency", "devicePixelRatio"],
+          "properties": {
+            "platform": { "type": "string", "minLength": 1 },
+            "hardwareConcurrency": { "type": "integer", "minimum": 1 },
+            "devicePixelRatio": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "raf": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "active",
+            "maxActive",
+            "samples",
+            "cadenceMs",
+            "callbackDurationMs",
+            "missedTicks",
+            "schedulerStacks",
+            "scheduler",
+            "inactiveWindows"
+          ],
+          "properties": {
+            "active": { "type": "integer", "minimum": 0 },
+            "maxActive": { "type": "integer", "minimum": 0 },
+            "samples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "cadenceMs": { "$ref": "#/$defs/nonNegativeSamples" },
+            "callbackDurationMs": { "$ref": "#/$defs/nonNegativeSamples" },
+            "missedTicks": { "$ref": "#/$defs/nonNegativeSamples" },
+            "schedulerStacks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["stack", "classification"],
+                "properties": {
+                  "stack": { "type": "string", "minLength": 1 },
+                  "classification": {
+                    "enum": ["pixi-application", "application", "other"]
+                  }
+                }
+              }
+            },
+            "scheduler": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "renderPath",
+                "applicationRootCount",
+                "sharedTickerListenerCount",
+                "sharedTickerRafCount",
+                "provenance"
+              ],
+              "properties": {
+                "renderPath": { "enum": ["dynamic", "static"] },
+                "applicationRootCount": { "type": "integer", "minimum": 0 },
+                "sharedTickerListenerCount": { "type": "integer", "minimum": 0 },
+                "sharedTickerRafCount": { "type": "integer", "minimum": 0 },
+                "provenance": {
+                  "enum": ["source-verified-policy", "no-renderer"]
+                }
+              }
+            },
+            "inactiveWindows": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["reduced-motion", "paused", "offscreen", "hidden"],
+              "properties": {
+                "reduced-motion": { "$ref": "#/$defs/inactiveRafWindow" },
+                "paused": { "$ref": "#/$defs/inactiveRafWindow" },
+                "offscreen": { "$ref": "#/$defs/inactiveRafWindow" },
+                "hidden": { "$ref": "#/$defs/inactiveRafWindow" }
+              }
+            }
+          }
+        },
+        "webgl": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contextCountSamples",
+            "successfulContextCreationSamples",
+            "drawCallSamples",
+            "triangleSamples",
+            "textureRtByteSamples"
+          ],
+          "properties": {
+            "contextCountSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "successfulContextCreationSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "drawCallSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "triangleSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "textureRtByteSamples": { "$ref": "#/$defs/nonNegativeSamples" }
+          }
+        },
+        "canvasDprSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+        "canvasBackingSizeSamples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "backingWidth",
+              "backingHeight",
+              "clientWidth",
+              "clientHeight",
+              "dpr"
+            ],
+            "properties": {
+              "backingWidth": { "type": "number", "exclusiveMinimum": 0 },
+              "backingHeight": { "type": "number", "exclusiveMinimum": 0 },
+              "clientWidth": { "type": "number", "exclusiveMinimum": 0 },
+              "clientHeight": { "type": "number", "exclusiveMinimum": 0 },
+              "dpr": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+        "longTaskDurationMs": { "$ref": "#/$defs/nonNegativeSamples" },
+        "longTasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "startTime", "duration", "attribution"],
+            "properties": {
+              "name": { "type": "string" },
+              "startTime": { "type": "number", "minimum": 0 },
+              "duration": { "type": "number", "minimum": 0 },
+              "attribution": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "containerType",
+                    "containerName",
+                    "containerId",
+                    "containerSrc"
+                  ],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "containerType": { "type": "string" },
+                    "containerName": { "type": "string" },
+                    "containerId": { "type": "string" },
+                    "containerSrc": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "longTaskWindow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["startTime", "endTime"],
+          "properties": {
+            "startTime": { "type": ["number", "null"], "minimum": 0 },
+            "endTime": { "type": "number", "minimum": 0 }
+          }
+        },
+        "performance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lcpMs", "inpMs", "clsSamples", "tbtMs"],
+          "properties": {
+            "lcpMs": { "$ref": "#/$defs/nonNegativeSamples" },
+            "inpMs": { "$ref": "#/$defs/nonNegativeSamples" },
+            "clsSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "tbtMs": { "$ref": "#/$defs/nonNegativeSamples" }
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "initiatorType",
+              "transferSize",
+              "encodedBodySize",
+              "decodedBodySize",
+              "duration"
+            ],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "initiatorType": { "type": "string" },
+              "transferSize": { "type": "number", "minimum": 0 },
+              "encodedBodySize": { "type": "number", "minimum": 0 },
+              "decodedBodySize": { "type": "number", "minimum": 0 },
+              "duration": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "dom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["activeJewelCountSamples", "visualPhase", "canvasCount"],
+          "properties": {
+            "activeJewelCountSamples": { "$ref": "#/$defs/nonNegativeSamples" },
+            "visualPhase": { "type": ["string", "null"] },
+            "canvasCount": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

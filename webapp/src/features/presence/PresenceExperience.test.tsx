@@ -343,6 +343,7 @@ describe("PresenceExperience", () => {
         ...snapshot.semantic,
         safety: "stopUnknown",
       },
+      safetyEvidence: "unknown",
     });
     view.rerender(<PresenceExperience />);
 
@@ -351,6 +352,34 @@ describe("PresenceExperience", () => {
       "assertive",
     );
     expect(announce).not.toHaveBeenCalledWith(expect.stringMatching(/已急停|已复位/), "assertive");
+  });
+
+  it("does not announce an unknown safety result while startup readback is still checking", () => {
+    const announce = vi.spyOn(semanticStore.getState(), "announce");
+    let snapshot = createSnapshot();
+    controllerMocks.usePresenceController.mockImplementation(() => ({ snapshot, actions }));
+    const view = render(<PresenceExperience />);
+    announce.mockClear();
+
+    snapshot = createSnapshot({
+      semantic: { ...snapshot.semantic, safety: "stopUnknown" },
+      safetyEvidence: "checking",
+    });
+    view.rerender(<PresenceExperience />);
+    expect(announce).not.toHaveBeenCalledWith(
+      "安全操作结果未知，执行层状态可能不一致",
+      "assertive",
+    );
+
+    snapshot = createSnapshot({
+      semantic: { ...snapshot.semantic },
+      safetyEvidence: "unknown",
+    });
+    view.rerender(<PresenceExperience />);
+    expect(announce).toHaveBeenCalledWith(
+      "安全操作结果未知，执行层状态可能不一致",
+      "assertive",
+    );
   });
 
   it("announces reset success only after authoritative clear readback", () => {
@@ -490,6 +519,9 @@ describe("PresenceExperience", () => {
     expect(experienceCss).toMatch(/minmax\(0,\s*72fr\)[\s\S]*minmax\([^,]+,\s*28fr\)/);
     expect(experienceCss).toMatch(/@media\s*\(max-width:\s*768px\)/);
     expect(experienceCss).toMatch(/@media\s*\(max-width:\s*390px\)/);
+    expect(experienceCss).toMatch(
+      /\.composerSkip\s*\{[^}]*transform:\s*translateY\(calc\(-180%\s*-\s*var\(--touch-target\)\s*-\s*var\(--space-4\)\)\)/,
+    );
     expect(experienceCss).toMatch(
       /\.dialogueSurface\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/,
     );

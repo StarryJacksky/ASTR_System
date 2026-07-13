@@ -142,6 +142,9 @@ describe("static Soul presence", () => {
     expect(css).toMatch(/var\(--astr-(?:surface|soul|text|hairline)/);
     expect(css).not.toMatch(/\banimation(?:-\w+)?\s*:/);
     expect(css).not.toMatch(/\btransition(?:-\w+)?\s*:/);
+    expect(css).toMatch(
+      /\.visualSlot\s+:global\(\[data-presence-visual-copy\]\)\s*\{[^}]*position:\s*absolute[^}]*inset-block-end:\s*var\(--space-2\)/,
+    );
     expect(`${soulSource}\n${lensSource}`).not.toMatch(
       /requestAnimationFrame|setTimeout|setInterval|getContext|PIXI|pixi|Live2D|Ticker\.shared|IntersectionObserver/,
     );

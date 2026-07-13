@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astr.local/schemas/evidence.schema.json",
+  "title": "ASTR Presence performance evidence",
+  "description": "Raw, profile-scoped evidence consumed by the strict Presence budget evaluator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profile",
+    "renderPath",
+    "dynamicCertification",
+    "capturedAt",
+    "environment",
+    "automated",
+    "fixedHardware",
+    "manual"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "profile": {
+      "enum": ["desktop", "mobile"]
+    },
+    "renderPath": {
+      "enum": ["dynamic", "static-fallback"]
+    },
+    "dynamicCertification": {
+      "$ref": "#/$defs/dynamicCertification"
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "automated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "webgl-context-count",
+        "active-raf-count",
+        "inactive-raf-count",
+        "device-pixel-ratio",
+        "draw-calls",
+        "triangles",
+        "texture-rt-bytes",
+        "visual-transfer-bytes",
+        "active-jewel-count",
+        "lens-gzip-bytes",
+        "stream-long-task-duration-ms"
+      ],
+      "properties": {
+        "webgl-context-count": { "$ref": "#/$defs/automatedMetric" },
+        "active-raf-count": { "$ref": "#/$defs/automatedMetric" },
+        "inactive-raf-count": { "$ref": "#/$defs/inactiveRafMetric" },
+        "device-pixel-ratio": { "$ref": "#/$defs/dprMetric" },
+        "draw-calls": { "$ref": "#/$defs/automatedMetric" },
+        "triangles": { "$ref": "#/$defs/automatedMetric" },
+        "texture-rt-bytes": { "$ref": "#/$defs/automatedMetric" },
+        "visual-transfer-bytes": { "$ref": "#/$defs/automatedMetric" },
+        "active-jewel-count": { "$ref": "#/$defs/automatedMetric" },
+        "lens-gzip-bytes": { "$ref": "#/$defs/automatedMetric" },
+        "stream-long-task-duration-ms": { "$ref": "#/$defs/automatedMetric" }
+      }
+    },
+    "fixedHardware": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/certificationEvidence" },
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": "visual-js-frame-p95" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "visual-cadence" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "cwv-fixed-profile" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "gpu-timing" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "thirty-minute-soak" } }, "required": ["id"] } }
+      ]
+    },
+    "manual": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/certificationEvidence" },
+      "allOf": [
+        { "contains": { "properties": { "id": { "const": "real-soft-keyboard" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "microsoft-ime" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "macos-ime" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "japanese-ime" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "gboard-ime" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "nvda" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "voiceover" } }, "required": ["id"] } },
+        { "contains": { "properties": { "id": { "const": "talkback" } }, "required": ["id"] } }
+      ]
+    }
+  },
+  "$defs": {
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["browser", "os", "viewport", "devicePixelRatio", "throttle"],
+      "properties": {
+        "browser": { "type": "string", "minLength": 1 },
+        "os": { "type": "string", "minLength": 1 },
+        "cpu": { "type": "string", "minLength": 1 },
+        "gpu": { "type": "string", "minLength": 1 },
+        "viewport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "devicePixelRatio": { "type": "number", "exclusiveMinimum": 0 },
+        "throttle": { "type": "string", "minLength": 1 }
+      }
+    },
+    "automatedMetric": {
+      "oneOf": [
+        { "$ref": "#/$defs/measuredMetric" },
+        { "$ref": "#/$defs/unavailableAutomatedMetric" }
+      ]
+    },
+    "dprMetric": {
+      "oneOf": [
+        { "$ref": "#/$defs/measuredMetric" },
+        { "$ref": "#/$defs/unavailableAutomatedMetric" },
+        { "$ref": "#/$defs/notApplicableDprMetric" }
+      ]
+    },
+    "inactiveRafMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "states"],
+      "properties": {
+        "unit": { "const": "count" },
+        "states": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reduced-motion", "paused", "offscreen", "hidden"],
+          "properties": {
+            "reduced-motion": { "$ref": "#/$defs/inactiveRafState" },
+            "paused": { "$ref": "#/$defs/inactiveRafState" },
+            "offscreen": { "$ref": "#/$defs/inactiveRafState" },
+            "hidden": { "$ref": "#/$defs/inactiveRafState" }
+          }
+        }
+      }
+    },
+    "inactiveRafState": {
+      "oneOf": [
+        { "$ref": "#/$defs/measuredMetric" },
+        { "$ref": "#/$defs/unavailableAutomatedMetric" }
+      ]
+    },
+    "measuredMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "unit", "samples"],
+      "properties": {
+        "status": { "const": "measured" },
+        "unit": {
+          "enum": ["count", "ratio", "bytes", "milliseconds"]
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "unavailableAutomatedMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "unit"],
+      "properties": {
+        "status": { "enum": ["unsupported", "not-run"] },
+        "unit": {
+          "enum": ["count", "ratio", "bytes", "milliseconds"]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "notApplicableDprMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "unit", "notes"],
+      "properties": {
+        "status": { "const": "not-applicable" },
+        "unit": { "const": "ratio" },
+        "notes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "certificationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "status": {
+          "enum": ["passed", "failed", "unsupported", "not-run"]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "dynamicCertification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["passed", "failed", "unsupported", "not-run"]
+        },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "x-presenceCertificationIds": {
+    "fixedHardware": [
+      "visual-js-frame-p95",
+      "visual-cadence",
+      "cwv-fixed-profile",
+      "gpu-timing",
+      "thirty-minute-soak"
+    ],
+    "manual": [
+      "real-soft-keyboard",
+      "microsoft-ime",
+      "macos-ime",
+      "japanese-ime",
+      "gboard-ime",
+      "nvda",
+      "voiceover",
+      "talkback"
+    ]
+  },
+  "x-presenceBudgets": {
+    "desktop": {
+      "webgl-context-count": 1,
+      "active-raf-count": 1,
+      "inactive-raf-count": 0,
+      "device-pixel-ratio": 1.5,
+      "draw-calls": 110,
+      "triangles": 8000,
+      "texture-rt-bytes": 67108864,
+      "visual-transfer-bytes": 4000000,
+      "active-jewel-count": 1,
+      "lens-gzip-bytes": 25000,
+      "stream-long-task-duration-ms": 50
+    },
+    "mobile": {
+      "webgl-context-count": 1,
+      "active-raf-count": 1,
+      "inactive-raf-count": 0,
+      "device-pixel-ratio": 1.25,
+      "draw-calls": 96,
+      "triangles": 8000,
+      "texture-rt-bytes": 33554432,
+      "visual-transfer-bytes": 1500000,
+      "active-jewel-count": 1,
+      "lens-gzip-bytes": 25000,
+      "stream-long-task-duration-ms": 50
+    }
+  }
+}

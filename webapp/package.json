@@ -6,6 +6,11 @@
     "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
   },
   "packageManager": "npm@10.8.2",
+  "overrides": {
+    "@axe-core/playwright": {
+      "playwright-core": "1.55.1"
+    }
+  },
   "scripts": {
     "dev": "next dev -p 3100",
     "build": "next build",
@@ -14,7 +19,16 @@
     "typecheck": "next typegen && tsc --noEmit --incremental false --pretty false",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "node scripts/run-playwright.mjs",
+    "test:e2e:no-build": "node scripts/run-playwright.mjs --no-build",
+    "test:e2e:real": "node scripts/real-core-smoke.mjs",
+    "test:presence-evidence": "vitest run e2e/support/budget-evaluator.test.ts e2e/support/performance-evidence.test.ts",
+    "check:presence-boundaries": "node scripts/check-presence-boundaries.mjs",
+    "check:presence-assets": "node scripts/check-presence-assets.mjs",
+    "check:presence-assets:dynamic": "node scripts/check-presence-assets.mjs --require-dynamic",
+    "check:presence-budgets": "node scripts/check-presence-budgets.mjs",
+    "presence:soak": "node scripts/presence-soak.mjs"
   },
   "dependencies": {
     "@pixi/core": "^7.4.3",
@@ -30,6 +44,8 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.55.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -45,6 +61,7 @@
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vite-node": "^6.0.0",
     "vitest": "^4.1.10"
   }
 }
