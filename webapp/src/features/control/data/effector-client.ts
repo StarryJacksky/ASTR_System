@@ -42,7 +42,6 @@ export class EffectorClientError extends Error {
     readonly operation: EffectorClientOperation,
     message: string,
     readonly status?: number,
-    readonly cause?: unknown,
   ) {
     super(message);
   }
@@ -82,7 +81,12 @@ export function createEffectorClient(options: EffectorClientOptions = {}): Effec
         parsePolicy,
       ),
     patchPolicy: (patch: PolicyPatch, signal?: AbortSignal) => {
-      const body = parsePolicyPatch(patch);
+      let body: Readonly<Record<string, unknown>> | null = null;
+      try {
+        body = parsePolicyPatch(patch);
+      } catch {
+        // Hostile getters and proxies are invalid input, never caller-visible causes.
+      }
       if (body === null) {
         return Promise.reject(
           new EffectorClientError(
@@ -160,13 +164,11 @@ async function requestJson<T>(
   let response: Response;
   try {
     response = await fetchImpl(`${baseUrl}${path}`, init);
-  } catch (cause) {
+  } catch {
     throw new EffectorClientError(
       "network",
       operation,
       `${operation} request failed`,
-      undefined,
-      cause,
     );
   }
 
@@ -182,17 +184,24 @@ async function requestJson<T>(
   let value: unknown;
   try {
     value = await response.json();
-  } catch (cause) {
+  } catch {
     throw new EffectorClientError(
       "json",
       operation,
       `${operation} returned invalid JSON`,
-      undefined,
-      cause,
     );
   }
 
-  if (isPlainRecord(value) && Object.hasOwn(value, "error")) {
+  let remoteError = false;
+  let parsed: T | null = null;
+  try {
+    remoteError = isPlainRecord(value) && Object.hasOwn(value, "error");
+    if (!remoteError) parsed = parse(value);
+  } catch {
+    // Treat unusual accessors/proxies as an invalid response without surfacing their details.
+  }
+
+  if (remoteError) {
     throw new EffectorClientError(
       "remote",
       operation,
@@ -200,12 +209,6 @@ async function requestJson<T>(
     );
   }
 
-  let parsed: T | null = null;
-  try {
-    parsed = parse(value);
-  } catch {
-    // Treat unusual accessors/proxies as an invalid response without surfacing their details.
-  }
   if (parsed === null) {
     throw new EffectorClientError(
       "shape",

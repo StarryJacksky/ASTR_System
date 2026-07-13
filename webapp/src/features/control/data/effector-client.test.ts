@@ -176,6 +176,28 @@ describe("Effector client", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("turns hostile policy patch access into an asynchronous safe input error", async () => {
+    const fetcher = vi.fn<EffectorFetch>();
+    const client = createEffectorClient({ fetch: fetcher });
+    const hostilePatch = Object.defineProperty({}, "approval_mode", {
+      enumerable: true,
+      get: () => {
+        throw new Error("D:/private/patch-secret");
+      },
+    });
+    let result: Promise<unknown> | undefined;
+
+    expect(() => {
+      result = client.patchPolicy(hostilePatch as never);
+    }).not.toThrow();
+    const error = await capturedError(result!);
+
+    expect(error).toMatchObject({ kind: "input", operation: "patch-policy" });
+    expect(error.message).toBe("patch-policy received an invalid patch");
+    expect(error.message).not.toContain("patch-secret");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it.each(operations)("rejects non-2xx %s responses without parsing or exposing the body", async (
     operation,
     invoke,
@@ -207,6 +229,26 @@ describe("Effector client", () => {
     expect(error.message).not.toContain("operator-secret");
   });
 
+  it("turns hostile response envelope inspection into a safe shape error", async () => {
+    const hostileBody = new Proxy(
+      {},
+      {
+        getPrototypeOf: () => {
+          throw new Error("D:/private/response-secret");
+        },
+      },
+    );
+    const client = createEffectorClient({
+      fetch: vi.fn<EffectorFetch>().mockResolvedValue(jsonResponse(hostileBody)),
+    });
+
+    const error = await capturedError(client.policy());
+
+    expect(error).toMatchObject({ kind: "shape", operation: "policy" });
+    expect(error.message).toBe("policy returned an invalid response shape");
+    expect(error.message).not.toContain("response-secret");
+  });
+
   it("distinguishes network and JSON failures without leaking underlying messages", async () => {
     const networkError = await capturedError(
       createEffectorClient({
@@ -216,6 +258,8 @@ describe("Effector client", () => {
     expect(networkError).toMatchObject({ kind: "network", operation: "status" });
     expect(networkError.message).toBe("status request failed");
     expect(networkError.message).not.toContain("secret");
+    expect(networkError).not.toHaveProperty("cause");
+    expect(JSON.stringify(networkError)).not.toContain("secret");
 
     const jsonError = await capturedError(
       createEffectorClient({ fetch: vi.fn<EffectorFetch>().mockResolvedValue(brokenJsonResponse()) })
@@ -224,6 +268,8 @@ describe("Effector client", () => {
     expect(jsonError).toMatchObject({ kind: "json", operation: "audit" });
     expect(jsonError.message).toBe("audit returned invalid JSON");
     expect(jsonError.message).not.toContain("secret");
+    expect(jsonError).not.toHaveProperty("cause");
+    expect(JSON.stringify(jsonError)).not.toContain("secret");
   });
 
   it.each([
