@@ -1,0 +1,253 @@
+export type ControlDomain = "system" | "soul";
+export type ControlModuleStatus = "available" | "planned";
+
+export interface ControlModule {
+  readonly id: string;
+  readonly href: `/admin/${string}`;
+  readonly domain: ControlDomain;
+  readonly title: string;
+  readonly subtitle: string;
+  readonly index: string;
+  readonly status: ControlModuleStatus;
+  readonly summary: string;
+  readonly contracts: readonly string[];
+  readonly prerequisite: string;
+}
+
+const modules = [
+  {
+    id: "dashboard",
+    href: "/admin/dashboard",
+    domain: "system",
+    title: "系统概览",
+    subtitle: "总星图",
+    index: "A01",
+    status: "planned",
+    summary: "汇总可验证的系统健康、成本与安全事实。",
+    contracts: [],
+    prerequisite: "需要独立的 Admin health projection。",
+  },
+  {
+    id: "platform-gateway",
+    href: "/admin/platform-gateway",
+    domain: "system",
+    title: "平台与网关",
+    subtitle: "航道",
+    index: "A02",
+    status: "planned",
+    summary: "管理平台适配与网关连接。",
+    contracts: [],
+    prerequisite: "需要授权后的 gateway projection。",
+  },
+  {
+    id: "model-router",
+    href: "/admin/model-router",
+    domain: "system",
+    title: "Provider 与模型路由",
+    subtitle: "星门",
+    index: "A03",
+    status: "planned",
+    summary: "查看 Provider、模型与路由事实。",
+    contracts: [],
+    prerequisite: "需要 model-router projection 与版本合同。",
+  },
+  {
+    id: "plugins-skills-mcp",
+    href: "/admin/plugins-skills-mcp",
+    domain: "system",
+    title: "插件、Skills 与 MCP",
+    subtitle: "工具舱",
+    index: "A04",
+    status: "planned",
+    summary: "查看扩展、技能与工具主机状态。",
+    contracts: [],
+    prerequisite: "需要 capability-scoped plugin and MCP projection。",
+  },
+  {
+    id: "sessions-people",
+    href: "/admin/sessions-people",
+    domain: "system",
+    title: "会话与人物",
+    subtitle: "名册",
+    index: "A05",
+    status: "planned",
+    summary: "查看主体、会话与人物关系。",
+    contracts: [],
+    prerequisite: "需要 principal-scoped session and people projection。",
+  },
+  {
+    id: "schedule",
+    href: "/admin/schedule",
+    domain: "system",
+    title: "调度计划",
+    subtitle: "星历",
+    index: "A06",
+    status: "planned",
+    summary: "查看计划任务与触发来源。",
+    contracts: [],
+    prerequisite: "需要 schedule projection 与取消语义。",
+  },
+  {
+    id: "logs-trace",
+    href: "/admin/logs-trace",
+    domain: "system",
+    title: "日志与 Trace",
+    subtitle: "回声档案",
+    index: "A07",
+    status: "planned",
+    summary: "按授权范围检查因果轨迹。",
+    contracts: [],
+    prerequisite: "需要通用 TraceProjection 与脱敏规则。",
+  },
+  {
+    id: "settings",
+    href: "/admin/settings",
+    domain: "system",
+    title: "系统设置",
+    subtitle: "定标室",
+    index: "A08",
+    status: "planned",
+    summary: "查看可安全暴露的系统设置。",
+    contracts: [],
+    prerequisite: "需要字段级读写权限与 revision。",
+  },
+  {
+    id: "resources-knowledge",
+    href: "/admin/resources-knowledge",
+    domain: "system",
+    title: "资源与知识",
+    subtitle: "藏书穹顶",
+    index: "A09",
+    status: "planned",
+    summary: "查看资源、索引与知识来源。",
+    contracts: [],
+    prerequisite: "需要资源与知识的只读 projection。",
+  },
+  {
+    id: "setup",
+    href: "/admin/setup",
+    domain: "system",
+    title: "安装与初始化",
+    subtitle: "点火序列",
+    index: "A10",
+    status: "planned",
+    summary: "检查安装、依赖与初始化阶段。",
+    contracts: [],
+    prerequisite: "需要幂等 setup state machine。",
+  },
+  {
+    id: "soul",
+    href: "/admin/soul",
+    domain: "soul",
+    title: "Soul 配置",
+    subtitle: "灵魂档案",
+    index: "S01",
+    status: "planned",
+    summary: "查看 Soul 身份、版本与纯度事实。",
+    contracts: [],
+    prerequisite: "需要只读 SoulPackage projection。",
+  },
+  {
+    id: "memory",
+    href: "/admin/memory",
+    domain: "soul",
+    title: "记忆系统",
+    subtitle: "深空存档",
+    index: "S02",
+    status: "planned",
+    summary: "查看记忆层、来源与保留策略。",
+    contracts: [],
+    prerequisite: "需要授权后的 Memory projection。",
+  },
+  {
+    id: "emotion",
+    href: "/admin/emotion",
+    domain: "soul",
+    title: "情绪系统",
+    subtitle: "潮汐仪",
+    index: "S03",
+    status: "planned",
+    summary: "查看情绪模型与衰减来源。",
+    contracts: [],
+    prerequisite: "需要 emotion history projection。",
+  },
+  {
+    id: "moa-teaching",
+    href: "/admin/moa-teaching",
+    domain: "soul",
+    title: "MoA 与教学",
+    subtitle: "议事庭",
+    index: "S04",
+    status: "planned",
+    summary: "查看讨论、教学与裁决证据。",
+    contracts: [],
+    prerequisite: "需要 MoA and teaching projection。",
+  },
+  {
+    id: "training",
+    href: "/admin/training",
+    domain: "soul",
+    title: "训练",
+    subtitle: "飞轮",
+    index: "S05",
+    status: "planned",
+    summary: "查看训练集、轮次与产物。",
+    contracts: [],
+    prerequisite: "需要可追溯 training run contract。",
+  },
+  {
+    id: "voice",
+    href: "/admin/voice",
+    domain: "soul",
+    title: "声音与声纹",
+    subtitle: "声纹室",
+    index: "S06",
+    status: "planned",
+    summary: "查看声音模型、声纹与权限边界。",
+    contracts: [],
+    prerequisite: "现有 Presence voiceprint 合同不足以构成 Admin 模块。",
+  },
+  {
+    id: "effector",
+    href: "/admin/effector",
+    domain: "soul",
+    title: "执行策略与审计",
+    subtitle: "丁册",
+    index: "S07",
+    status: "available",
+    summary: "管理执行策略、安全底线、急停与审计链。",
+    contracts: [
+      "GET /v1/admin/effector/policy",
+      "PUT /v1/admin/effector/policy",
+      "GET /v1/admin/effector/audit",
+      "GET /v1/effector/status",
+      "POST /v1/effector/estop",
+      "POST /v1/effector/estop/reset",
+    ],
+    prerequisite: "现有 Core 合同已提供。",
+  },
+  {
+    id: "migration",
+    href: "/admin/migration",
+    domain: "soul",
+    title: "灵魂迁移",
+    subtitle: "远航封装",
+    index: "S08",
+    status: "planned",
+    summary: "查看灵魂包迁移、校验与回滚。",
+    contracts: [],
+    prerequisite: "需要签名迁移包、兼容性与回滚合同。",
+  },
+] as const satisfies readonly ControlModule[];
+
+export type ControlModuleId = (typeof modules)[number]["id"];
+
+export const CONTROL_MODULES = Object.freeze(modules);
+
+export function getControlModule(id: string): ControlModule | undefined {
+  return CONTROL_MODULES.find((module) => module.id === id);
+}
+
+export function getControlModulesByDomain(domain: ControlDomain): readonly ControlModule[] {
+  return CONTROL_MODULES.filter((module) => module.domain === domain);
+}
