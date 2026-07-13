@@ -22,8 +22,55 @@ export default defineConfig({
     clearMocks: true,
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
-      include: ["src/lib/**/*.ts", "src/components/system/**/*.tsx"],
+      reporter: ["text", "html", "json-summary"],
+      include: [
+        "src/lib/**/*.ts",
+        "src/components/system/**/*.tsx",
+        "src/features/mobile/**/*.{ts,tsx}",
+      ],
+      exclude: [
+        "**/*.test.*",
+        "**/*.test-*.*",
+        "**/*.spec.*",
+        "**/*.spec-*.*",
+        "**/*.d.ts",
+        "**/__tests__/**",
+        "**/{test,tests,fixture,fixtures}/**",
+        "**/__snapshots__/**",
+        "**/*.snap",
+      ],
+      thresholds: {
+        "src/features/mobile/**/*.{ts,tsx}": {
+          lines: 90,
+          statements: 90,
+          functions: 90,
+          branches: 85,
+        },
+        "src/features/mobile/authority/loopback-authority.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        "src/features/mobile/tasks/{local-task-draft,local-task-draft-storage}.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        "src/features/mobile/safety/mobile-safety-client.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+        "src/features/mobile/safety/create-mobile-safety-controller.ts": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 100,
+        },
+      },
     },
   },
 });

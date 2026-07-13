@@ -118,6 +118,18 @@ describe("decodeLocalTaskDrafts", () => {
     expect(decodeLocalTaskDrafts([symbolKey]).ok).toBe(false);
   });
 
+  it("rejects non-string timestamps before attempting canonical date parsing", () => {
+    expect(decodeOne({ created_at: null }).ok).toBe(false);
+  });
+
+  it("rejects an exact-length record that substitutes an unknown key", () => {
+    const substituted = { ...VALID_DRAFT } as Record<string, unknown>;
+    delete substituted.text;
+    substituted.task_id = "remote_task_1";
+
+    expect(decodeLocalTaskDrafts([substituted]).ok).toBe(false);
+  });
+
   it("rejects accessor records without invoking their getters", () => {
     let invoked = false;
     const accessor = { ...VALID_DRAFT } as Record<string, unknown>;

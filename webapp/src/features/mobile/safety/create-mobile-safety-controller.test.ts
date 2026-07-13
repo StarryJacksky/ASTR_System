@@ -344,6 +344,78 @@ describe("Mobile Safety controller", () => {
     expect(controller.getSnapshot().status.phase).toBe("ready");
   });
 
+  it("ignores a superseded request that rejects after its replacement starts", async () => {
+    const harness = createPendingClient();
+    const controller = createMobileSafetyController({ client: harness.client });
+    controller.start();
+    const firstSignal = requestSignal(harness, "status", 0);
+
+    controller.actions.refreshStatus();
+    const replacementSnapshot = controller.getSnapshot();
+    expect(firstSignal.aborted).toBe(true);
+
+    harness.statusRequests[0]?.reject(new Error("SUPERSEDED_SECRET"));
+    await flushSettlements();
+
+    expect(controller.getSnapshot()).toBe(replacementSnapshot);
+    expect(controller.getSnapshot().status.phase).toBe("loading");
+    expect(JSON.stringify(controller.getSnapshot())).not.toContain("SUPERSEDED_SECRET");
+    controller.dispose();
+  });
+
+  it("lets a clock callback supersede settlement without publishing the older value", async () => {
+    const harness = createPendingClient();
+    let superseded = false;
+    const controller = createMobileSafetyController({
+      client: harness.client,
+      now: () => {
+        if (!superseded) {
+          superseded = true;
+          controller.actions.refreshStatus();
+        }
+        return new Date("2026-07-13T04:05:06.007Z");
+      },
+    });
+    controller.start();
+
+    harness.statusRequests[0]?.resolve(STATUS);
+    await flushSettlements();
+
+    expect(harness.statusRequests).toHaveLength(2);
+    expect(requestSignal(harness, "status", 0).aborted).toBe(true);
+    expect(controller.getSnapshot().status.phase).toBe("loading");
+
+    harness.statusRequests[1]?.resolve({ ...STATUS, pending_count: 7 });
+    await flushSettlements();
+    expect(controller.getSnapshot().status).toMatchObject({
+      phase: "ready",
+      value: { pending_count: 7 },
+      verified_at: "2026-07-13T04:05:06.007Z",
+    });
+  });
+
+  it("does not publish or request again when abort disposal reenters refresh", () => {
+    const harness = createPendingClient();
+    const client: MobileSafetyClient = {
+      ...harness.client,
+      status: vi.fn((signal?: AbortSignal) => {
+        const request = pending<MobileLocalStatusProjection>(signal);
+        harness.statusRequests.push(request);
+        signal?.addEventListener("abort", () => controller.dispose(), { once: true });
+        return request.promise;
+      }),
+    };
+    const controller = createMobileSafetyController({ client });
+    controller.start();
+    const loading = controller.getSnapshot();
+
+    expect(() => controller.actions.refreshStatus()).not.toThrow();
+
+    expect(controller.getSnapshot()).toBe(loading);
+    expect(client.status).toHaveBeenCalledTimes(1);
+    expect(harness.statusRequests).toHaveLength(1);
+  });
+
   it.each<ChannelKey>(["status", "policy", "audit"])(
     "retains verified value and time when %s refresh fails",
     async (key) => {
