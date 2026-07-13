@@ -488,6 +488,84 @@ describe("ConversationRegion", () => {
     viewportB.unmount();
   });
 
+  it("announces only one new entrant after disjoint viewports reconcile a shared ledger", () => {
+    const announce = vi.fn();
+    const ledger = getFinalAnnouncementLedgerForScope({});
+    const aFinals = Array.from({ length: 256 }, (_, index) =>
+      message({
+        id: "reply:disjoint-a-" + index,
+        role: "qiuqiu",
+        text: "A 终稿 " + index,
+        eventId: "decision:disjoint-a-" + index,
+      }),
+    );
+    const bFinals = Array.from({ length: 256 }, (_, index) =>
+      message({
+        id: "reply:disjoint-b-" + index,
+        role: "qiuqiu",
+        text: "B 终稿 " + index,
+        eventId: "decision:disjoint-b-" + index,
+      }),
+    );
+
+    const viewportA = render(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: aFinals })}
+      />,
+    );
+    const viewportB = render(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: bFinals })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(512);
+
+    viewportA.rerender(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: aFinals.map((item) => ({ ...item })),
+        })}
+      />,
+    );
+    viewportB.rerender(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: bFinals.map((item) => ({ ...item })),
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(512);
+
+    const aNew = message({
+      id: "reply:disjoint-a-new",
+      role: "qiuqiu",
+      text: "A 新终稿",
+      eventId: "decision:disjoint-a-new",
+    });
+    viewportA.rerender(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: [...aFinals.map((item) => ({ ...item })), aNew],
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(513);
+    expect(announce).toHaveBeenLastCalledWith("Soul 回答完成：A 新终稿", "polite");
+
+    viewportA.unmount();
+    viewportB.unmount();
+  });
+
   it("reconciles only the newest 256 finals so a remount cannot cascade-replay evicted history", () => {
     const announce = vi.fn();
     const scope = {};

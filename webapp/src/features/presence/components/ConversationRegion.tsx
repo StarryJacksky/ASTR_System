@@ -138,7 +138,7 @@ export function ConversationRegion({
     announcementLedger ?? localAnnouncementLedger;
   const previousAnnouncementLedgerRef = useRef(resolvedAnnouncementLedger);
   const previousProjectedEventIdsRef = useRef<ReadonlySet<string> | null>(null);
-  const previousDistinctFallbackIdRef = useRef<string | null>(null);
+  const previousCandidateEventIdsRef = useRef<ReadonlySet<string> | null>(null);
   const entries = useMemo(
     () => projectConversationTimeline(conversation),
     [conversation],
@@ -191,7 +191,7 @@ export function ConversationRegion({
     }
     previousAnnouncementLedgerRef.current = resolvedAnnouncementLedger;
     previousProjectedEventIdsRef.current = null;
-    previousDistinctFallbackIdRef.current = null;
+    previousCandidateEventIdsRef.current = null;
     previousEntriesRef.current = null;
     scrollToLatest();
   }, [resolvedAnnouncementLedger, scrollToLatest]);
@@ -237,7 +237,7 @@ export function ConversationRegion({
 
   useEffect(() => {
     const previousProjectedEventIds = previousProjectedEventIdsRef.current;
-    const previousDistinctFallbackId = previousDistinctFallbackIdRef.current;
+    const previousCandidateEventIds = previousCandidateEventIdsRef.current;
     const projectedEventIds = new Set<string>();
     for (const message of conversation.messages) {
       if (message.role === "qiuqiu" && isNonBlankString(message.eventId)) {
@@ -250,16 +250,6 @@ export function ConversationRegion({
     );
     const distinctFallback =
       fallback && !projectedEventIds.has(fallback.id) ? fallback : null;
-    const distinctFallbackId = distinctFallback?.id ?? null;
-    const projectedWindowChanged =
-      previousProjectedEventIds === null ||
-      previousProjectedEventIds.size !== projectedEventIds.size ||
-      [...projectedEventIds].some(
-        (eventId) => !previousProjectedEventIds.has(eventId),
-      );
-    const announcementWindowChanged =
-      projectedWindowChanged ||
-      previousDistinctFallbackId !== distinctFallbackId;
     const messageWindowCapacity =
       FINAL_ANNOUNCEMENT_ID_CAPACITY - (distinctFallback ? 1 : 0);
     const selectedMessageCandidates = new Map<string, {
@@ -280,6 +270,30 @@ export function ConversationRegion({
           message.role !== "qiuqiu" ||
           !isNonBlankString(message.eventId) ||
           previousProjectedEventIds.has(message.eventId) ||
+          selectedMessageCandidates.has(message.eventId)
+        ) {
+          continue;
+        }
+        selectedMessageCandidates.set(message.eventId, {
+          eventId: message.eventId,
+          copy: finalAnnouncementCopy(message, visibleAssistantLabel),
+          index,
+        });
+      }
+    }
+
+    if (previousCandidateEventIds !== null) {
+      for (
+        let index = conversation.messages.length - 1;
+        index >= 0 && selectedMessageCandidates.size < messageWindowCapacity;
+        index -= 1
+      ) {
+        const message = conversation.messages[index];
+        if (
+          message === undefined ||
+          message.role !== "qiuqiu" ||
+          !isNonBlankString(message.eventId) ||
+          !previousCandidateEventIds.has(message.eventId) ||
           selectedMessageCandidates.has(message.eventId)
         ) {
           continue;
@@ -324,16 +338,22 @@ export function ConversationRegion({
       });
     }
 
+    const candidateEventIds = candidates.map((candidate) => candidate.eventId);
+    const eligibleEventIds = new Set(
+      previousCandidateEventIds === null
+        ? candidateEventIds
+        : candidateEventIds.filter(
+            (eventId) => !previousCandidateEventIds.has(eventId),
+          ),
+    );
     previousProjectedEventIdsRef.current = projectedEventIds;
-    previousDistinctFallbackIdRef.current = distinctFallbackId;
+    previousCandidateEventIdsRef.current = new Set(candidateEventIds);
     const unseenEventIds = new Set(
-      resolvedAnnouncementLedger.reconcileWindow(
-        candidates.map((candidate) => candidate.eventId),
-      ),
+      resolvedAnnouncementLedger.reconcileWindow(candidateEventIds),
     );
     for (const candidate of candidates) {
       if (
-        !announcementWindowChanged ||
+        !eligibleEventIds.has(candidate.eventId) ||
         !unseenEventIds.has(candidate.eventId)
       ) {
         continue;
