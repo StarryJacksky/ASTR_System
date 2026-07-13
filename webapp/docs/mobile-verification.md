@@ -63,13 +63,13 @@ Production Mobile code must satisfy all of these rules:
 - no Safety mutation verb, mutation client, or route-owned mutation byte;
 - tests, declarations, fixtures, and snapshots are excluded from production scanning and cannot serve as production evidence.
 
-Mock Core evidence proves deterministic frontend behavior only. It is not proof of a real Core, a real device, a real assistive-technology session, a remote computer, or a production network. `check:mobile-boundaries` is the fail-closed source/build gate planned for Task 9; until that package command and its fresh stamped build evidence land and pass, the boundary status remains pending.
+Mock Core evidence proves deterministic frontend behavior only. It is not proof of a real Core, a real device, a real assistive-technology session, a remote computer, or a production network. `check:mobile-boundaries` is the fail-closed source/build gate. It accepts only a fresh `.next/astr-e2e-build.json` whose build ID and source fingerprint match the current production output, then verifies the five server entries, route manifests, route-owned modules, and client chunks.
 
 ## Browser, device, and AT status
 
 | Evidence | Status | Required interpretation |
 | --- | --- | --- |
-| Component/unit, lint, typecheck, and six-route production build | Complete for the assembled shell | Does not replace route-level browser evidence. |
+| Component/unit, coverage, lint, typecheck, six-route production build, and stamped source/chunk boundary | Complete for the assembled shell | Does not replace route-level browser evidence. |
 | Trusted and remote-origin request/authority matrix | Pending Task 10 | Remote Presence/Safety must show gates and make zero Core requests. |
 | Axe, one-live-region, overflow, 200%/400% reflow, focus, and desktop soft-keyboard contraction proxy | Pending Task 10 | Desktop simulation is not a real mobile keyboard or screen reader. |
 | Five domains × dark/light × 390×844/430×932 visual baselines | Pending Task 10 | Exactly 20 inspected screenshots are required. |
@@ -89,7 +89,7 @@ npm run test:e2e -- --list
 npm run check:mobile-boundaries
 ```
 
-The last command is intentionally future-facing until Task 9 adds `check:mobile-boundaries` to `package.json`. It must report `passed:true`, exactly the five routes, `buildEvidence.status:"checked"`, real server/manifest evidence, and zero violations. A bare `next build` without the ASTR E2E stamp is not authoritative boundary evidence.
+The last command must report `passed:true`, exactly the five routes, `buildEvidence.status:"checked"`, real server/manifest evidence, and zero violations. A bare `next build` without the ASTR E2E stamp is not authoritative boundary evidence.
 
 After Task 10 adds the browser matrices, run the W4 closeout gate in this order:
 
