@@ -9,9 +9,7 @@
   overflow: hidden;
   padding: clamp(var(--space-4), 3vw, var(--space-6));
   border: 1px solid var(--astr-hairline-strong);
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--astr-soul) 7%, transparent), transparent 44%),
-    var(--astr-surface);
+  background: color-mix(in srgb, var(--astr-surface) 94%, var(--astr-soul));
   box-shadow: var(--shadow-2), inset 0 1px 0 var(--astr-hairline);
   clip-path: polygon(
     0 0,
@@ -35,11 +33,7 @@
   border: 1px solid color-mix(in srgb, var(--astr-soul) 54%, var(--astr-hairline));
   border-inline-end-color: transparent;
   border-radius: 50%;
-  background: radial-gradient(
-    circle at 42% 50%,
-    color-mix(in srgb, var(--astr-soul) 10%, transparent),
-    transparent 64%
-  );
+  background: color-mix(in srgb, var(--astr-soul) 6%, transparent);
   content: "";
   pointer-events: none;
   transform: rotate(-18deg);
@@ -51,7 +45,8 @@
   inset: var(--corner-signature) var(--space-4) auto auto;
   inline-size: min(34%, 9rem);
   block-size: 1px;
-  background: linear-gradient(90deg, transparent, var(--astr-soul));
+  background: color-mix(in srgb, var(--astr-soul) 72%, var(--astr-hairline));
+  clip-path: polygon(10% 0, 100% 0, 100% 100%, 0 100%);
   content: "";
 }
 

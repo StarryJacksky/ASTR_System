@@ -150,6 +150,18 @@ describe("static Soul presence", () => {
     );
   });
 
+  it("keeps the shared Soul shell on a token-only solid surface boundary", () => {
+    const css = readFileSync(
+      resolve(process.cwd(), "src/features/presence/components/SoulPresence.module.css"),
+      "utf8",
+    );
+
+    expect(css).not.toMatch(
+      /gradient|backdrop-filter|@keyframes|\banimation(?:-\w+)?\s*:|\b(?:green|lime|emerald|chartreuse)\b/i,
+    );
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i);
+  });
+
   it("shapes the Soul shell with the one constitutional 14px eclipse notch", () => {
     const css = readFileSync(
       resolve(process.cwd(), "src/features/presence/components/SoulPresence.module.css"),

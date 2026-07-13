@@ -13,9 +13,7 @@
   border-inline-start: 2px solid var(--astr-soul);
   border-inline-end: 0;
   border-radius: 0;
-  background:
-    linear-gradient(112deg, color-mix(in srgb, var(--astr-soul) 6%, transparent), transparent 34%),
-    color-mix(in srgb, var(--astr-surface) 96%, transparent);
+  background: color-mix(in srgb, var(--astr-surface) 96%, var(--astr-soul));
   box-shadow: none;
 }
 
