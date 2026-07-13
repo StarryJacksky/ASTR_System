@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ControlModulePage from "../../../app/admin/[module]/page";
@@ -127,6 +128,33 @@ describe("EffectorWorkspace", () => {
     expect(screen.getByText("审计尾部 1")).toBeVisible();
   });
 
+  it("keeps both local skip targets present and focusable with or without evidence", async () => {
+    const user = userEvent.setup();
+    const readyView = renderWorkspace(BASE_SNAPSHOT);
+
+    await user.click(screen.getByRole("link", { name: "跳到策略表单" }));
+    expect(screen.getByRole("form", { name: "执行策略编辑" })).toHaveFocus();
+    await user.click(screen.getByRole("link", { name: "跳到审计丁册" }));
+    expect(screen.getByRole("region", { name: "审计丁册" })).toHaveFocus();
+
+    readyView.unmount();
+    renderWorkspace({
+      ...BASE_SNAPSHOT,
+      policy: null,
+      audit: null,
+      channels: { ...BASE_SNAPSHOT.channels, policy: "error", audit: "error" },
+      errors: {
+        policy: "策略加载失败，请重试。",
+        audit: "审计记录加载失败，请重试。",
+      },
+    });
+
+    await user.click(screen.getByRole("link", { name: "跳到策略表单" }));
+    expect(document.getElementById("control-form")).toHaveFocus();
+    await user.click(screen.getByRole("link", { name: "跳到审计丁册" }));
+    expect(document.getElementById("audit-ledger")).toHaveFocus();
+  });
+
   it("keeps status safety and audit visible when policy alone fails", () => {
     renderWorkspace({
       ...BASE_SNAPSHOT,
@@ -169,6 +197,31 @@ describe("EffectorWorkspace", () => {
     expect(screen.getAllByText("可能陈旧")).toHaveLength(2);
     expect(screen.getByText("策略刷新失败，请重试。")).toBeVisible();
     expect(screen.getByText("审计刷新失败，请重试。")).toBeVisible();
+  });
+
+  it("places mutation failures in the shared operation seam, not inside safety evidence", () => {
+    renderWorkspace({
+      ...BASE_SNAPSHOT,
+      errors: { mutation: "策略保存失败，请重试。" },
+    });
+
+    const status = screen.getByRole("region", { name: "执行层状态证据" });
+    expect(within(status).queryByText("策略保存失败，请重试。")).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("策略保存失败，请重试。");
+  });
+
+  it("marks retained status counts stale when status refresh fails", () => {
+    renderWorkspace({
+      ...BASE_SNAPSHOT,
+      channels: { ...BASE_SNAPSHOT.channels, status: "error" },
+      errors: { status: "安全状态读取失败，请重试。" },
+      safetyEvidence: "unknown",
+    });
+
+    const status = screen.getByRole("region", { name: "执行层状态证据" });
+    expect(within(status).getByText("可能陈旧")).toBeVisible();
+    expect(within(status).getByText("待处理 2")).toBeVisible();
+    expect(within(status).getByText("审计尾部 1")).toBeVisible();
   });
 
   it("does not manufacture pending or audit-tail counts without Core status", () => {
@@ -227,6 +280,9 @@ describe("EffectorWorkspace", () => {
     );
     expect(styles).toMatch(
       /\.chip\s*>\s*span:first-child\s*\{[\s\S]*min-width:\s*0;[\s\S]*overflow-wrap:\s*anywhere;[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.entryDescription\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*\}/,
     );
     expect(shellStyles).toMatch(/\.effectorDossier\s*\{/);
   });

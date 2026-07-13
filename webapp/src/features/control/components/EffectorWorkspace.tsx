@@ -19,8 +19,20 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
   return (
     <article className={`${shellStyles.effectorDossier} ${styles.effectorWorkspace}`}>
       <nav aria-label="Effector 工作区跳转" className={styles.workspaceSkips}>
-        <a className={styles.workspaceSkip} href="#control-form">跳到策略表单</a>
-        <a className={styles.workspaceSkip} href="#audit-ledger">跳到审计丁册</a>
+        <a
+          className={styles.workspaceSkip}
+          href="#control-form"
+          onClick={() => focusWorkspaceTarget("control-form")}
+        >
+          跳到策略表单
+        </a>
+        <a
+          className={styles.workspaceSkip}
+          href="#audit-ledger"
+          onClick={() => focusWorkspaceTarget("audit-ledger")}
+        >
+          跳到审计丁册
+        </a>
       </nav>
 
       <header className={styles.moduleHeader}>
@@ -44,6 +56,13 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
         </section>
       </header>
 
+      {snapshot.errors.mutation && (
+        <div className={styles.mutationAlert} role="alert">
+          <span className={styles.sequence}>OPERATION / UNCONFIRMED</span>
+          <p>{snapshot.errors.mutation}</p>
+        </div>
+      )}
+
       <div className={styles.safetyBand}>
         <SafetyControl
           evidence={snapshot.safetyEvidence}
@@ -60,8 +79,8 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
           {snapshot.errors.status && (
             <p className={styles.channelError}>{snapshot.errors.status}</p>
           )}
-          {snapshot.errors.mutation && (
-            <p className={styles.channelError}>{snapshot.errors.mutation}</p>
+          {snapshot.channels.status === "error" && snapshot.status && (
+            <span className={styles.staleLabel}>可能陈旧</span>
           )}
           {snapshot.status && (
             <dl className={styles.statusCounts}>
@@ -100,7 +119,7 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
               savingPolicy={snapshot.savingPolicy}
             />
           ) : (
-            <p className={styles.loadingState}>
+            <p className={styles.loadingState} id="control-form" tabIndex={-1}>
               {snapshot.channels.policy === "error"
                 ? "没有可显示的已验证策略。"
                 : "正在读取 Core 策略。"}
@@ -129,7 +148,7 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
               selectedDate={snapshot.selectedAuditDate}
             />
           ) : (
-            <p className={styles.loadingState}>
+            <p className={styles.loadingState} id="audit-ledger" tabIndex={-1}>
               {snapshot.channels.audit === "error"
                 ? "没有可显示的已验证审计记录。"
                 : "正在读取 Core 审计记录。"}
@@ -139,6 +158,10 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
       </div>
     </article>
   );
+}
+
+function focusWorkspaceTarget(id: "control-form" | "audit-ledger"): void {
+  document.getElementById(id)?.focus({ preventScroll: true });
 }
 
 function ChannelStateCopy({

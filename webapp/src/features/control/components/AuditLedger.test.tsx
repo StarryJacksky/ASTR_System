@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { act } from "react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -128,10 +128,8 @@ describe("AuditLedger", () => {
       selectedDate: "2026-07-13",
       refreshAudit: vi.fn(),
     } as const;
-    const serverMarkup = renderToString(<AuditLedger {...props} />).replace(
-      /(<time[^>]*>)[\s\S]*?(<\/time>)/,
-      "$1SERVER-TIMEZONE-COPY$2",
-    );
+    const serverMarkup = renderToString(<AuditLedger {...props} />);
+    expect(serverMarkup).toContain(">2026-07-13T08:09:10Z</time>");
     const container = document.createElement("div");
     container.innerHTML = serverMarkup;
     document.body.append(container);
@@ -143,6 +141,14 @@ describe("AuditLedger", () => {
       await Promise.resolve();
     });
 
+    const localized = new Intl.DateTimeFormat("zh-CN", {
+      dateStyle: "medium",
+      timeStyle: "medium",
+      hour12: false,
+    }).format(new Date("2026-07-13T08:09:10Z"));
+    await waitFor(() => {
+      expect(container.querySelector("time")?.textContent).toBe(localized);
+    });
     expect(consoleError.mock.calls.flat().join("\n")).not.toMatch(
       /hydration|did not match|server rendered text/i,
     );

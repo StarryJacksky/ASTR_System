@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 import type { EffectorActions } from "../controller/create-effector-controller";
 import type { EffectorAudit } from "../data/effector-client";
 import { auditDecisionColor } from "../model/audit-decision";
@@ -37,6 +39,7 @@ export function AuditLedger({
       aria-labelledby="audit-title"
       className={styles.auditLedger}
       id="audit-ledger"
+      tabIndex={-1}
     >
       <header className={styles.auditHeader}>
         <div className={styles.auditTitleBlock}>
@@ -91,9 +94,7 @@ export function AuditLedger({
               >
                 <div className={styles.entryHeader}>
                   <span className={styles.entryDecision}>决策：{entry.decision}</span>
-                  <time dateTime={entry.ts} suppressHydrationWarning>
-                    {formatAuditTimestamp(entry.ts)}
-                  </time>
+                  <LocalizedAuditTime value={entry.ts} />
                 </div>
                 <p className={styles.entryDescription}>{entry.description}</p>
                 <dl className={styles.entryFacts}>
@@ -117,6 +118,17 @@ export function AuditLedger({
       )}
     </section>
   );
+}
+
+const subscribeToLocale = () => () => undefined;
+
+function LocalizedAuditTime({ value }: { readonly value: string }) {
+  const localized = useSyncExternalStore(
+    subscribeToLocale,
+    () => formatAuditTimestamp(value),
+    () => value,
+  );
+  return <time dateTime={value}>{localized}</time>;
 }
 
 function decisionTone(decision: string): "action" | "warning" | "danger" | "silver" {

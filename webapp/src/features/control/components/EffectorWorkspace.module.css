@@ -578,6 +578,21 @@
   line-height: 1.55;
 }
 
+.mutationAlert {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 12px 20px;
+  padding: 12px 0;
+  border-block: 1px solid var(--astr-warning);
+  color: var(--astr-text-2);
+}
+
+.mutationAlert p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .loadingState {
   min-height: 88px;
   margin: 0;
@@ -718,6 +733,7 @@
 
 .entryDescription {
   margin: 14px 0;
+  overflow-wrap: anywhere;
   color: var(--astr-text-2);
   line-height: 1.65;
 }

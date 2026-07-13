@@ -48,6 +48,7 @@ export function EffectorPolicyEditor({
       aria-label="执行策略编辑"
       className={styles.controlForm}
       id="control-form"
+      tabIndex={-1}
       onSubmit={(event: FormEvent) => event.preventDefault()}
     >
       <section className={styles.archiveSection} aria-labelledby="policy-authority-title">
