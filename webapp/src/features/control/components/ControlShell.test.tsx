@@ -35,6 +35,10 @@ describe("Control shell", () => {
       "aria-current",
       "page",
     );
+    const breadcrumb = screen.getByRole("navigation", { name: "模块面包屑" });
+    expect(breadcrumb).toHaveTextContent("Control");
+    expect(breadcrumb).toHaveTextContent("Soul 域");
+    expect(breadcrumb).toHaveTextContent("执行策略与审计");
   });
 
   it("opens the complete module atlas through a native disclosure", async () => {

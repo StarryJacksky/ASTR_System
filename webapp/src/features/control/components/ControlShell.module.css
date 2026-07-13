@@ -150,12 +150,52 @@
   gap: 24px;
   padding: 0 clamp(16px, 3vw, 42px);
   border-bottom: 1px solid var(--astr-hairline-strong);
-  background: color-mix(in srgb, var(--astr-bg) 92%, transparent);
-  backdrop-filter: blur(16px);
+  background: var(--astr-bg);
 }
 
 .currentDossier {
   min-width: 0;
+}
+
+.breadcrumb {
+  min-width: 0;
+}
+
+.breadcrumb ol {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+  padding: 0;
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  list-style: none;
+}
+
+.breadcrumb li {
+  min-width: 0;
+}
+
+.breadcrumb li + li::before {
+  margin-right: 8px;
+  color: var(--astr-hairline-strong);
+  content: "/";
+}
+
+.breadcrumb a {
+  color: var(--astr-action);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.breadcrumb [aria-current="page"] {
+  overflow: hidden;
+  color: var(--astr-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .currentLine {
@@ -625,6 +665,10 @@
 
   .currentDossier {
     width: 100%;
+  }
+
+  .breadcrumb + .eyebrow {
+    display: none;
   }
 
   .currentLine {

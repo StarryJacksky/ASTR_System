@@ -55,6 +55,15 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
       <div className={styles.workspace}>
         <header className={styles.controlHeader}>
           <div className={styles.currentDossier}>
+            {currentModule && (
+              <nav aria-label="模块面包屑" className={styles.breadcrumb}>
+                <ol>
+                  <li><Link href="/admin">Control</Link></li>
+                  <li>{currentModule.domain === "system" ? "系统域" : "Soul 域"}</li>
+                  <li aria-current="page">{currentModule.title}</li>
+                </ol>
+              </nav>
+            )}
             <p className={styles.eyebrow}>CONTROL / 主权控制面</p>
             <div className={styles.currentLine}>
               <p className={styles.currentTitle} aria-label="当前档案">

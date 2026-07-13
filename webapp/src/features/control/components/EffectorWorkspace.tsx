@@ -56,12 +56,28 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
         </section>
       </header>
 
-      {snapshot.errors.mutation && (
+      {snapshot.errors.policyMutation && (
         <div className={styles.mutationAlert} role="alert">
-          <span className={styles.sequence}>OPERATION / UNCONFIRMED</span>
-          <p>{snapshot.errors.mutation}</p>
+          <span className={styles.sequence}>POLICY / UNCONFIRMED</span>
+          <p>{snapshot.errors.policyMutation}</p>
         </div>
       )}
+
+      {snapshot.errors.safetyMutation && (
+        <div className={styles.mutationAlert} role="alert">
+          <span className={styles.sequence}>SAFETY / UNCONFIRMED</span>
+          <p>{snapshot.errors.safetyMutation}</p>
+        </div>
+      )}
+
+      {!snapshot.errors.policyMutation &&
+        !snapshot.errors.safetyMutation &&
+        snapshot.errors.mutation && (
+          <div className={styles.mutationAlert} role="alert">
+            <span className={styles.sequence}>OPERATION / UNCONFIRMED</span>
+            <p>{snapshot.errors.mutation}</p>
+          </div>
+        )}
 
       <div className={styles.safetyBand}>
         <SafetyControl
@@ -81,6 +97,15 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
           )}
           {snapshot.channels.status === "error" && snapshot.status && (
             <span className={styles.staleLabel}>可能陈旧</span>
+          )}
+          {snapshot.channels.status === "error" && (
+            <button
+              className={styles.retryButton}
+              type="button"
+              onClick={actions.refreshStatus}
+            >
+              重新读取状态
+            </button>
           )}
           {snapshot.status && (
             <dl className={styles.statusCounts}>
@@ -112,6 +137,15 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
           {snapshot.errors.policy && (
             <p className={styles.channelError}>{snapshot.errors.policy}</p>
           )}
+          {snapshot.channels.policy === "error" && (
+            <button
+              className={styles.retryButton}
+              type="button"
+              onClick={actions.refreshPolicy}
+            >
+              重新读取策略
+            </button>
+          )}
           {snapshot.policy ? (
             <EffectorPolicyEditor
               onPatch={actions.patchPolicy}
@@ -140,6 +174,15 @@ export function EffectorWorkspace({ module }: EffectorWorkspaceProps) {
           </header>
           {snapshot.errors.audit && (
             <p className={styles.channelError}>{snapshot.errors.audit}</p>
+          )}
+          {snapshot.channels.audit === "error" && (
+            <button
+              className={styles.retryButton}
+              type="button"
+              onClick={() => actions.refreshAudit()}
+            >
+              重新读取审计
+            </button>
           )}
           {snapshot.audit ? (
             <AuditLedger

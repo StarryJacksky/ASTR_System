@@ -578,6 +578,24 @@
   line-height: 1.55;
 }
 
+.retryButton {
+  min-height: var(--touch-target);
+  margin: 0 0 18px;
+  padding: 8px 14px;
+  border: 1px solid var(--astr-action);
+  background: transparent;
+  color: var(--astr-action);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.retryButton:hover,
+.retryButton:focus-visible {
+  background: var(--astr-action);
+  color: var(--astr-on-accent);
+}
+
 .mutationAlert {
   display: flex;
   min-width: 0;
@@ -686,6 +704,23 @@
   color: var(--astr-text-3);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+}
+
+.auditDateEvidence {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--astr-hairline);
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.auditDateEvidence p {
+  margin: 0;
+}
+
+.auditDateMismatch {
+  margin-top: 6px !important;
+  color: var(--astr-warning);
 }
 
 .auditList {

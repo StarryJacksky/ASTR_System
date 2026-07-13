@@ -24,7 +24,7 @@ const POLICY: EffectorPolicy = {
 };
 
 const LABELS = {
-  checking: "安全状态检查中",
+  checking: "触发急停 · 状态检查中",
   clear: "触发急停",
   latched: "急停已闩锁 · 请求复位",
   unknown: "安全状态未知 · 重新触发急停",
@@ -122,7 +122,7 @@ describe("SafetyControl", () => {
     expect(onEstop).toHaveBeenCalledTimes(1);
   });
 
-  it("disables checking and in-flight safety actions while retaining authoritative copy", async () => {
+  it("keeps checking e-stop capable and disables only in-flight safety actions", async () => {
     const user = userEvent.setup();
     const onEstop = vi.fn();
     const view = render(
@@ -133,7 +133,10 @@ describe("SafetyControl", () => {
         onReset={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: LABELS.checking })).toBeDisabled();
+    const checkingButton = screen.getByRole("button", { name: LABELS.checking });
+    expect(checkingButton).toBeEnabled();
+    await user.click(checkingButton);
+    expect(onEstop).toHaveBeenCalledTimes(1);
 
     view.rerender(
       <SafetyControl
@@ -147,6 +150,6 @@ describe("SafetyControl", () => {
     expect(button).toBeDisabled();
     expect(screen.getByText("等待 Core 权威回读")).toBeVisible();
     await user.click(button);
-    expect(onEstop).not.toHaveBeenCalled();
+    expect(onEstop).toHaveBeenCalledTimes(1);
   });
 });

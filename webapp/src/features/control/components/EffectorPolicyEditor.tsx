@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type { EffectorActions } from "../controller/create-effector-controller";
 import type { EffectorPolicy, PolicyPatch } from "../data/effector-client";
@@ -31,8 +31,64 @@ export function EffectorPolicyEditor({
   savingPolicy,
   onPatch,
 }: EffectorPolicyEditorProps) {
+  const [cwdDraft, setCwdDraft] = useState(policy.headless_cwd);
+  const [maxStepsDraft, setMaxStepsDraft] = useState(
+    String(policy.max_steps_per_task),
+  );
+  const previousPolicyRef = useRef({
+    headless_cwd: policy.headless_cwd,
+    max_steps_per_task: policy.max_steps_per_task,
+  });
+  const wasSavingRef = useRef(savingPolicy);
+
+  useEffect(() => {
+    const saveFinished = wasSavingRef.current && !savingPolicy;
+    if (
+      saveFinished ||
+      previousPolicyRef.current.headless_cwd !== policy.headless_cwd
+    ) {
+      setCwdDraft(policy.headless_cwd);
+    }
+    if (
+      saveFinished ||
+      previousPolicyRef.current.max_steps_per_task !== policy.max_steps_per_task
+    ) {
+      setMaxStepsDraft(String(policy.max_steps_per_task));
+    }
+    previousPolicyRef.current = {
+      headless_cwd: policy.headless_cwd,
+      max_steps_per_task: policy.max_steps_per_task,
+    };
+    wasSavingRef.current = savingPolicy;
+  }, [policy.headless_cwd, policy.max_steps_per_task, savingPolicy]);
+
   const patch = (value: PolicyPatch): void => {
     void onPatch(value);
+  };
+  const commitCwdDraft = (): void => {
+    const headless_cwd = cwdDraft.trim();
+    setCwdDraft(headless_cwd);
+    if (headless_cwd !== policy.headless_cwd) patch({ headless_cwd });
+  };
+  const commitMaxStepsDraft = (): void => {
+    const normalized = maxStepsDraft.trim();
+    if (!/^\d+$/.test(normalized)) {
+      setMaxStepsDraft(String(policy.max_steps_per_task));
+      return;
+    }
+    const max_steps_per_task = Number(normalized);
+    if (
+      !Number.isInteger(max_steps_per_task) ||
+      max_steps_per_task < 1 ||
+      max_steps_per_task > 100
+    ) {
+      setMaxStepsDraft(String(policy.max_steps_per_task));
+      return;
+    }
+    setMaxStepsDraft(String(max_steps_per_task));
+    if (max_steps_per_task !== policy.max_steps_per_task) {
+      patch({ max_steps_per_task });
+    }
   };
   const dangerousCategories = mergeFloor(
     policy.dangerous_categories,
@@ -80,16 +136,13 @@ export function EffectorPolicyEditor({
             <label className={styles.field}>
               <span className={styles.label}>当前工作目录</span>
               <input
-                key={policy.headless_cwd}
                 aria-label="当前工作目录"
                 className={styles.textInput}
-                defaultValue={policy.headless_cwd}
                 disabled={savingPolicy}
                 type="text"
-                onBlur={(event) => {
-                  const headless_cwd = event.currentTarget.value.trim();
-                  if (headless_cwd !== policy.headless_cwd) patch({ headless_cwd });
-                }}
+                value={cwdDraft}
+                onBlur={commitCwdDraft}
+                onChange={(event) => setCwdDraft(event.currentTarget.value)}
               />
             </label>
           )}
@@ -113,17 +166,13 @@ export function EffectorPolicyEditor({
               max={100}
               min={1}
               type="number"
-              value={policy.max_steps_per_task}
-              onChange={(event) => {
-                const max_steps_per_task = Number(event.currentTarget.value);
-                if (
-                  Number.isInteger(max_steps_per_task) &&
-                  max_steps_per_task >= 1 &&
-                  max_steps_per_task <= 100 &&
-                  max_steps_per_task !== policy.max_steps_per_task
-                ) {
-                  patch({ max_steps_per_task });
-                }
+              value={maxStepsDraft}
+              onBlur={commitMaxStepsDraft}
+              onChange={(event) => setMaxStepsDraft(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                event.currentTarget.blur();
               }}
             />
           </label>

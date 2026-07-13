@@ -210,6 +210,24 @@ describe("EffectorWorkspace", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("策略保存失败，请重试。");
   });
 
+  it("keeps concurrent policy and safety mutation failures independently visible", () => {
+    renderWorkspace({
+      ...BASE_SNAPSHOT,
+      errors: {
+        policyMutation: "策略保存失败，请重试。",
+        safetyMutation: "安全操作失败，请重试。",
+        mutation: "策略保存失败，请重试。 安全操作失败，请重试。",
+      },
+    });
+
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(2);
+    expect(alerts[0]).toHaveTextContent("POLICY / UNCONFIRMED");
+    expect(alerts[0]).toHaveTextContent("策略保存失败，请重试。");
+    expect(alerts[1]).toHaveTextContent("SAFETY / UNCONFIRMED");
+    expect(alerts[1]).toHaveTextContent("安全操作失败，请重试。");
+  });
+
   it("marks retained status counts stale when status refresh fails", () => {
     renderWorkspace({
       ...BASE_SNAPSHOT,
@@ -236,6 +254,35 @@ describe("EffectorWorkspace", () => {
     expect(screen.queryByText(/待处理 \d/)).toBeNull();
     expect(screen.queryByText(/审计尾部 \d/)).toBeNull();
     expect(screen.getByText("安全状态读取失败，请重试。")).toBeVisible();
+  });
+
+  it("exposes keyboard-operable recovery for every failed read channel", async () => {
+    const user = userEvent.setup();
+    const workspaceActions = actions();
+    renderWorkspace(
+      {
+        ...BASE_SNAPSHOT,
+        policy: null,
+        audit: null,
+        status: null,
+        channels: { policy: "error", audit: "error", status: "error" },
+        errors: {
+          policy: "策略加载失败，请重试。",
+          audit: "审计记录加载失败，请重试。",
+          status: "安全状态读取失败，请重试。",
+        },
+        safetyEvidence: "unknown",
+      },
+      workspaceActions,
+    );
+
+    await user.click(screen.getByRole("button", { name: "重新读取策略" }));
+    await user.click(screen.getByRole("button", { name: "重新读取审计" }));
+    await user.click(screen.getByRole("button", { name: "重新读取状态" }));
+
+    expect(workspaceActions.refreshPolicy).toHaveBeenCalledTimes(1);
+    expect(workspaceActions.refreshAudit).toHaveBeenCalledWith();
+    expect(workspaceActions.refreshStatus).toHaveBeenCalledTimes(1);
   });
 
   it("routes only Effector to the interactive workspace", async () => {
@@ -285,5 +332,6 @@ describe("EffectorWorkspace", () => {
       /\.entryDescription\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*\}/,
     );
     expect(shellStyles).toMatch(/\.effectorDossier\s*\{/);
+    expect(shellStyles).not.toMatch(/backdrop-filter/);
   });
 });

@@ -25,6 +25,8 @@ export function AuditLedger({
   refreshAudit,
 }: AuditLedgerProps) {
   const activeDate = selectedDate ?? audit.date ?? "";
+  const showingRetainedEvidence =
+    selectedDate !== null && selectedDate !== audit.date;
   const dates = activeDate && !audit.dates.includes(activeDate)
     ? [activeDate, ...audit.dates]
     : audit.dates;
@@ -75,12 +77,25 @@ export function AuditLedger({
         </div>
       </header>
 
+      <div className={styles.auditDateEvidence}>
+        <p>证据日期：{audit.date ?? "未提供"}</p>
+        {showingRetainedEvidence && (
+          <p className={styles.auditDateMismatch}>
+            请求日期：{selectedDate} · 当前仍显示最近一次已验证记录
+          </p>
+        )}
+      </div>
+
       {audit.total !== undefined && (
         <p className={styles.auditSummary}>共 {audit.total} 条</p>
       )}
 
       {audit.entries.length === 0 ? (
-        <p className={styles.emptyAudit}>当前所选日期没有审计条目。</p>
+        <p className={styles.emptyAudit}>
+          {showingRetainedEvidence
+            ? "已验证证据日期没有审计条目；请求日期尚未获得权威记录。"
+            : "当前所选日期没有审计条目。"}
+        </p>
       ) : (
         <ol className={styles.auditList}>
           {audit.entries.map((entry, index) => {

@@ -147,6 +147,14 @@ test("has no horizontal overflow at 1440, 980, 390, or 320 CSS pixels", async ({
     await page.setViewportSize(viewport);
     await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("form", { name: "执行策略编辑" })).toBeVisible();
+    const controlHeader = page
+      .getByRole("navigation", { name: "模块面包屑" })
+      .locator("xpath=ancestor::header[1]");
+    const headerMetrics = await controlHeader.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }));
+    expect(headerMetrics.scrollHeight).toBeLessThanOrEqual(headerMetrics.clientHeight + 1);
     await expectNoHorizontalOverflow(page);
   }
 });
@@ -177,6 +185,49 @@ test("sends one policy key and publishes the returned full effective policy", as
     .toHaveValue("25");
   const observed = await readMockCoreState(request);
   expect((observed.counts as Record<string, number>)["effector-policy-update"]).toBe(1);
+});
+
+test("commits a multi-digit max-step draft only once after editing finishes", async ({
+  page,
+}) => {
+  await loadReadyEffector(page);
+  const updates: Request[] = [];
+  page.on("request", (request) => {
+    if (isPolicyPut(request)) updates.push(request);
+  });
+  const input = page.getByRole("spinbutton", { name: "单任务最大步骤" });
+
+  await input.clear();
+  await input.pressSequentially("30");
+  expect(updates).toHaveLength(0);
+
+  const response = page.waitForResponse((value) => isPolicyPut(value.request()));
+  await page.keyboard.press("Tab");
+  await response;
+  expect(updates).toHaveLength(1);
+  expect(updates[0].postDataJSON()).toEqual({ max_steps_per_task: 30 });
+  await expect(input).toHaveValue("30");
+});
+
+test("restores the authoritative cwd after a failed save", async ({ page }) => {
+  await loadReadyEffector(page);
+  await page.route("**/v1/admin/effector/policy", async (route) => {
+    if (route.request().method() !== "PUT") return route.continue();
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      headers: { "access-control-allow-origin": "http://127.0.0.1:3100" },
+      body: JSON.stringify({ detail: "deterministic cwd failure" }),
+    });
+  });
+  const cwd = page.getByRole("textbox", { name: "当前工作目录" });
+
+  await cwd.fill("D:/unverified-draft");
+  await page.keyboard.press("Tab");
+  await expect(mutationAlert(page, "策略保存失败，请重试。"))
+    .toContainText("策略保存失败，请重试。");
+  await expect(cwd).toHaveValue("D:/ASTR_System");
+  acknowledgeExpectedHttpFailures(page, 1);
 });
 
 test("retains verified policy and exposes an error when a policy save fails", async ({ page }) => {
@@ -223,6 +274,22 @@ test("orders stop and reset POSTs before authoritative status GET readbacks", as
   ]);
   const observed = await readMockCoreState(request);
   expect(observed.counts).toMatchObject({ estop: 1, reset: 1, "effector-status": 3 });
+});
+
+test("keeps e-stop operable while the initial status readback is pending", async ({
+  page,
+  request,
+}) => {
+  await configureMockCore(request, { effector: { statusDelayMs: 1_000 } });
+  await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
+  const button = page.getByRole("button", { name: "触发急停 · 状态检查中" });
+  await expect(button).toBeEnabled();
+
+  const stopRequest = page.waitForRequest((value) =>
+    value.method() === "POST" && corePath(value) === "/v1/effector/estop");
+  await button.click();
+  await stopRequest;
+  await expect(page.locator("[data-safety='latched']")).toBeVisible();
 });
 
 test("treats a contrary stop readback as unknown", async ({ page, request }) => {
@@ -309,6 +376,39 @@ test("renders audit date, empty/full evidence, full trace IDs, and all chain sta
   await expect(audit.getByText("链断裂 · 证据可能被修改")).toBeVisible();
   await expect(audit.getByText("trace-id-preserved-in-full-0123456789abcdef", { exact: true }))
     .toBeVisible();
+});
+
+test("does not attribute null-dated evidence to a failed requested date", async ({ page }) => {
+  await page.route("**/v1/admin/effector/audit*", async (route) => {
+    await fulfillAudit(route, {
+      dates: ["2026-07-12", "2026-07-13"],
+      date: null,
+      entries: [],
+      total: 0,
+      chain_valid: null,
+    });
+  });
+  await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
+  const audit = page.getByRole("region", { name: "审计丁册" });
+  await expect(audit.getByText("证据日期：未提供")).toBeVisible();
+
+  await page.unroute("**/v1/admin/effector/audit*");
+  await page.route("**/v1/admin/effector/audit*", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      headers: { "access-control-allow-origin": "http://127.0.0.1:3100" },
+      body: JSON.stringify({ detail: "deterministic audit failure" }),
+    });
+  });
+  await audit.getByRole("combobox", { name: "审计日期" }).selectOption("2026-07-13");
+  await expect(audit.getByText(
+    "请求日期：2026-07-13 · 当前仍显示最近一次已验证记录",
+  )).toBeVisible();
+  await expect(audit.getByText(
+    "已验证证据日期没有审计条目；请求日期尚未获得权威记录。",
+  )).toBeVisible();
+  acknowledgeExpectedHttpFailures(page, 1);
 });
 
 function collectPageErrors(page: Page): string[] {

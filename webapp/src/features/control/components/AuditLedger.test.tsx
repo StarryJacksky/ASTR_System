@@ -70,6 +70,56 @@ describe("AuditLedger", () => {
     expect(refreshAudit).toHaveBeenCalledTimes(2);
   });
 
+  it("labels retained entries with their verified date while another date is requested", () => {
+    render(
+      <AuditLedger
+        audit={{ ...AUDIT, date: "2026-07-12" }}
+        selectedDate="2026-07-13"
+        refreshAudit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "审计日期" })).toHaveValue(
+      "2026-07-13",
+    );
+    expect(screen.getByText("证据日期：2026-07-12")).toBeVisible();
+    expect(screen.getByText("请求日期：2026-07-13 · 当前仍显示最近一次已验证记录"))
+      .toBeVisible();
+  });
+
+  it("does not attribute retained empty evidence to an unverified requested date", () => {
+    render(
+      <AuditLedger
+        audit={{ ...AUDIT, date: "2026-07-12", entries: [], total: 0 }}
+        selectedDate="2026-07-13"
+        refreshAudit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(
+      "已验证证据日期没有审计条目；请求日期尚未获得权威记录。",
+    )).toBeVisible();
+    expect(screen.queryByText("当前所选日期没有审计条目。")).toBeNull();
+  });
+
+  it("treats a retained null evidence date as distinct from a requested date", () => {
+    render(
+      <AuditLedger
+        audit={{ ...AUDIT, date: null, entries: [], total: 0 }}
+        selectedDate="2026-07-13"
+        refreshAudit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("证据日期：未提供")).toBeVisible();
+    expect(screen.getByText(
+      "请求日期：2026-07-13 · 当前仍显示最近一次已验证记录",
+    )).toBeVisible();
+    expect(screen.getByText(
+      "已验证证据日期没有审计条目；请求日期尚未获得权威记录。",
+    )).toBeVisible();
+  });
+
   it("describes an empty selected date without claiming the system never ran", () => {
     render(
       <AuditLedger

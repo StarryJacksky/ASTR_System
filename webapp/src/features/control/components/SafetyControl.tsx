@@ -13,7 +13,7 @@ const SAFETY_COPY: Readonly<
   >
 > = {
   checking: {
-    action: "安全状态检查中",
+    action: "触发急停 · 状态检查中",
     title: "正在核验执行层",
     description: "在权威状态返回前，不推断急停是否闭锁。",
   },
@@ -48,7 +48,7 @@ export function SafetyControl({
   onReset,
 }: SafetyControlProps) {
   const copy = SAFETY_COPY[evidence];
-  const disabled = evidence === "checking" || mutation !== null;
+  const disabled = mutation !== null;
 
   return (
     <section
@@ -71,7 +71,7 @@ export function SafetyControl({
         type="button"
         onClick={() => {
           if (evidence === "latched") void onReset();
-          else if (evidence === "clear" || evidence === "unknown") void onEstop();
+          else void onEstop();
         }}
       >
         {copy.action}

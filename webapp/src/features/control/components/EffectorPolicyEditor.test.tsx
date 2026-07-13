@@ -63,9 +63,11 @@ describe("EffectorPolicyEditor", () => {
     const cwd = screen.getByRole("textbox", { name: "当前工作目录" });
     fireEvent.change(cwd, { target: { value: "D:/ASTR_System/next" } });
     fireEvent.blur(cwd);
-    fireEvent.change(screen.getByRole("spinbutton", { name: "单任务最大步骤" }), {
+    const maxSteps = screen.getByRole("spinbutton", { name: "单任务最大步骤" });
+    fireEvent.change(maxSteps, {
       target: { value: "30" },
     });
+    fireEvent.blur(maxSteps);
     addChip("允许的应用", "Terminal.exe");
     addChip("允许登录的网站", "admin.example.test");
     addChip("危险类别", "filesystem");
@@ -92,6 +94,94 @@ describe("EffectorPolicyEditor", () => {
       { headless_folders: ["D:/ASTR_System/astr", "D:/ASTR_System/docs"] },
     ]);
     expect(onPatch.mock.calls.every(([patch]) => Object.keys(patch).length === 1)).toBe(true);
+  });
+
+  it("restores the authoritative cwd after an unchanged policy finishes saving", () => {
+    const onPatch = vi
+      .fn<EffectorActions["patchPolicy"]>()
+      .mockResolvedValue(false);
+    const view = render(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy={false} onPatch={onPatch} />,
+    );
+    const cwd = screen.getByRole("textbox", { name: "当前工作目录" });
+
+    fireEvent.change(cwd, { target: { value: "D:/unverified-draft" } });
+    fireEvent.blur(cwd);
+    expect(onPatch).toHaveBeenCalledWith({ headless_cwd: "D:/unverified-draft" });
+
+    view.rerender(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy onPatch={onPatch} />,
+    );
+    view.rerender(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy={false} onPatch={onPatch} />,
+    );
+
+    expect(screen.getByRole("textbox", { name: "当前工作目录" }))
+      .toHaveValue(POLICY.headless_cwd);
+  });
+
+  it("commits a multi-digit max step draft once on blur without intermediate patches", async () => {
+    const user = userEvent.setup();
+    const onPatch = vi
+      .fn<EffectorActions["patchPolicy"]>()
+      .mockResolvedValue(true);
+    render(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy={false} onPatch={onPatch} />,
+    );
+    const maxSteps = screen.getByRole("spinbutton", { name: "单任务最大步骤" });
+
+    await user.clear(maxSteps);
+    await user.type(maxSteps, "30");
+    expect(onPatch).not.toHaveBeenCalled();
+
+    await user.tab();
+    expect(onPatch).toHaveBeenCalledTimes(1);
+    expect(onPatch).toHaveBeenCalledWith({ max_steps_per_task: 30 });
+  });
+
+  it("commits a valid max step draft once when Enter moves focus", async () => {
+    const user = userEvent.setup();
+    const onPatch = vi
+      .fn<EffectorActions["patchPolicy"]>()
+      .mockResolvedValue(true);
+    render(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy={false} onPatch={onPatch} />,
+    );
+    const maxSteps = screen.getByRole("spinbutton", { name: "单任务最大步骤" });
+
+    await user.click(maxSteps);
+    fireEvent.change(maxSteps, { target: { value: "30" } });
+    await user.keyboard("{Enter}");
+
+    expect(onPatch).toHaveBeenCalledTimes(1);
+    expect(onPatch).toHaveBeenCalledWith({ max_steps_per_task: 30 });
+  });
+
+  it("restores invalid and failed max step drafts to the authoritative value", () => {
+    const onPatch = vi
+      .fn<EffectorActions["patchPolicy"]>()
+      .mockResolvedValue(false);
+    const view = render(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy={false} onPatch={onPatch} />,
+    );
+    const maxSteps = screen.getByRole("spinbutton", { name: "单任务最大步骤" });
+
+    fireEvent.change(maxSteps, { target: { value: "101" } });
+    fireEvent.blur(maxSteps);
+    expect(onPatch).not.toHaveBeenCalled();
+    expect(maxSteps).toHaveValue(POLICY.max_steps_per_task);
+
+    fireEvent.change(maxSteps, { target: { value: "30" } });
+    fireEvent.blur(maxSteps);
+    expect(onPatch).toHaveBeenCalledOnce();
+    view.rerender(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy onPatch={onPatch} />,
+    );
+    view.rerender(
+      <EffectorPolicyEditor policy={POLICY} savingPolicy={false} onPatch={onPatch} />,
+    );
+    expect(screen.getByRole("spinbutton", { name: "单任务最大步骤" }))
+      .toHaveValue(POLICY.max_steps_per_task);
   });
 
   it("keeps Core floors non-removable and exposes immutable policy provenance", () => {

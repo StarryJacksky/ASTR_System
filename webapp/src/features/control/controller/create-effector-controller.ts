@@ -10,7 +10,8 @@ export type ChannelState = "idle" | "loading" | "ready" | "error";
 export type SafetyEvidence = "checking" | "clear" | "latched" | "unknown";
 
 type Channel = "policy" | "audit" | "status";
-type ErrorChannel = Channel | "mutation";
+type MutationErrorChannel = "policyMutation" | "safetyMutation";
+type ErrorChannel = Channel | MutationErrorChannel | "mutation";
 
 export interface EffectorSnapshot {
   readonly policy: EffectorPolicy | null;
@@ -189,6 +190,13 @@ export function createEffectorController(client: EffectorClient): EffectorContro
           await client.audit(selectedDate, undefined, operation.controller.signal),
         );
         if (!isCurrentChannel("audit", operation)) return;
+        if (selectedDate !== undefined && received.date !== selectedDate) {
+          publish({
+            channels: channelsWith("audit", "error"),
+            errors: errorsWith("audit", CHANNEL_ERRORS.audit),
+          });
+          return;
+        }
         const audit = reuseVerifiedValue(snapshot.audit, received);
         publish({
           audit,
@@ -247,7 +255,10 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     cancelChannel("policy");
     const operation = { controller: new AbortController() };
     policyMutation = operation;
-    publish({ savingPolicy: true, errors: errorsWith("mutation") });
+    publish({
+      savingPolicy: true,
+      errors: mutationErrorsWith("policyMutation"),
+    });
     try {
       const received = cloneServerValue(
         await client.patchPolicy(patch, operation.controller.signal),
@@ -258,7 +269,11 @@ export function createEffectorController(client: EffectorClient): EffectorContro
         policy,
         savingPolicy: false,
         channels: channelsWith("policy", "ready"),
-        errors: clearErrors("policy", "mutation"),
+        errors: mutationErrorsWith(
+          "policyMutation",
+          undefined,
+          clearErrors("policy"),
+        ),
       });
       return true;
     } catch {
@@ -267,12 +282,13 @@ export function createEffectorController(client: EffectorClient): EffectorContro
       publish({
         savingPolicy: false,
         channels: channelsWith("policy", hasVerifiedPolicy ? "ready" : "error"),
-        errors: replaceErrors(
-          hasVerifiedPolicy ? ["policy"] : [],
-          {
-            ...(!hasVerifiedPolicy ? { policy: CHANNEL_ERRORS.policy } : {}),
-            mutation: POLICY_MUTATION_ERROR,
-          },
+        errors: mutationErrorsWith(
+          "policyMutation",
+          POLICY_MUTATION_ERROR,
+          replaceErrors(
+            hasVerifiedPolicy ? ["policy"] : [],
+            !hasVerifiedPolicy ? { policy: CHANNEL_ERRORS.policy } : {},
+          ),
         ),
       });
       return false;
@@ -304,6 +320,25 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     return Object.freeze(next);
   };
 
+  const mutationErrorsWith = (
+    channel: MutationErrorChannel,
+    message?: string,
+    base: EffectorSnapshot["errors"] = snapshot.errors,
+  ): EffectorSnapshot["errors"] => {
+    const next: Partial<Record<ErrorChannel, string>> = { ...base };
+    if (message === undefined) delete next[channel];
+    else next[channel] = message;
+
+    const aggregate = [next.policyMutation, next.safetyMutation].filter(
+      (value): value is string => value !== undefined,
+    );
+    if (aggregate.length === 0) delete next.mutation;
+    else next.mutation = aggregate.join(" ");
+
+    if (errorRecordsEqual(base, next)) return base;
+    return Object.freeze(next);
+  };
+
   const isCurrentSafetyMutation = (operation: ActiveOperation): boolean =>
     !disposed &&
     !operation.controller.signal.aborted &&
@@ -314,7 +349,10 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     cancelChannel("status");
     const operation = { controller: new AbortController() };
     safetyMutation = operation;
-    publish({ safetyMutation: kind, errors: errorsWith("mutation") });
+    publish({
+      safetyMutation: kind,
+      errors: mutationErrorsWith("safetyMutation"),
+    });
     try {
       if (kind === "estop") await client.estop(operation.controller.signal);
       else await client.reset(operation.controller.signal);
@@ -334,8 +372,16 @@ export function createEffectorController(client: EffectorClient): EffectorContro
           : "unknown",
         channels: channelsWith("status", "ready"),
         errors: confirmed
-          ? clearErrors("status", "mutation")
-          : replaceErrors(["status"], { mutation: SAFETY_MISMATCH_ERROR }),
+          ? mutationErrorsWith(
+              "safetyMutation",
+              undefined,
+              clearErrors("status"),
+            )
+          : mutationErrorsWith(
+              "safetyMutation",
+              SAFETY_MISMATCH_ERROR,
+              clearErrors("status"),
+            ),
       });
       return confirmed;
     } catch {
@@ -344,10 +390,11 @@ export function createEffectorController(client: EffectorClient): EffectorContro
         safetyMutation: null,
         safetyEvidence: "unknown",
         channels: channelsWith("status", "error"),
-        errors: replaceErrors([], {
-          status: CHANNEL_ERRORS.status,
-          mutation: SAFETY_MUTATION_ERROR,
-        }),
+        errors: mutationErrorsWith(
+          "safetyMutation",
+          SAFETY_MUTATION_ERROR,
+          replaceErrors([], { status: CHANNEL_ERRORS.status }),
+        ),
       });
       return false;
     } finally {
