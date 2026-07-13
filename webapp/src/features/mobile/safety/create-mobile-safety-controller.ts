@@ -187,10 +187,11 @@ export function createMobileSafetyController({
             verified_at: verifiedAt,
           },
     );
+    if (!isCurrent(key, epoch, abort)) return;
 
     let pending: Promise<ChannelValue[K]>;
     try {
-      pending = request(abort.signal);
+      pending = Promise.resolve(request(abort.signal));
     } catch {
       settleFailure(key, epoch, abort);
       return;

@@ -242,6 +242,108 @@ describe("Mobile Safety controller", () => {
     },
   );
 
+  it("contains a throwing then getter without leaking or blocking the other channels", async () => {
+    const harness = createPendingClient();
+    const hostile = Object.defineProperty({}, "then", {
+      get(): never {
+        throw new Error("THEN_GETTER_SECRET");
+      },
+    }) as unknown as Promise<MobileLocalStatusProjection>;
+    const client: MobileSafetyClient = {
+      status: vi.fn(() => hostile),
+      policy: harness.client.policy,
+      audit: harness.client.audit,
+    };
+    const controller = createMobileSafetyController({ client });
+
+    expect(() => controller.start()).not.toThrow();
+    expect(client.status).toHaveBeenCalledTimes(1);
+    expect(client.policy).toHaveBeenCalledTimes(1);
+    expect(client.audit).toHaveBeenCalledTimes(1);
+    harness.policyRequests[0]?.resolve(POLICY);
+    harness.auditRequests[0]?.resolve(AUDIT);
+    await flushSettlements();
+
+    expect(controller.getSnapshot().status).toEqual({
+      phase: "error",
+      value: null,
+      error: ERRORS.status,
+      verified_at: null,
+    });
+    expect(controller.getSnapshot().policy.phase).toBe("ready");
+    expect(controller.getSnapshot().audit.phase).toBe("ready");
+    expect(JSON.stringify(controller.getSnapshot())).not.toContain("THEN_GETTER_SECRET");
+  });
+
+  it("assimilates a synchronous thenable whose then returns undefined", async () => {
+    const harness = createPendingClient();
+    const synchronousThenable = {
+      then(resolve: (value: MobileLocalStatusProjection) => void): undefined {
+        resolve(STATUS);
+        return undefined;
+      },
+    } as unknown as Promise<MobileLocalStatusProjection>;
+    const client: MobileSafetyClient = {
+      status: vi.fn(() => synchronousThenable),
+      policy: harness.client.policy,
+      audit: harness.client.audit,
+    };
+    const controller = createMobileSafetyController({ client });
+
+    expect(() => controller.start()).not.toThrow();
+    expect(client.status).toHaveBeenCalledTimes(1);
+    expect(client.policy).toHaveBeenCalledTimes(1);
+    expect(client.audit).toHaveBeenCalledTimes(1);
+    harness.policyRequests[0]?.resolve(POLICY);
+    harness.auditRequests[0]?.resolve(AUDIT);
+    await flushSettlements();
+
+    expect(controller.getSnapshot().status).toMatchObject({
+      phase: "ready",
+      value: STATUS,
+    });
+    expect(controller.getSnapshot().policy.phase).toBe("ready");
+    expect(controller.getSnapshot().audit.phase).toBe("ready");
+  });
+
+  it("does not call any client after a loading listener disposes the controller", () => {
+    const harness = createPendingClient();
+    const controller = createMobileSafetyController({ client: harness.client });
+    controller.subscribe(() => {
+      if (controller.getSnapshot().status.phase === "loading") controller.dispose();
+    });
+
+    expect(() => controller.start()).not.toThrow();
+    expect(harness.client.status).not.toHaveBeenCalled();
+    expect(harness.client.policy).not.toHaveBeenCalled();
+    expect(harness.client.audit).not.toHaveBeenCalled();
+  });
+
+  it("calls only the new current request after a loading listener refreshes the same channel", async () => {
+    const harness = createPendingClient();
+    const controller = createMobileSafetyController({ client: harness.client });
+    let refreshed = false;
+    controller.subscribe(() => {
+      if (!refreshed && controller.getSnapshot().status.phase === "loading") {
+        refreshed = true;
+        controller.actions.refreshStatus();
+      }
+    });
+
+    controller.start();
+    expect(harness.client.status).toHaveBeenCalledTimes(1);
+    expect(harness.statusRequests).toHaveLength(1);
+    expect(harness.statusRequests[0]?.signal?.aborted).toBe(false);
+    expect(harness.client.policy).toHaveBeenCalledTimes(1);
+    expect(harness.client.audit).toHaveBeenCalledTimes(1);
+
+    harness.statusRequests[0]?.resolve(STATUS);
+    harness.policyRequests[0]?.resolve(POLICY);
+    harness.auditRequests[0]?.resolve(AUDIT);
+    await flushSettlements();
+    expect(controller.getSnapshot().status.phase).toBe("ready");
+  });
+
   it.each<ChannelKey>(["status", "policy", "audit"])(
     "retains verified value and time when %s refresh fails",
     async (key) => {
