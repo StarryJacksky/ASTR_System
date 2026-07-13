@@ -230,6 +230,24 @@ describe("Effector controller", () => {
     expect(controller.getSnapshot().errors.mutation).not.toContain("private");
   });
 
+  it("does not leave a canceled policy load stuck after a patch failure", async () => {
+    const policyGate = deferred<EffectorPolicy>();
+    const policy = vi.fn<EffectorClient["policy"]>(() => policyGate.promise);
+    const patchPolicy = vi
+      .fn<EffectorClient["patchPolicy"]>()
+      .mockRejectedValue(new Error("offline"));
+    const controller = createEffectorController(createClient({ policy, patchPolicy }));
+
+    controller.actions.refreshPolicy();
+    const result = controller.actions.patchPolicy({ approval_mode: "audited" });
+
+    expect(policy.mock.calls[0][0]?.aborted).toBe(true);
+    await expect(result).resolves.toBe(false);
+    expect(controller.getSnapshot().channels.policy).toBe("error");
+    expect(controller.getSnapshot().errors.policy).toEqual(expect.any(String));
+    expect(controller.getSnapshot().errors.mutation).toEqual(expect.any(String));
+  });
+
   it("publishes only the authoritative policy returned by a successful patch", async () => {
     const patchPolicy = vi
       .fn<EffectorClient["patchPolicy"]>()
@@ -246,6 +264,21 @@ describe("Effector controller", () => {
       channels: { policy: "ready" },
     });
     expect(controller.getSnapshot().errors.mutation).toBeUndefined();
+  });
+
+  it("reuses semantically identical verified data across refreshes", async () => {
+    const policy = vi.fn<EffectorClient["policy"]>().mockResolvedValue(POLICY);
+    const controller = createEffectorController(createClient({ policy }));
+
+    controller.actions.refreshPolicy();
+    await vi.waitFor(() => expect(controller.getSnapshot().channels.policy).toBe("ready"));
+    const verifiedPolicy = controller.getSnapshot().policy;
+
+    controller.actions.refreshPolicy();
+    await vi.waitFor(() => expect(policy).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(controller.getSnapshot().channels.policy).toBe("ready"));
+
+    expect(controller.getSnapshot().policy).toBe(verifiedPolicy);
   });
 
   it("confirms e-stop only after POST acknowledgement and a stopped status readback", async () => {
@@ -293,6 +326,26 @@ describe("Effector controller", () => {
     expect(snapshot.errors.mutation).not.toContain("private");
   });
 
+  it("clears a stale status-channel error after a successful contrary readback", async () => {
+    const status = vi
+      .fn<EffectorClient["status"]>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(CLEAR_STATUS);
+    const controller = createEffectorController(createClient({ status }));
+
+    controller.actions.refreshStatus();
+    await vi.waitFor(() => expect(controller.getSnapshot().channels.status).toBe("error"));
+    expect(controller.getSnapshot().errors.status).toEqual(expect.any(String));
+
+    await expect(controller.actions.estop()).resolves.toBe(false);
+
+    expect(controller.getSnapshot().channels.status).toBe("ready");
+    expect(controller.getSnapshot().errors.status).toBeUndefined();
+    expect(controller.getSnapshot().errors.mutation).toBe(
+      "权威回读与操作目标不一致。",
+    );
+  });
+
   it("confirms reset only after an authoritative clear status readback", async () => {
     const reset = vi.fn<EffectorClient["reset"]>().mockResolvedValue({ stopped: false });
     const status = vi.fn<EffectorClient["status"]>().mockResolvedValue(CLEAR_STATUS);
@@ -308,6 +361,25 @@ describe("Effector controller", () => {
       safetyEvidence: "clear",
       channels: { status: "ready" },
     });
+  });
+
+  it("does not leave a canceled status load stuck after a safety failure", async () => {
+    const statusGate = deferred<EffectorStatus>();
+    const status = vi.fn<EffectorClient["status"]>(() => statusGate.promise);
+    const estop = vi
+      .fn<EffectorClient["estop"]>()
+      .mockRejectedValue(new Error("offline"));
+    const controller = createEffectorController(createClient({ status, estop }));
+
+    controller.actions.refreshStatus();
+    const result = controller.actions.estop();
+
+    expect(status.mock.calls[0][0]?.aborted).toBe(true);
+    await expect(result).resolves.toBe(false);
+    expect(controller.getSnapshot().channels.status).toBe("error");
+    expect(controller.getSnapshot().errors.status).toEqual(expect.any(String));
+    expect(controller.getSnapshot().errors.mutation).toEqual(expect.any(String));
+    expect(controller.getSnapshot().safetyEvidence).toBe("unknown");
   });
 
   it("allows e-stop while a policy patch remains pending", async () => {
@@ -374,5 +446,49 @@ describe("Effector controller", () => {
     expect(controller.getSnapshot()).toBe(disposedSnapshot);
     expect(listener).toHaveBeenCalledTimes(publicationCount);
     expect(status).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears abandoned mutation flags before restarting after dispose", async () => {
+    const patchGate = deferred<EffectorPolicy>();
+    const stopGate = deferred<{ readonly stopped: boolean }>();
+    const policy = vi.fn<EffectorClient["policy"]>().mockResolvedValue(POLICY);
+    const audit = vi.fn<EffectorClient["audit"]>().mockResolvedValue(AUDIT);
+    const status = vi.fn<EffectorClient["status"]>().mockResolvedValue(CLEAR_STATUS);
+    const patchPolicy = vi.fn<EffectorClient["patchPolicy"]>(() => patchGate.promise);
+    const estop = vi.fn<EffectorClient["estop"]>(() => stopGate.promise);
+    const controller = createEffectorController(
+      createClient({ policy, audit, status, patchPolicy, estop }),
+    );
+
+    const patchResult = controller.actions.patchPolicy({ approval_mode: "audited" });
+    const stopResult = controller.actions.estop();
+    expect(controller.getSnapshot()).toMatchObject({
+      savingPolicy: true,
+      safetyMutation: "estop",
+    });
+
+    controller.dispose();
+    controller.start();
+
+    await vi.waitFor(() => {
+      expect(controller.getSnapshot().channels).toEqual({
+        policy: "ready",
+        audit: "ready",
+        status: "ready",
+      });
+    });
+    expect(controller.getSnapshot()).toMatchObject({
+      savingPolicy: false,
+      safetyMutation: null,
+      safetyEvidence: "clear",
+    });
+    expect(policy).toHaveBeenCalledTimes(1);
+    expect(audit).toHaveBeenCalledTimes(1);
+    expect(status).toHaveBeenCalledTimes(1);
+
+    patchGate.resolve(UPDATED_POLICY);
+    stopGate.resolve({ stopped: true });
+    await expect(patchResult).resolves.toBe(false);
+    await expect(stopResult).resolves.toBe(false);
   });
 });

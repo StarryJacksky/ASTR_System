@@ -156,8 +156,9 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     if (operation === null) return;
     void (async () => {
       try {
-        const policy = cloneServerValue(await client.policy(operation.controller.signal));
+        const received = cloneServerValue(await client.policy(operation.controller.signal));
         if (!isCurrentChannel("policy", operation)) return;
+        const policy = reuseVerifiedValue(snapshot.policy, received);
         publish({
           policy,
           channels: channelsWith("policy", "ready"),
@@ -184,10 +185,11 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     if (operation === null) return;
     void (async () => {
       try {
-        const audit = cloneServerValue(
+        const received = cloneServerValue(
           await client.audit(selectedDate, undefined, operation.controller.signal),
         );
         if (!isCurrentChannel("audit", operation)) return;
+        const audit = reuseVerifiedValue(snapshot.audit, received);
         publish({
           audit,
           channels: channelsWith("audit", "ready"),
@@ -211,8 +213,9 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     if (operation === null) return;
     void (async () => {
       try {
-        const status = cloneServerValue(await client.status(operation.controller.signal));
+        const received = cloneServerValue(await client.status(operation.controller.signal));
         if (!isCurrentChannel("status", operation)) return;
+        const status = reuseVerifiedValue(snapshot.status, received);
         publish({
           status,
           channels: channelsWith("status", "ready"),
@@ -246,10 +249,11 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     policyMutation = operation;
     publish({ savingPolicy: true, errors: errorsWith("mutation") });
     try {
-      const policy = cloneServerValue(
+      const received = cloneServerValue(
         await client.patchPolicy(patch, operation.controller.signal),
       );
       if (!isCurrentPolicyMutation(operation)) return false;
+      const policy = reuseVerifiedValue(snapshot.policy, received);
       publish({
         policy,
         savingPolicy: false,
@@ -259,9 +263,17 @@ export function createEffectorController(client: EffectorClient): EffectorContro
       return true;
     } catch {
       if (!isCurrentPolicyMutation(operation)) return false;
+      const hasVerifiedPolicy = snapshot.policy !== null;
       publish({
         savingPolicy: false,
-        errors: errorsWith("mutation", POLICY_MUTATION_ERROR),
+        channels: channelsWith("policy", hasVerifiedPolicy ? "ready" : "error"),
+        errors: replaceErrors(
+          hasVerifiedPolicy ? ["policy"] : [],
+          {
+            ...(!hasVerifiedPolicy ? { policy: CHANNEL_ERRORS.policy } : {}),
+            mutation: POLICY_MUTATION_ERROR,
+          },
+        ),
       });
       return false;
     } finally {
@@ -281,6 +293,17 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     return Object.freeze(next);
   };
 
+  const replaceErrors = (
+    clear: readonly ErrorChannel[],
+    set: Readonly<Partial<Record<ErrorChannel, string>>>,
+  ) => {
+    const next: Partial<Record<ErrorChannel, string>> = { ...snapshot.errors };
+    for (const channel of clear) delete next[channel];
+    Object.assign(next, set);
+    if (errorRecordsEqual(snapshot.errors, next)) return snapshot.errors;
+    return Object.freeze(next);
+  };
+
   const isCurrentSafetyMutation = (operation: ActiveOperation): boolean =>
     !disposed &&
     !operation.controller.signal.aborted &&
@@ -297,8 +320,9 @@ export function createEffectorController(client: EffectorClient): EffectorContro
       else await client.reset(operation.controller.signal);
       if (!isCurrentSafetyMutation(operation)) return false;
 
-      const readback = cloneServerValue(await client.status(operation.controller.signal));
+      const received = cloneServerValue(await client.status(operation.controller.signal));
       if (!isCurrentSafetyMutation(operation)) return false;
+      const readback = reuseVerifiedValue(snapshot.status, received);
       const confirmed = kind === "estop" ? readback.stopped : !readback.stopped;
       publish({
         status: readback,
@@ -311,7 +335,7 @@ export function createEffectorController(client: EffectorClient): EffectorContro
         channels: channelsWith("status", "ready"),
         errors: confirmed
           ? clearErrors("status", "mutation")
-          : errorsWith("mutation", SAFETY_MISMATCH_ERROR),
+          : replaceErrors(["status"], { mutation: SAFETY_MISMATCH_ERROR }),
       });
       return confirmed;
     } catch {
@@ -319,7 +343,11 @@ export function createEffectorController(client: EffectorClient): EffectorContro
       publish({
         safetyMutation: null,
         safetyEvidence: "unknown",
-        errors: errorsWith("mutation", SAFETY_MUTATION_ERROR),
+        channels: channelsWith("status", "error"),
+        errors: replaceErrors([], {
+          status: CHANNEL_ERRORS.status,
+          mutation: SAFETY_MUTATION_ERROR,
+        }),
       });
       return false;
     } finally {
@@ -331,6 +359,9 @@ export function createEffectorController(client: EffectorClient): EffectorContro
     if (started) return;
     disposed = false;
     started = true;
+    if (snapshot.savingPolicy || snapshot.safetyMutation !== null) {
+      publish({ savingPolicy: false, safetyMutation: null });
+    }
     refreshAll();
   };
 
@@ -389,6 +420,54 @@ function snapshotEqual(left: EffectorSnapshot, right: EffectorSnapshot): boolean
 
 function cloneServerValue<T>(value: T): T {
   return deepFreeze(structuredClone(value));
+}
+
+function reuseVerifiedValue<T>(previous: T | null, next: T): T {
+  return previous !== null && semanticEqual(previous, next) ? previous : next;
+}
+
+function semanticEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  ) {
+    return false;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => semanticEqual(value, right[index]))
+    );
+  }
+  const leftRecord = left as Readonly<Record<string, unknown>>;
+  const rightRecord = right as Readonly<Record<string, unknown>>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.hasOwn(rightRecord, key) &&
+        semanticEqual(leftRecord[key], rightRecord[key]),
+    )
+  );
+}
+
+function errorRecordsEqual(
+  left: Readonly<Partial<Record<ErrorChannel, string>>>,
+  right: Readonly<Partial<Record<ErrorChannel, string>>>,
+): boolean {
+  const leftKeys = Object.keys(left) as ErrorChannel[];
+  const rightKeys = Object.keys(right);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => left[key] === right[key])
+  );
 }
 
 function deepFreeze<T>(value: T): T {
