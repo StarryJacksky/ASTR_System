@@ -321,7 +321,7 @@ describe("PresenceHeader", () => {
     expect(actions.reset).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps Control, theme, settings, motion, and safety controls at the constitutional target", async () => {
+  it("keeps exactly five global controls plus safety at the constitutional target", async () => {
     const { container } = render(
       <AppShell>
         <main id="main-content">
@@ -332,6 +332,7 @@ describe("PresenceHeader", () => {
 
     const controls = [
       screen.getByRole("link", { name: "Control" }),
+      screen.getByRole("link", { name: "Mobile" }),
       screen.getByRole("button", { name: "切换昼夜主题" }),
       screen.getByRole("button", { name: "打开设置" }),
       screen.getByRole("button", { name: "触发急停" }),
@@ -347,8 +348,29 @@ describe("PresenceHeader", () => {
     await waitFor(() =>
       expect(within(header).getByRole("button", { name: "暂停视觉动效" })).toBeEnabled(),
     );
+    const globalControls = within(header).getByRole("navigation", { name: "全局控制" });
+    expect(globalControls.querySelectorAll("a[href], button")).toHaveLength(5);
+    expect(within(globalControls).getByRole("button", { name: "切换昼夜主题" })).toBeVisible();
+    expect(within(globalControls).getByRole("button", { name: "暂停视觉动效" })).toBeVisible();
+    expect(within(globalControls).getByRole("button", { name: "打开设置" })).toBeVisible();
+    expect(within(globalControls).getByRole("link", { name: "Control" })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+    expect(within(globalControls).getByRole("link", { name: "Mobile" })).toHaveAttribute(
+      "href",
+      "/mobile/presence",
+    );
     expect(screen.getAllByRole("button", { name: "暂停视觉动效" })).toHaveLength(1);
     expect(container.querySelectorAll("[aria-live]")).toHaveLength(1);
+
+    const source = readFileSync(
+      resolve(process.cwd(), "src/features/presence/components/PresenceHeader.tsx"),
+      "utf8",
+    );
+    const mobileLink =
+      source.match(/<Link(?=[^>]*href="\/mobile\/presence")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
+    expect(mobileLink).toMatch(/prefetch=\{false\}/);
   });
 
   it("opens a controlled modal, traps both Tab directions, and returns focus to the exact trigger", async () => {
@@ -475,9 +497,14 @@ describe("PresenceHeader", () => {
     expect(css).toMatch(
       /@media \(max-width:\s*480px\)[\s\S]*?\.identityRail\s*\{[^}]*flex-wrap:\s*nowrap/,
     );
-    expect(css).toMatch(
-      /@media \(max-width:\s*480px\)[\s\S]*?\.controlRail\s*\{[^}]*flex-wrap:\s*nowrap/,
-    );
+    const compactControlRail =
+      css.match(
+        /@media \(max-width:\s*480px\)[\s\S]*?\.controlRail\s*\{([^}]*)\}/,
+      )?.[1] ?? "";
+    expect(compactControlRail).toMatch(/flex-wrap:\s*wrap/);
+    expect(compactControlRail).not.toMatch(/flex-wrap:\s*nowrap/);
+    expect(compactControlRail).not.toMatch(/overflow(?:-inline|-x)?\s*:/);
+    expect(compactControlRail).not.toMatch(/(?:inline-size|width):\s*\d+(?:\.\d+)?(?:px|rem)/);
     expect(css).toMatch(
       /@media \(max-width:\s*480px\)[\s\S]*?\.secondaryRail\s*\{[^}]*flex-direction:\s*column/,
     );

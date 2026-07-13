@@ -46,10 +46,19 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
         <span className={styles.spineTitle} aria-hidden>
           CONTROL
         </span>
-        <Link className={styles.presenceLink} href="/" aria-label="返回 Presence">
-          <span aria-hidden>←</span>
-          <span>Presence</span>
-        </Link>
+        <nav className={styles.spaceLinks} aria-label="跨空间">
+          <Link className={styles.spaceLink} href="/" aria-label="返回 Presence">
+            <span aria-hidden>←</span>
+            <span>Presence</span>
+          </Link>
+          <Link
+            className={styles.spaceLink}
+            href="/mobile/presence"
+            prefetch={false}
+          >
+            Mobile
+          </Link>
+        </nav>
       </aside>
 
       <div className={styles.workspace}>

@@ -212,6 +212,14 @@ export function PresenceHeader({
           <Link className={styles.control} style={TOUCH_TARGET_STYLE} href="/admin">
             Control
           </Link>
+          <Link
+            className={styles.control}
+            style={TOUCH_TARGET_STYLE}
+            href="/mobile/presence"
+            prefetch={false}
+          >
+            Mobile
+          </Link>
         </nav>
       </div>
 
