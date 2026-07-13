@@ -1,0 +1,276 @@
+.shell {
+  --mobile-nav-block-size: 5.25rem;
+  position: relative;
+  isolation: isolate;
+  block-size: 100dvh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: auto;
+  scroll-padding-bottom: calc(
+    var(--mobile-nav-block-size) + env(safe-area-inset-bottom) + var(--space-5)
+  );
+  background: var(--astr-bg);
+  color: var(--astr-text);
+}
+
+.header {
+  position: relative;
+  z-index: var(--z-panel);
+  display: grid;
+  grid-template-areas: "brand fact actions";
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding-block: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4);
+  padding-inline-start: calc(max(var(--space-4), 4vw) + env(safe-area-inset-left));
+  padding-inline-end: calc(max(var(--space-4), 4vw) + env(safe-area-inset-right));
+  border-bottom: 1px solid var(--astr-hairline-strong);
+  background: var(--astr-bg);
+}
+
+.brandRail {
+  grid-area: brand;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.eclipse {
+  position: relative;
+  flex: none;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  overflow: hidden;
+  border: 1px solid var(--astr-action);
+  border-radius: 50%;
+  background: var(--astr-surface-2);
+  clip-path: polygon(0 0, 72% 0, 88% 24%, 100% 35%, 100% 100%, 0 100%);
+}
+
+.eclipse::before,
+.eclipse::after {
+  position: absolute;
+  content: "";
+}
+
+.eclipse::before {
+  inset: 0.45rem;
+  border: 1px solid var(--astr-hairline-strong);
+  border-radius: 50%;
+}
+
+.eclipse::after {
+  inset: 50% -0.25rem auto;
+  border-top: 1px solid var(--astr-text-3);
+}
+
+.brandCopy {
+  min-width: 0;
+}
+
+.brand,
+.domainName,
+.localFact {
+  margin: 0;
+}
+
+.brand {
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.domainName {
+  overflow-wrap: anywhere;
+  color: var(--astr-text);
+  font-family: var(--font-display);
+  font-size: clamp(var(--type-1), 3vw, var(--type-2));
+  line-height: 1.25;
+}
+
+.localFact {
+  grid-area: fact;
+  max-width: 12rem;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--astr-hairline-strong);
+  color: var(--astr-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  line-height: 1.5;
+}
+
+.headerActions {
+  grid-area: actions;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.headerActions :global(button),
+.presenceLink,
+.domainLink {
+  min-inline-size: var(--touch-target);
+  min-block-size: var(--touch-target);
+}
+
+.motionSlot {
+  display: inline-flex;
+}
+
+.motionSlot :global(.astr-motion-toggle) {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  min-inline-size: var(--touch-target);
+  min-block-size: var(--touch-target);
+}
+
+.presenceLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--astr-hairline-strong);
+  padding-inline: var(--space-3);
+  color: var(--astr-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  text-decoration: none;
+}
+
+.presenceLink:hover {
+  border-color: var(--astr-action);
+  color: var(--astr-text);
+}
+
+.relayCurve {
+  position: fixed;
+  z-index: var(--z-base);
+  inset-block: 0 var(--mobile-nav-block-size);
+  inset-inline-start: max(0.35rem, env(safe-area-inset-left));
+  inline-size: clamp(2.75rem, 8vw, 6rem);
+  block-size: calc(100dvh - var(--mobile-nav-block-size));
+  overflow: visible;
+  pointer-events: none;
+}
+
+.relayCurve path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--astr-action) 42%, var(--astr-hairline-strong));
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.main {
+  position: relative;
+  z-index: var(--z-base);
+  inline-size: min(100%, 76rem);
+  min-width: 0;
+  margin-inline: auto;
+  padding-block-start: clamp(var(--space-4), 4vw, var(--space-7));
+  padding-inline-start: calc(
+    clamp(var(--space-4), 4vw, var(--space-7)) + env(safe-area-inset-left)
+  );
+  padding-inline-end: calc(
+    clamp(var(--space-4), 4vw, var(--space-7)) + env(safe-area-inset-right)
+  );
+  padding-bottom: calc(
+    var(--mobile-nav-block-size) + env(safe-area-inset-bottom) + var(--space-5)
+  );
+}
+
+.domainNav {
+  position: fixed;
+  z-index: var(--z-overlay);
+  inset-inline: 0;
+  inset-block-end: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  min-block-size: var(--mobile-nav-block-size);
+  padding: var(--space-2) max(var(--space-2), env(safe-area-inset-right))
+    calc(var(--space-2) + env(safe-area-inset-bottom))
+    max(var(--space-2), env(safe-area-inset-left));
+  border-top: 1px solid var(--astr-hairline-strong);
+  background: var(--astr-surface);
+}
+
+.domainLink {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  place-content: center;
+  gap: 0.1rem;
+  padding: 0.35rem 0.1rem;
+  border-top: 1px solid transparent;
+  color: var(--astr-text-2);
+  text-align: center;
+  text-decoration: none;
+}
+
+.domainLink::before {
+  position: absolute;
+  inset: -1px 28% auto;
+  border-top: 1px solid transparent;
+  content: "";
+}
+
+.domainLink[data-current="true"] {
+  border-top-color: var(--astr-action);
+  color: var(--astr-action);
+}
+
+.domainLink[data-current="true"]::before {
+  border-top-color: currentColor;
+}
+
+.domainIndex {
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  letter-spacing: 0.08em;
+}
+
+.domainLabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--type-0);
+  line-height: 1.2;
+}
+
+@media (max-width: 48rem) {
+  .header {
+    grid-template-areas:
+      "brand fact"
+      "actions actions";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .headerActions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 36rem) {
+  .header {
+    grid-template-areas:
+      "brand"
+      "fact"
+      "actions";
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .localFact {
+    max-width: none;
+  }
+
+  .domainLabel {
+    font-size: 0.72rem;
+  }
+}
