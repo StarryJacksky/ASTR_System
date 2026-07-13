@@ -12,7 +12,10 @@ import {
 const css = readFileSync(resolve(process.cwd(), "src/styles/tokens.css"), "utf8");
 const globals = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 const emotion = readFileSync(resolve(process.cwd(), "src/lib/emotion.ts"), "utf8");
-const admin = readFileSync(resolve(process.cwd(), "src/app/admin/page.tsx"), "utf8");
+const auditDecision = readFileSync(
+  resolve(process.cwd(), "src/features/control/model/audit-decision.ts"),
+  "utf8",
+);
 
 function customProperty(source: string, token: string): string {
   const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -169,7 +172,9 @@ describe("ASTR constitutional tokens", () => {
   });
 
   it("uses the warning role for confirm audit decisions", () => {
-    expect(admin).toMatch(/if \(decision === "confirm"\) return "var\(--astr-warning\)";/);
+    expect(auditDecision).toMatch(
+      /if \(decision === "confirm"\) return "var\(--astr-warning\)";/,
+    );
   });
 
   it("keeps day text-3 legible on surface-2", () => {

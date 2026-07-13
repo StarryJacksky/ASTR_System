@@ -27,10 +27,12 @@ const EXPECTED_IDS = [
   "migration",
 ] as const;
 
+const EXPECTED_HREFS = EXPECTED_IDS.map((id) => `/admin/${id}`);
+
 describe("Control module registry", () => {
   it("defines the exact 18-route IA once", () => {
     expect(CONTROL_MODULES.map(({ id }) => id)).toEqual(EXPECTED_IDS);
-    expect(new Set(CONTROL_MODULES.map(({ href }) => href)).size).toBe(18);
+    expect(CONTROL_MODULES.map(({ href }) => href)).toEqual(EXPECTED_HREFS);
     expect(getControlModulesByDomain("system")).toHaveLength(10);
     expect(getControlModulesByDomain("soul")).toHaveLength(8);
   });

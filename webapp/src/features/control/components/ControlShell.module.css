@@ -25,6 +25,22 @@
   opacity: 0.66;
 }
 
+.controlField::after {
+  position: absolute;
+  top: clamp(118px, 15vh, 210px);
+  right: clamp(-148px, -8vw, -72px);
+  width: clamp(270px, 31vw, 520px);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--astr-action) 32%, transparent);
+  border-left-color: transparent;
+  border-radius: 50%;
+  box-shadow:
+    inset 24px -18px 70px color-mix(in srgb, var(--astr-soul) 7%, transparent),
+    0 0 0 28px color-mix(in srgb, var(--astr-bg) 26%, transparent);
+  content: "";
+  transform: rotate(-22deg);
+}
+
 .localSkip {
   position: fixed;
   z-index: calc(var(--z-modal) + 1);

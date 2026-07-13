@@ -54,6 +54,25 @@ describe("Control shell", () => {
       .toHaveLength(18);
   });
 
+  it("opens and focuses the atlas disclosure from the local skip link", async () => {
+    const user = userEvent.setup();
+    render(
+      <ControlShell>
+        <p>Effector workspace</p>
+      </ControlShell>,
+    );
+
+    const summary = screen.getByText("模块索引").closest("summary");
+    const disclosure = summary?.closest("details");
+    expect(summary).not.toBeNull();
+    expect(disclosure).not.toHaveAttribute("open");
+
+    await user.click(screen.getByRole("link", { name: "跳到模块索引" }));
+
+    expect(disclosure).toHaveAttribute("open");
+    expect(summary).toHaveFocus();
+  });
+
   it("uses a neutral Control index label at the root route", () => {
     usePathname.mockReturnValue("/admin");
     render(

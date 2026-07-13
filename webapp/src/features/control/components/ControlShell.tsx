@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,11 +19,22 @@ function currentModuleFromPath(pathname: string) {
 export function ControlShell({ children }: { readonly children: ReactNode }) {
   const pathname = usePathname();
   const currentModule = currentModuleFromPath(pathname);
+  const atlasDisclosureRef = useRef<HTMLDetailsElement>(null);
+  const atlasSummaryRef = useRef<HTMLElement>(null);
+
+  const openModuleIndex = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const disclosure = atlasDisclosureRef.current;
+    const summary = atlasSummaryRef.current;
+    if (disclosure === null || summary === null) return;
+    disclosure.open = true;
+    summary.focus();
+  };
 
   return (
     <div className={styles.shell}>
       <div className={styles.controlField} aria-hidden />
-      <a className={styles.localSkip} href="#module-index">
+      <a className={styles.localSkip} href="#module-index" onClick={openModuleIndex}>
         跳到模块索引
       </a>
 
@@ -59,8 +70,8 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
 
           <div className={styles.headerTools}>
             <span className={styles.surfaceVersion}>SURFACE W2</span>
-            <details className={styles.atlasDisclosure} id="module-index">
-              <summary>
+            <details className={styles.atlasDisclosure} ref={atlasDisclosureRef}>
+              <summary id="module-index" ref={atlasSummaryRef}>
                 <span aria-hidden className={styles.indexGlyph}>
                   18
                 </span>
