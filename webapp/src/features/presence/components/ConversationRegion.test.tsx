@@ -1284,10 +1284,14 @@ describe("ConversationRegion", () => {
     expect(cssSource).toMatch(/@media\s*\(max-width:\s*480px\)[\s\S]*max-inline-size:\s*92%/);
     expect(cssSource).toMatch(/min-block-size:\s*var\(--touch-target\)/);
     expect(cssSource).toMatch(/min-inline-size:\s*var\(--touch-target\)/);
-    expect(cssSource).toMatch(
+    const assistantBubbleRule = cssSource.match(
+      /^\.assistantBubble\s*\{([^}]*)\}/m,
+    )?.[1];
+    const returnLatestRule = cssSource.match(/^\.returnLatest\s*\{([^}]*)\}/m)?.[1];
+    expect(assistantBubbleRule).toMatch(
       /box-shadow:\s*var\(\s*--astr-timeline-assistant-shadow,\s*none\s*\)/,
     );
-    expect(cssSource).toMatch(
+    expect(returnLatestRule).toMatch(
       /box-shadow:\s*var\(\s*--astr-timeline-return-shadow,\s*none\s*\)/,
     );
     expect(cssSource).not.toContain("var(--glow-her-1)");

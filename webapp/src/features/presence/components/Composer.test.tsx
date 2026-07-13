@@ -114,19 +114,21 @@ describe("Presence Composer", () => {
     expect(css).toMatch(/\.textarea:focus-visible\s*\{[\s\S]*?outline:/);
     expect(css).toMatch(/min-(?:inline-size|width):\s*var\(--touch-target\)/);
     expect(css).toMatch(/min-(?:block-size|height):\s*var\(--touch-target\)/);
-    expect(css).toMatch(
+    const composerRule = css.match(/^\.composer\s*\{([^}]*)\}/m)?.[1];
+    const composerAccentRule = css.match(/^\.composer::before\s*\{([^}]*)\}/m)?.[1];
+    expect(composerRule).toMatch(
       /background:\s*var\(\s*--astr-composer-surface,\s*color-mix\(/,
     );
-    expect(css).toMatch(
+    expect(composerAccentRule).toMatch(
       /background:\s*var\(\s*--astr-composer-accent-line,\s*var\(--astr-action\)\s*\)/,
     );
-    expect(css).toMatch(
+    expect(composerRule).toMatch(
       /box-shadow:\s*var\(\s*--astr-composer-shadow,\s*none\s*\)/,
     );
-    expect(css).toMatch(
+    expect(composerRule).toMatch(
       /max-block-size:\s*var\(\s*--astr-composer-max-block-size,\s*none\s*\)/,
     );
-    expect(css).toMatch(
+    expect(composerRule).toMatch(
       /overflow-y:\s*var\(\s*--astr-composer-overflow-y,\s*visible\s*\)/,
     );
     expect(css).not.toMatch(/gradient/i);
