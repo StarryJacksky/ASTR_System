@@ -77,7 +77,7 @@ test("does not send during composition and sends exactly once after compositione
     );
   });
   await page.waitForTimeout(250);
-  expect(await mockCount(request, "ingest")).toBeUndefined();
+  expect(await mockCount(request, "ingest")).toBe(0);
 
   await composer.dispatchEvent("compositionend");
   await composer.press("Enter");
@@ -123,7 +123,7 @@ test("records and transcribes into the textarea without automatically ingesting"
   await expect(page.getByText("转写已回填，请确认后发送")).toBeVisible();
   await expect.poll(() => mockCount(request, "transcribe")).toBe(1);
   await page.waitForTimeout(250);
-  expect(await mockCount(request, "ingest")).toBeUndefined();
+  expect(await mockCount(request, "ingest")).toBe(0);
 });
 
 for (const testCase of [
