@@ -618,6 +618,21 @@ describe("PresenceExperience", () => {
     expect(experienceCss).toMatch(
       /\.dialogueSurface\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/,
     );
+    expect(experienceCss).toMatch(
+      /--astr-composer-surface:\s*linear-gradient\([\s\S]*?color-mix\(/,
+    );
+    expect(experienceCss).toMatch(
+      /--astr-composer-accent-line:\s*linear-gradient\(/,
+    );
+    expect(experienceCss).toMatch(
+      /--astr-composer-shadow:\s*inset\s+0\s+1px\s+0\s+color-mix\(/,
+    );
+    expect(experienceCss).toMatch(
+      /--astr-timeline-assistant-shadow:\s*var\(--glow-her-1\)/,
+    );
+    expect(experienceCss).toMatch(
+      /--astr-timeline-return-shadow:\s*var\(--shadow-2\)/,
+    );
     expect(experienceCss).toMatch(/prefers-reduced-motion[\s\S]*transition-duration:\s*0ms/);
     expect(experienceCss).toMatch(/data-visual-motion=["']paused["'][\s\S]*transition-duration:\s*0ms/);
     expect(experienceCss).toMatch(

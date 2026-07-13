@@ -131,7 +131,7 @@
 .assistantBubble {
   border-start-start-radius: var(--radius-small);
   background: var(--astr-surface-2);
-  box-shadow: var(--glow-her-1);
+  box-shadow: var(--astr-timeline-assistant-shadow, none);
   color: var(--astr-text);
 }
 
@@ -173,7 +173,7 @@
   inset-block-end: var(--space-4);
   z-index: var(--z-panel);
   padding-inline: var(--space-4);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--astr-timeline-return-shadow, none);
 }
 
 .returnLatest:focus-visible,

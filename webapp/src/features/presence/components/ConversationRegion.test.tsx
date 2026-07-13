@@ -1284,6 +1284,14 @@ describe("ConversationRegion", () => {
     expect(cssSource).toMatch(/@media\s*\(max-width:\s*480px\)[\s\S]*max-inline-size:\s*92%/);
     expect(cssSource).toMatch(/min-block-size:\s*var\(--touch-target\)/);
     expect(cssSource).toMatch(/min-inline-size:\s*var\(--touch-target\)/);
+    expect(cssSource).toMatch(
+      /box-shadow:\s*var\(\s*--astr-timeline-assistant-shadow,\s*none\s*\)/,
+    );
+    expect(cssSource).toMatch(
+      /box-shadow:\s*var\(\s*--astr-timeline-return-shadow,\s*none\s*\)/,
+    );
+    expect(cssSource).not.toContain("var(--glow-her-1)");
+    expect(cssSource).not.toContain("var(--shadow-2)");
 
     const phaseRule = cssSource.match(/\.phase[\s\S]*?\{([^}]*)\}/)?.[1];
     expect(phaseRule).toContain("color: var(--astr-text-2)");

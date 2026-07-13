@@ -114,6 +114,22 @@ describe("Presence Composer", () => {
     expect(css).toMatch(/\.textarea:focus-visible\s*\{[\s\S]*?outline:/);
     expect(css).toMatch(/min-(?:inline-size|width):\s*var\(--touch-target\)/);
     expect(css).toMatch(/min-(?:block-size|height):\s*var\(--touch-target\)/);
+    expect(css).toMatch(
+      /background:\s*var\(\s*--astr-composer-surface,\s*color-mix\(/,
+    );
+    expect(css).toMatch(
+      /background:\s*var\(\s*--astr-composer-accent-line,\s*var\(--astr-action\)\s*\)/,
+    );
+    expect(css).toMatch(
+      /box-shadow:\s*var\(\s*--astr-composer-shadow,\s*none\s*\)/,
+    );
+    expect(css).toMatch(
+      /max-block-size:\s*var\(\s*--astr-composer-max-block-size,\s*none\s*\)/,
+    );
+    expect(css).toMatch(
+      /overflow-y:\s*var\(\s*--astr-composer-overflow-y,\s*visible\s*\)/,
+    );
+    expect(css).not.toMatch(/gradient/i);
     expect(tokens).toMatch(/--touch-target:\s*44px/);
     const necessaryStateRule = css.match(
       /\.voiceStatus,[\s\S]*?\.errorText\s*\{([^}]*)\}/,

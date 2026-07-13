@@ -5,10 +5,13 @@
   padding: 14px 16px 12px;
   border: 1px solid var(--astr-hairline);
   border-radius: var(--radius-medium);
-  background:
-    linear-gradient(110deg, color-mix(in srgb, var(--astr-soul) 7%, transparent), transparent 34%),
-    color-mix(in srgb, var(--astr-surface) 92%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--astr-action) 10%, transparent);
+  background: var(
+    --astr-composer-surface,
+    color-mix(in srgb, var(--astr-surface) 92%, var(--astr-bg))
+  );
+  box-shadow: var(--astr-composer-shadow, none);
+  max-block-size: var(--astr-composer-max-block-size, none);
+  overflow-y: var(--astr-composer-overflow-y, visible);
 }
 
 .composer::before {
@@ -17,7 +20,7 @@
   width: min(34%, 180px);
   height: 1px;
   content: "";
-  background: linear-gradient(90deg, var(--astr-action), transparent);
+  background: var(--astr-composer-accent-line, var(--astr-action));
 }
 
 .label {

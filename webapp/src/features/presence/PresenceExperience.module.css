@@ -60,6 +60,19 @@
 }
 
 .dialogueSurface {
+  --astr-composer-surface:
+    linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--astr-soul) 7%, transparent),
+      transparent 34%
+    ),
+    color-mix(in srgb, var(--astr-surface) 92%, transparent);
+  --astr-composer-accent-line:
+    linear-gradient(90deg, var(--astr-action), transparent);
+  --astr-composer-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--astr-action) 10%, transparent);
+  --astr-timeline-assistant-shadow: var(--glow-her-1);
+  --astr-timeline-return-shadow: var(--shadow-2);
   position: relative;
   display: grid;
   min-block-size: clamp(34rem, calc(100dvh - 19rem), 52rem);
