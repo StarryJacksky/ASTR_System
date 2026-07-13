@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
+import ts from "typescript";
 
 const boundaryScript = resolve(process.cwd(), "scripts/check-mobile-boundaries.mjs");
 const DOMAINS = ["presence", "tasks", "workbench", "knowledge", "safety"];
@@ -155,6 +156,14 @@ describe("Mobile production boundary command", () => {
       "fetch('/api/core/v1/effector/status/', { method: 'GET' });",
       "mobile-safety-mutation",
     ],
+    [
+      "Safety computed Object.fromEntries PUT",
+      "src/features/mobile/safety/rogue.ts",
+      `fetch('/api/core/v1/effector/status', {
+        ...Object.fromEntries([['method', 'PUT']]),
+      });`,
+      "mobile-safety-mutation",
+    ],
   ])("rejects %s in production source", (_label, file, source, rule) => {
     const root = createFixture({ [file]: source });
     const result = runBoundary(root);
@@ -162,6 +171,48 @@ describe("Mobile production boundary command", () => {
 
     expect(result.status).not.toBe(0);
     expect(report.violations).toContainEqual(expect.objectContaining({ rule, file }));
+  });
+
+  it.each([
+    ["CoreClient", "import { CoreClient } from '@/lib/transport'; export { CoreClient };"],
+    ["Core library", "import { request } from '@/lib/core/client'; export { request };"],
+    ["direct fetch", "export const load = () => fetch('/api/core/v1/status');"],
+  ])("rejects Shell/Nav %s access", (_label, source) => {
+    const file = "src/features/mobile/shell/rogue.ts";
+    const root = createFixture({ [file]: source });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-shell-network-access",
+      file,
+    }));
+  });
+
+  it.each([
+    ["client boundary", `"use client"; export const marker = true;`],
+    ["network request", "export const load = () => fetch('/api/core/v1/status');"],
+  ])("rejects Workbench/Knowledge %s", (_label, source) => {
+    const file = "src/features/mobile/knowledge/rogue.ts";
+    const root = createFixture({ [file]: source });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-static-runtime-access",
+      file,
+    }));
+  });
+
+  it("rejects a concatenated W5 endpoint in source", () => {
+    const file = "src/features/mobile/tasks/rogue.ts";
+    const root = createFixture({
+      [file]: `export const endpoint = '/v1/' + 'devices' + '/bind';`,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-w5-capability",
+      file,
+    }));
   });
 
   it.each([
@@ -229,6 +280,17 @@ describe("Mobile production boundary command", () => {
     expect(report.sourceFilesScanned).toBe(baseReport.sourceFilesScanned);
   });
 
+  it("treats .test-helper.ts as production source rather than a test file", () => {
+    const file = "src/features/mobile/tasks/mobile.test-helper.ts";
+    const root = createFixture({ [file]: "export const paint = 'linear-gradient(green, lime)';" });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-forbidden-gradient",
+      file,
+    }));
+  });
+
   it.each([
     ["wrong", registrySource(["presence", "tasks", "workbench", "knowledge", "dispatch"])],
     ["duplicate", registrySource(["presence", "tasks", "workbench", "knowledge", "knowledge"])],
@@ -248,6 +310,37 @@ describe("Mobile production boundary command", () => {
 
   it("rejects a registry whose route href does not exactly match its domain", () => {
     const source = registrySource(DOMAINS).replace("/mobile/tasks", "/mobile/task");
+    const root = createFixture({ "src/features/mobile/model/mobile-domains.ts": source });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-domain-registry",
+    }));
+  });
+
+  it("rejects spread extras hidden beside five valid registry literals", () => {
+    const exact = JSON.parse(registryDefinitionsJson(DOMAINS));
+    const source = `
+      const extras = [{ id: "dispatch", href: "/mobile/dispatch" }];
+      const domainDefinitions = ${JSON.stringify(exact)} as const;
+      const registryWithExtra = [...domainDefinitions, ...extras] as const;
+      export const MOBILE_DOMAINS = Object.freeze(registryWithExtra);
+    `;
+    const root = createFixture({ "src/features/mobile/model/mobile-domains.ts": source });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-domain-registry",
+    }));
+  });
+
+  it("rejects an exact decoy domainDefinitions array when MOBILE_DOMAINS exports another value", () => {
+    const exact = registryDefinitionsJson(DOMAINS);
+    const source = `
+      const domainDefinitions = ${exact} as const;
+      const decoy = domainDefinitions.slice(0, 4);
+      export const MOBILE_DOMAINS = Object.freeze(decoy);
+    `;
     const root = createFixture({ "src/features/mobile/model/mobile-domains.ts": source });
     const report = parseReport(runBoundary(root).stdout);
 
@@ -282,6 +375,22 @@ describe("Mobile production boundary command", () => {
         "animation: none;",
         "animation: none; animation: orbit 9s infinite;",
       ),
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-global-ambient-witness",
+    }));
+  });
+
+  it("rejects a later same-specificity ambient cascade override after a valid witness", () => {
+    const root = createFixture({
+      "src/app/globals.css": `${globalsWitness()}
+        body:has([data-route-surface="mobile"]) .astr-grain {
+          animation: orbit 9s linear infinite;
+          background: red;
+        }
+      `,
     });
     const report = parseReport(runBoundary(root).stdout);
 
@@ -432,6 +541,98 @@ describe("Mobile production boundary command", () => {
     }));
   });
 
+  it("rejects Object.fromEntries PUT bytes in a Safety-owned chunk", () => {
+    const file = ".next/static/chunks/mobile-safety.js";
+    const root = createFixture({
+      [file]: `fetch(path,Object.fromEntries([["method","PUT"]]))`,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-safety-mutation",
+      file,
+    }));
+  });
+
+  it("rejects concatenated W5 endpoint bytes in a route-owned chunk", () => {
+    const file = ".next/static/chunks/mobile-tasks.js";
+    const root = createFixture({
+      [file]: `export const endpoint="/v1/"+"devices"+"/bind";`,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-w5-capability",
+      file,
+    }));
+  });
+
+  it("unions own clientModules chunks into route validation and heavy-byte scanning", () => {
+    const manifestFile = ".next/server/app/mobile/presence/page_client-reference-manifest.js";
+    const hiddenChunk = ".next/static/chunks/mobile-presence-hidden.js";
+    const root = createFixture({
+      [manifestFile]: rscManifest("presence", {
+        extraOwnedChunk: "static/chunks/mobile-presence-hidden.js",
+      }),
+      [hiddenChunk]: `export const hidden = "pixi.js";`,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+    const presence = report.buildEvidence.routes.find(({ route }) => route === "/mobile/presence");
+
+    expect(presence.clientChunks).toContain(hiddenChunk);
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-route-heavy-bytes",
+      file: hiddenChunk,
+    }));
+  });
+
+  it("forbids a Workbench-owned client module even without a dedicated page chunk", () => {
+    const file = ".next/server/app/mobile/workbench/page_client-reference-manifest.js";
+    const root = createFixture({
+      [file]: rscManifest("workbench", { ownClientModule: true }),
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-static-route-client-boundary",
+      file,
+    }));
+  });
+
+  it("forbids a dedicated Knowledge page chunk without a domain client module", () => {
+    const manifestFile = ".next/server/app/mobile/knowledge/page_client-reference-manifest.js";
+    const chunkFile = ".next/static/chunks/mobile-knowledge.js";
+    const root = createFixture({
+      [manifestFile]: rscManifest("knowledge", {
+        dedicatedChunk: "static/chunks/mobile-knowledge.js",
+      }),
+      [chunkFile]: "export const knowledge = true;",
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-static-route-client-boundary",
+      file: manifestFile,
+    }));
+  });
+
+  it("scans route-owned entryCSSFiles outside source roots with shared visual rules", () => {
+    const manifestFile = ".next/server/app/mobile/tasks/page_client-reference-manifest.js";
+    const cssFile = ".next/static/chunks/mobile-tasks-owned.css";
+    const root = createFixture({
+      [manifestFile]: rscManifest("tasks", {
+        ownedCss: "static/chunks/mobile-tasks-owned.css",
+      }),
+      [cssFile]: ".task { color: green; background: linear-gradient(#111, #222); }",
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rule: "no-green-hardcode", file: cssFile }),
+      expect.objectContaining({ rule: "mobile-forbidden-gradient", file: cssFile }),
+    ]));
+  });
+
   it("rejects Workbench and Knowledge manifests that own another domain's business module", () => {
     const root = createFixture({
       ".next/server/app/mobile/workbench/page_client-reference-manifest.js": rscManifest(
@@ -479,6 +680,33 @@ describe("Mobile production boundary command", () => {
 
     expect(first.stdout).toBe(second.stdout);
     expect(sortKeys).toEqual([...sortKeys].sort());
+  });
+});
+
+describe("Mobile coverage configuration contract", () => {
+  const configPath = resolve(process.cwd(), "vitest.config.mts");
+
+  it("preserves existing coverage, adds Mobile coverage, and locks exact thresholds", () => {
+    expect(inspectCoverageConfig(readFileSync(configPath, "utf8"))).toEqual([]);
+  });
+
+  it.each([
+    ["lib include", (source) => source.replace('"src/lib/**/*.ts",', "")],
+    ["system include", (source) => source.replace('"src/components/system/**/*.tsx",', "")],
+    ["Mobile include", (source) => source.replace('"src/features/mobile/**/*.{ts,tsx}",', "")],
+    ["test-support exclude", (source) => source.replace('"**/*.test-*.*",', "")],
+    ["json-summary reporter", (source) => source.replace(', "json-summary"', "")],
+    ["aggregate branch threshold", (source) => source.replace("branches: 85,", "branches: 84,")],
+    [
+      "critical threshold",
+      (source) => source.replace(
+        '"src/features/mobile/safety/mobile-safety-client.ts": {',
+        '"src/features/mobile/safety/mobile-safety-client-renamed.ts": {',
+      ),
+    ],
+  ])("mutation guard rejects removal of %s", (_label, mutate) => {
+    const source = readFileSync(configPath, "utf8");
+    expect(inspectCoverageConfig(mutate(source))).not.toEqual([]);
   });
 });
 
@@ -553,6 +781,7 @@ function createFixture(files = {}, options = {}) {
     "tsconfig.json": "{}",
     "public/.keep": "",
     ".next/static/chunks/shared-runtime.js": "export const shared = true;",
+    ".next/static/chunks/shared-mobile.css": ".shared { color: #8bcfff; }",
     ".next/static/chunks/mobile-presence.js": "export const presence = true;",
     ".next/static/chunks/mobile-tasks.js": "export const tasks = true;",
     ".next/static/chunks/mobile-safety.js": "export const safety = true;",
@@ -602,6 +831,13 @@ function globalsWitness() {
 }
 
 function registrySource(domains) {
+  return `
+    const domainDefinitions = ${registryDefinitionsJson(domains)} as const;
+    export const MOBILE_DOMAINS = Object.freeze(domainDefinitions);
+  `;
+}
+
+function registryDefinitionsJson(domains) {
   const definitions = domains.map((id) => ({
     id,
     href: `/mobile/${id}`,
@@ -609,10 +845,7 @@ function registrySource(domains) {
     index: "00",
     status: "unavailable",
   }));
-  return `
-    const domainDefinitions = ${JSON.stringify(definitions)} as const;
-    export const MOBILE_DOMAINS = Object.freeze(domainDefinitions);
-  `;
+  return JSON.stringify(definitions);
 }
 
 function componentFor(domain) {
@@ -650,7 +883,15 @@ function rscManifest(domain, options = {}) {
 
   if (!new Set(["workbench", "knowledge", "wrong"]).has(domain)) {
     clientModules[`[project]/src/features/mobile/${domain}/${componentFor(domain)}.tsx`] = {
-      chunks: [`/_next/static/chunks/mobile-${domain}.js`],
+      chunks: [
+        `/_next/static/chunks/mobile-${domain}.js`,
+        ...(options.extraOwnedChunk ? [`/_next/${options.extraOwnedChunk}`] : []),
+      ],
+    };
+  }
+  if (options.ownClientModule && new Set(["workbench", "knowledge"]).has(domain)) {
+    clientModules[`[project]/src/features/mobile/${domain}/${componentFor(domain)}.tsx`] = {
+      chunks: ["/_next/static/chunks/shared-runtime.js"],
     };
   }
   if (options.foreignDomain) {
@@ -668,7 +909,9 @@ function rscManifest(domain, options = {}) {
     });
   }
 
-  const domainChunk = new Set(["workbench", "knowledge", "wrong"]).has(domain)
+  const domainChunk = options.dedicatedChunk
+    ? [options.dedicatedChunk]
+    : new Set(["workbench", "knowledge", "wrong"]).has(domain)
     ? []
     : [`static/chunks/mobile-${domain}.js`];
   return `globalThis.__RSC_MANIFEST = globalThis.__RSC_MANIFEST || {};
@@ -679,6 +922,15 @@ globalThis.__RSC_MANIFEST[${JSON.stringify(routeKey)}] = ${JSON.stringify({
       [`[project]/src/app/mobile/${domain}/page`]: [
         "static/chunks/shared-runtime.js",
         ...domainChunk,
+      ],
+    },
+    entryCSSFiles: {
+      "[project]/src/app/mobile/layout": [
+        { path: "static/chunks/shared-mobile.css", inlined: false },
+      ],
+      [`[project]/src/app/mobile/${domain}/page`]: [
+        { path: "static/chunks/shared-mobile.css", inlined: false },
+        ...(options.ownedCss ? [{ path: options.ownedCss, inlined: false }] : []),
       ],
     },
   })};`;
@@ -743,6 +995,132 @@ function appendBuildInput(hash, root, relativePath) {
       hash.update(readFileSync(join(root, ...childPath.split("/"))));
     }
   }
+}
+
+function inspectCoverageConfig(source) {
+  const violations = [];
+  const sourceFile = ts.createSourceFile(
+    "vitest.config.mts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const exported = sourceFile.statements.find(ts.isExportAssignment);
+  const configCall = exported ? unwrapConfigExpression(exported.expression) : null;
+  const config = configCall && ts.isCallExpression(configCall)
+    ? unwrapConfigExpression(configCall.arguments[0])
+    : null;
+  const test = config && ts.isObjectLiteralExpression(config)
+    ? objectPropertyValue(config, "test")
+    : null;
+  const coverage = test && ts.isObjectLiteralExpression(test)
+    ? objectPropertyValue(test, "coverage")
+    : null;
+  if (!coverage || !ts.isObjectLiteralExpression(coverage)) return ["coverage-object"];
+
+  const includes = stringArray(objectPropertyValue(coverage, "include"));
+  for (const required of [
+    "src/lib/**/*.ts",
+    "src/components/system/**/*.tsx",
+    "src/features/mobile/**/*.{ts,tsx}",
+  ]) {
+    if (!includes.includes(required)) violations.push(`include:${required}`);
+  }
+
+  const expectedExcludes = [
+    "**/*.test.*",
+    "**/*.test-*.*",
+    "**/*.spec.*",
+    "**/*.spec-*.*",
+    "**/*.d.ts",
+    "**/__tests__/**",
+    "**/{test,tests,fixture,fixtures}/**",
+    "**/__snapshots__/**",
+    "**/*.snap",
+  ].sort();
+  const excludes = stringArray(objectPropertyValue(coverage, "exclude")).sort();
+  if (JSON.stringify(excludes) !== JSON.stringify(expectedExcludes)) {
+    violations.push("exclude:exact-test-support-set");
+  }
+
+  const reporters = stringArray(objectPropertyValue(coverage, "reporter"));
+  if (!reporters.includes("json-summary")) violations.push("reporter:json-summary");
+
+  const thresholds = objectPropertyValue(coverage, "thresholds");
+  if (!thresholds || !ts.isObjectLiteralExpression(thresholds)) {
+    violations.push("thresholds:object");
+    return violations.sort();
+  }
+  const expectedThresholds = new Map([
+    [
+      "src/features/mobile/**/*.{ts,tsx}",
+      { lines: 90, statements: 90, functions: 90, branches: 85 },
+    ],
+    [
+      "src/features/mobile/authority/loopback-authority.ts",
+      { lines: 100, statements: 100, functions: 100, branches: 100 },
+    ],
+    [
+      "src/features/mobile/tasks/{local-task-draft,local-task-draft-storage}.ts",
+      { lines: 100, statements: 100, functions: 100, branches: 100 },
+    ],
+    [
+      "src/features/mobile/safety/mobile-safety-client.ts",
+      { lines: 100, statements: 100, functions: 100, branches: 100 },
+    ],
+    [
+      "src/features/mobile/safety/create-mobile-safety-controller.ts",
+      { lines: 100, statements: 100, functions: 100, branches: 100 },
+    ],
+  ]);
+  for (const [glob, expected] of expectedThresholds) {
+    const threshold = objectPropertyValue(thresholds, glob);
+    if (!threshold || !ts.isObjectLiteralExpression(threshold)) {
+      violations.push(`threshold:${glob}`);
+      continue;
+    }
+    for (const [metric, value] of Object.entries(expected)) {
+      const actual = objectPropertyValue(threshold, metric);
+      if (!actual || !ts.isNumericLiteral(actual) || Number(actual.text) !== value) {
+        violations.push(`threshold:${glob}:${metric}`);
+      }
+    }
+  }
+  return violations.sort();
+}
+
+function unwrapConfigExpression(expression) {
+  let current = expression;
+  while (
+    current &&
+    (ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isParenthesizedExpression(current))
+  ) {
+    current = current.expression;
+  }
+  return current ?? null;
+}
+
+function objectPropertyValue(object, key) {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = property.name;
+    const propertyKey = ts.isIdentifier(name) || ts.isStringLiteralLike(name)
+      ? name.text
+      : null;
+    if (propertyKey === key) return unwrapConfigExpression(property.initializer);
+  }
+  return null;
+}
+
+function stringArray(expression) {
+  if (!expression || !ts.isArrayLiteralExpression(expression)) return [];
+  return expression.elements.flatMap((element) => {
+    const value = unwrapConfigExpression(element);
+    return value && ts.isStringLiteralLike(value) ? [value.text] : [];
+  });
 }
 
 function runBoundary(root) {
