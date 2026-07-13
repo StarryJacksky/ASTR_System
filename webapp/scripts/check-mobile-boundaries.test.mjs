@@ -463,6 +463,36 @@ describe("Mobile production boundary command", () => {
     }));
   });
 
+  it("rejects a higher-specificity ambient override with a single-quoted Mobile attribute selector", () => {
+    const root = createFixture({
+      "src/app/globals.css": `${globalsWitness()}
+        html body:has([data-route-surface='mobile']) .astr-ambient {
+          display: block;
+        }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-global-ambient-witness",
+    }));
+  });
+
+  it("rejects a higher-specificity grain override with an unquoted Mobile attribute selector", () => {
+    const root = createFixture({
+      "src/app/globals.css": `${globalsWitness()}
+        html body:has([data-route-surface=mobile]) .astr-grain {
+          animation: orbit 9s linear infinite;
+        }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "mobile-global-ambient-witness",
+    }));
+  });
+
   it("fails closed when the stamped build is missing", () => {
     const root = createFixture({}, { buildEvidence: false });
     const result = runBoundary(root);

@@ -753,7 +753,13 @@ function cssDeclarationValues(declarations, property) {
 }
 
 function normalizeCssSelector(selector) {
-  return selector.trim().replace(/\s+/g, " ");
+  return selector
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(
+      /\[\s*data-route-surface\s*=\s*(?:"mobile"|'mobile'|mobile)\s*\]/g,
+      '[data-route-surface="mobile"]',
+    );
 }
 
 function isMobileAmbientOrGrainSelector(selector) {
