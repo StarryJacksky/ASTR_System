@@ -419,6 +419,15 @@ describe("LocalTaskDraftRegion", () => {
 
     await user.click(screen.getByRole("button", { name: "保留当前未保存内容" }));
     expect(textbox).toHaveValue("未保存的新正文");
+    expect(trigger).toHaveFocus();
+
+    await user.click(trigger);
+    await user.tab();
+    await user.click(
+      screen.getByRole("button", { name: "放弃未保存内容并编辑第 1 条草稿" }),
+    );
+    expect(textbox).toHaveValue("已保存正文");
+    expect(textbox).toHaveFocus();
     expect(storage.write).not.toHaveBeenCalled();
   });
 
@@ -442,6 +451,7 @@ describe("LocalTaskDraftRegion", () => {
       screen.getByRole("button", { name: "放弃未保存内容并编辑第 2 条草稿" }),
     );
     expect(textbox).toHaveValue("正文 B");
+    expect(textbox).toHaveFocus();
     expect(storage.write).not.toHaveBeenCalled();
     expect(announce).toHaveBeenCalledTimes(1);
     expect(announce).toHaveBeenCalledWith(
@@ -501,6 +511,21 @@ describe("LocalTaskDraftRegion", () => {
     expect(announce).toHaveBeenCalledWith("保存失败，未持久化", "assertive");
   });
 
+  it("returns focus to the editor after explicitly abandoning an edit", async () => {
+    const user = userEvent.setup();
+    const { storage } = storageFixture([draft(1, "准备放弃")]);
+    render(<LocalTaskDraftRegion storage={storage} />);
+
+    await user.click(await screen.findByRole("button", { name: "继续编辑第 1 条草稿" }));
+    const textbox = screen.getByRole("textbox", { name: "本地任务草稿" });
+    await user.type(textbox, " · 未保存");
+    await user.click(screen.getByRole("button", { name: "放弃本次编辑" }));
+
+    expect(textbox).toHaveValue("");
+    expect(textbox).toHaveFocus();
+    expect(storage.write).not.toHaveBeenCalled();
+  });
+
   it("keeps the item and editor when delete persistence fails", async () => {
     const user = userEvent.setup();
     const { storage } = storageFixture([draft(1, "保留我")]);
@@ -528,6 +553,7 @@ describe("LocalTaskDraftRegion", () => {
     expect(storage.write).toHaveBeenCalledTimes(1);
     expect(persisted()).toEqual([]);
     expect(screen.queryByText("删除我")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "本地任务草稿" })).toHaveFocus();
   });
 
   it("refuses delete when another tab changed text without changing the timestamp", async () => {
@@ -624,10 +650,13 @@ describe("LocalTaskDraftRegion", () => {
 
     expect(source).not.toMatch(/fetch\s*\(|navigator\.clipboard|sessionStorage|\/v1\/|queued|running|completed|task_id/);
     expect(source).not.toMatch(/defaultValue/);
+    expect(source).toMatch(/className=\{styles\.deleteButton\}/);
     expect(source.indexOf("window.localStorage")).toBeGreaterThan(
       source.indexOf("useEffect(() =>"),
     );
     expect(source.slice(0, source.indexOf("useEffect(() =>"))).not.toMatch(/localStorage/);
+    expect(css).not.toMatch(/\.itemActions\s+button:last-child/);
+    expect(css).toMatch(/\.deleteButton\s*\{[^}]*color:\s*var\(--astr-danger\)/s);
     expect(css).not.toMatch(/gradient|backdrop-filter|@keyframes|animation\s*:|\bgreen\b/i);
   });
 });
@@ -728,6 +757,7 @@ export function LocalTaskDraftRegion({
   createId = createDefaultIdSeed,
 }: LocalTaskDraftRegionProps) {
   const storageRef = useRef<LocalTaskDraftStorage | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [drafts, setDrafts] = useState<readonly LocalTaskDraft[]>([]);
   const [text, setText] = useState("");
   const [editing, setEditing] = useState<EditSelection | null>(null);
@@ -916,6 +946,7 @@ export function LocalTaskDraftRegion({
         : `已载入第 ${ordinal} 条本地草稿`,
       storagePhase,
     );
+    textareaRef.current?.focus();
   };
 
   const requestEdit = (draft: LocalTaskDraft, ordinal: number) => {
@@ -940,6 +971,7 @@ export function LocalTaskDraftRegion({
     setPendingEditId(null);
     setEditorConflict(null);
     publish("已放弃未保存编辑", storagePhase);
+    textareaRef.current?.focus();
   };
 
   const remove = (draft: LocalTaskDraft) => {
@@ -953,6 +985,7 @@ export function LocalTaskDraftRegion({
         setEditorConflict("deleted");
       }
       publish("草稿已在另一上下文删除", "ready");
+      textareaRef.current?.focus();
       return;
     }
     if (!sameRevision(current, draft)) {
@@ -974,6 +1007,7 @@ export function LocalTaskDraftRegion({
       if (!preserveDirtyText) setText("");
     }
     if (pendingEditId === draft.draft_id) setPendingEditId(null);
+    textareaRef.current?.focus();
   };
 
   return (
@@ -1026,6 +1060,7 @@ export function LocalTaskDraftRegion({
               );
             }}
             placeholder="写下意图、上下文与期望结果；此处不会执行。"
+            ref={textareaRef}
             value={text}
           />
           <div className={styles.actions}>
@@ -1083,6 +1118,7 @@ export function LocalTaskDraftRegion({
                   <div className={styles.itemActions}>
                     <button
                       aria-label={`继续编辑第 ${index + 1} 条草稿`}
+                      id={`mobile-local-draft-edit-${draft.draft_id}`}
                       type="button"
                       onClick={() => requestEdit(draft, index + 1)}
                     >
@@ -1106,6 +1142,9 @@ export function LocalTaskDraftRegion({
                             onClick={() => {
                               setPendingEditId(null);
                               publish("已保留当前未保存内容", storagePhase);
+                              document
+                                .getElementById(`mobile-local-draft-edit-${draft.draft_id}`)
+                                ?.focus();
                             }}
                           >
                             保留当前未保存内容
@@ -1115,6 +1154,7 @@ export function LocalTaskDraftRegion({
                     )}
                     <button
                       aria-label={`删除第 ${index + 1} 条本地草稿`}
+                      className={styles.deleteButton}
                       type="button"
                       onClick={() => remove(draft)}
                     >
@@ -1379,7 +1419,7 @@ Create `webapp/src/features/mobile/tasks/LocalTaskDraftRegion.module.css` with e
   color: var(--astr-text-3);
 }
 
-.itemActions button:last-child {
+.deleteButton {
   color: var(--astr-danger);
 }
 
