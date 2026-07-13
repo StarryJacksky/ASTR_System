@@ -656,7 +656,12 @@ describe("LocalTaskDraftRegion", () => {
     );
     expect(source.slice(0, source.indexOf("useEffect(() =>"))).not.toMatch(/localStorage/);
     expect(css).not.toMatch(/\.itemActions\s+button:last-child/);
-    expect(css).toMatch(/\.deleteButton\s*\{[^}]*color:\s*var\(--astr-danger\)/s);
+    expect(css).toMatch(
+      /\.itemActions\s+\.deleteButton\s*\{[^}]*color:\s*var\(--astr-danger\)/,
+    );
+    expect(css).toMatch(
+      /\.itemActions\s+\.dangerButton\s*\{[^}]*border-color:\s*var\(--astr-danger\)[^}]*color:\s*var\(--astr-danger\)/,
+    );
     expect(css).not.toMatch(/gradient|backdrop-filter|@keyframes|animation\s*:|\bgreen\b/i);
   });
 });
@@ -1361,7 +1366,8 @@ Create `webapp/src/features/mobile/tasks/LocalTaskDraftRegion.module.css` with e
   color: var(--astr-text-2);
 }
 
-.dangerButton {
+.dangerButton,
+.itemActions .dangerButton {
   border-color: var(--astr-danger);
   color: var(--astr-danger);
 }
@@ -1419,7 +1425,7 @@ Create `webapp/src/features/mobile/tasks/LocalTaskDraftRegion.module.css` with e
   color: var(--astr-text-3);
 }
 
-.deleteButton {
+.itemActions .deleteButton {
   color: var(--astr-danger);
 }
 
