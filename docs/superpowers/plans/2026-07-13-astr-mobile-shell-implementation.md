@@ -624,15 +624,24 @@ git commit -m "feat: add explicit browser-local Mobile drafts"
 
 ### Task 4：可信 Presence Mobile 投影
 
+> 实施细化：以 docs/superpowers/plans/2026-07-14-astr-mobile-presence-implementation.md 为 Task 4 的逐步执行权威；该微计划补上 owner-scoped 终稿去重、ConversationRegion 完整行为复用、宽阔聊天滚动容器与 timeline shadow 隔离。
+
 **文件：**
 
 - Create: `webapp/src/features/mobile/presence/MobilePresenceDomain.tsx`
 - Create: `webapp/src/features/mobile/presence/MobilePresenceDomain.test.tsx`
+- Create: `webapp/src/features/mobile/presence/MobilePresenceDomain.remote.test.tsx`
 - Create: `webapp/src/features/mobile/presence/TrustedMobilePresenceDomain.tsx`
 - Create: `webapp/src/features/mobile/presence/TrustedMobilePresenceDomain.test.tsx`
+- Create: `webapp/src/features/mobile/presence/presence.test-support.ts`
+- Create: `webapp/src/features/mobile/presence/presence-hydration.test-support.tsx`
 - Create: `webapp/src/features/mobile/presence/MobilePresenceDomain.module.css`
 - Modify: `webapp/src/features/presence/components/Composer.module.css`
 - Modify: `webapp/src/features/presence/components/Composer.test.tsx`
+- Modify: `webapp/src/features/presence/components/ConversationRegion.tsx`
+- Modify: `webapp/src/features/presence/components/ConversationRegion.test.tsx`
+- Modify: `webapp/src/features/presence/components/PresenceTimelines.module.css`
+- Modify: `webapp/src/features/presence/PresenceExperience.tsx`
 - Modify: `webapp/src/features/presence/PresenceExperience.module.css`
 - Modify: `webapp/src/features/presence/PresenceExperience.test.tsx`
 
@@ -649,10 +658,10 @@ export function TrustedMobilePresenceDomain(props: {
 ```
 
 - Consumes: Task 1 phase and existing W1 `usePresenceController(owner)`.
-- Reuses: `MessageTimeline`, `projectConversationTimeline`, `Composer`, `StaticSoulLens`.
+- Reuses: complete `ConversationRegion` behavior（含 projection、72px 跟随、256+ 未读、回到最新、终稿播报）, `Composer`, `StaticSoulLens`.
 - Must not import: `PresenceExperience`, `SoulPresence`, `PresenceVisualHost`, Jewel/Pixi/Live2D modules.
 
-- Shared-skin rule: Mobile may reuse the existing `Composer` behavior and markup, but its route-owned CSS chunk must contain no gradient. Move the two current Composer gradient values behind inherited custom properties: `Composer.module.css` owns only solid fallbacks, while `PresenceExperience.module.css` supplies the existing Presence-only values. Mobile does not import `PresenceExperience.module.css`, so its Composer resolves to the solid fallback without changing W1 geometry or behavior.
+- Shared-skin rule: Mobile reuses existing `ConversationRegion` and `Composer` behavior, but its route-owned composition must contain no gradient or glow. Move the two current Composer gradient values and the two shared timeline shadows behind inherited custom properties: shared CSS owns only solid / `none` fallbacks, while `PresenceExperience.module.css` supplies the existing Presence-only values. Mobile does not import that route stylesheet, so shared behavior remains intact without带入桌面材质。
 
 - [ ] **Step 1 — authority mount RED**
 
@@ -704,7 +713,7 @@ Add the old layered background and accent-line values as `--astr-composer-surfac
 
 - [ ] **Step 4 — implement trusted projection**
 
-Call `usePresenceController(owner)`, project messages with `projectConversationTimeline`, pass the existing snapshot/action subsets to Composer, and render terse local status facts. Use `status.displayName?.trim()` only; activity missing gets explicit “Core 未提供” copy. Add one aria-hidden static S path and `StaticSoulLens`; do not install a visual runtime. Because `StaticSoulLens` emits unstyled global child classes, `MobilePresenceDomain.module.css` must explicitly style `.lensOuter/.lensContinuity/.lensShell/.lensNotch/.lensAxis` with `fill:none` and static strokes, `.lensFacet` with an opaque `--astr-surface-2` fill, and `.lensCore` with `--astr-soul`; it must not import `SoulPresence.module.css`, add filter/glow, or leave SVG default fill active.
+Call `usePresenceController(owner)`, pass the same owner-scoped bounded ledger into the existing `ConversationRegion`, pass the existing snapshot/action subsets to Composer, and render terse local status facts. Use `status.displayName?.trim()` only; activity missing gets explicit “Core 未提供” copy. Add one aria-hidden static S path and `StaticSoulLens`; do not install a visual runtime. Because `StaticSoulLens` emits unstyled global child classes, `MobilePresenceDomain.module.css` must explicitly style `.lensOuter/.lensContinuity/.lensShell/.lensNotch/.lensAxis` with `fill:none` and static strokes, `.lensFacet` with an opaque `--astr-surface-2` fill, and `.lensCore` with `--astr-soul`; it must not import `SoulPresence.module.css`, add filter/glow, or leave SVG default fill active.
 
 - [ ] **Step 5 — focused GREEN and dependency scan**
 
