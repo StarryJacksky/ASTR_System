@@ -34,12 +34,14 @@ export interface ConversationRegionProps {
   readonly conversation: ConversationProjection;
   readonly assistantLabel?: string;
   readonly announceFinal?: FinalAnnouncementPublisher;
+  readonly announcementLedger?: BoundedIdLedger;
   readonly headerAction?: ReactNode;
 }
 
 export interface BoundedIdLedger {
   readonly size: number;
   readonly remember: (id: string) => boolean;
+  readonly reconcileWindow: (ids: readonly string[]) => readonly string[];
 }
 
 export function createBoundedIdLedger(
@@ -64,7 +66,49 @@ export function createBoundedIdLedger(
       }
       return true;
     },
+    reconcileWindow(nextIds: readonly string[]) {
+      const nextOrder = boundedDistinctWindow(nextIds, capacity);
+      const unseen = nextOrder.filter((id) => !ids.has(id));
+      ids.clear();
+      order.length = 0;
+      for (const id of nextOrder) {
+        ids.add(id);
+        order.push(id);
+      }
+      return Object.freeze(unseen);
+    },
   });
+}
+
+function boundedDistinctWindow(
+  values: readonly string[],
+  capacity: number,
+): string[] {
+  const seen = new Set<string>();
+  const newestFirst: string[] = [];
+  for (
+    let index = values.length - 1;
+    index >= 0 && newestFirst.length < capacity;
+    index -= 1
+  ) {
+    const id = values[index];
+    if (id === undefined || seen.has(id)) continue;
+    seen.add(id);
+    newestFirst.push(id);
+  }
+  return newestFirst.reverse();
+}
+
+const scopedFinalAnnouncementLedgers = new WeakMap<object, BoundedIdLedger>();
+
+export function getFinalAnnouncementLedgerForScope(
+  scope: object,
+): BoundedIdLedger {
+  const existing = scopedFinalAnnouncementLedgers.get(scope);
+  if (existing) return existing;
+  const created = createBoundedIdLedger();
+  scopedFinalAnnouncementLedgers.set(scope, created);
+  return created;
 }
 
 const defaultFinalAnnouncement: FinalAnnouncementPublisher = (message, politeness = "polite") => {
@@ -75,6 +119,7 @@ export function ConversationRegion({
   conversation,
   assistantLabel,
   announceFinal = defaultFinalAnnouncement,
+  announcementLedger,
   headerAction,
 }: ConversationRegionProps) {
   const headingId = useId();
@@ -83,12 +128,10 @@ export function ConversationRegion({
   const followingRef = useRef(true);
   const unreadIdsRef = useRef(new Set<string>());
   const unreadOverflowRef = useRef(false);
-  const previousMessagesRef = useRef<readonly ChatMessage[] | null>(null);
-  const previousFallbackDecisionIdRef = useRef<string | null>(null);
-  const announcementLedgerRef = useRef<BoundedIdLedger | null>(null);
-  if (announcementLedgerRef.current === null) {
-    announcementLedgerRef.current = createBoundedIdLedger();
-  }
+  const [localAnnouncementLedger] = useState(() => createBoundedIdLedger());
+  const resolvedAnnouncementLedger =
+    announcementLedger ?? localAnnouncementLedger;
+  const previousAnnouncementLedgerRef = useRef(resolvedAnnouncementLedger);
   const entries = useMemo(
     () => projectConversationTimeline(conversation),
     [conversation],
@@ -136,6 +179,15 @@ export function ConversationRegion({
   }, [scrollToLatest]);
 
   useLayoutEffect(() => {
+    if (previousAnnouncementLedgerRef.current === resolvedAnnouncementLedger) {
+      return;
+    }
+    previousAnnouncementLedgerRef.current = resolvedAnnouncementLedger;
+    previousEntriesRef.current = null;
+    scrollToLatest();
+  }, [resolvedAnnouncementLedger, scrollToLatest]);
+
+  useLayoutEffect(() => {
     const previousEntries = previousEntriesRef.current;
     const previousById = new Map(
       (previousEntries ?? []).map((entry) => [entry.id, entry]),
@@ -175,46 +227,71 @@ export function ConversationRegion({
   }, [entries, scrollToLatest, syncScrollUi]);
 
   useEffect(() => {
-    const previousByMessageId = new Map(
-      (previousMessagesRef.current ?? []).map((message) => [message.id, message]),
-    );
     const projectedEventIds = new Set<string>();
-
     for (const message of conversation.messages) {
-      if (message.role !== "qiuqiu" || !isNonBlankString(message.eventId)) continue;
-      projectedEventIds.add(message.eventId);
-      const previous = previousByMessageId.get(message.id);
-      if (previous?.eventId === message.eventId) continue;
-      publishFinalAnnouncement(message.eventId, finalAnnouncementCopy(message, visibleAssistantLabel));
+      if (message.role === "qiuqiu" && isNonBlankString(message.eventId)) {
+        projectedEventIds.add(message.eventId);
+      }
     }
-
     const fallback = compatibleDecision(
       conversation.authoritativeDecision,
       conversation.receipt?.trace_id,
     );
-    if (
-      fallback &&
-      !projectedEventIds.has(fallback.id) &&
-      previousFallbackDecisionIdRef.current !== fallback.id
+    const distinctFallback =
+      fallback && !projectedEventIds.has(fallback.id) ? fallback : null;
+    const messageWindowCapacity =
+      FINAL_ANNOUNCEMENT_ID_CAPACITY - (distinctFallback ? 1 : 0);
+    const messageCandidates: Array<{
+      readonly eventId: string;
+      readonly copy: string;
+    }> = [];
+    const windowEventIds = new Set<string>();
+
+    for (
+      let index = conversation.messages.length - 1;
+      index >= 0 && messageCandidates.length < messageWindowCapacity;
+      index -= 1
     ) {
-      publishFinalAnnouncement(
-        fallback.id,
-        `${visibleAssistantLabel} 的权威终稿：${fallback.text}`,
-      );
+      const message = conversation.messages[index];
+      if (
+        message === undefined ||
+        message.role !== "qiuqiu" ||
+        !isNonBlankString(message.eventId) ||
+        windowEventIds.has(message.eventId)
+      ) {
+        continue;
+      }
+      windowEventIds.add(message.eventId);
+      messageCandidates.push({
+        eventId: message.eventId,
+        copy: finalAnnouncementCopy(message, visibleAssistantLabel),
+      });
+    }
+    messageCandidates.reverse();
+
+    const candidates = [...messageCandidates];
+    if (distinctFallback) {
+      candidates.push({
+        eventId: distinctFallback.id,
+        copy: visibleAssistantLabel + " 的权威终稿：" + distinctFallback.text,
+      });
     }
 
-    previousMessagesRef.current = conversation.messages;
-    previousFallbackDecisionIdRef.current = fallback?.id ?? null;
-
-    function publishFinalAnnouncement(eventId: string, message: string): void {
-      if (!announcementLedgerRef.current?.remember(eventId)) return;
-      announceFinal(message, "polite");
+    const unseenEventIds = new Set(
+      resolvedAnnouncementLedger.reconcileWindow(
+        candidates.map((candidate) => candidate.eventId),
+      ),
+    );
+    for (const candidate of candidates) {
+      if (!unseenEventIds.has(candidate.eventId)) continue;
+      announceFinal(candidate.copy, "polite");
     }
   }, [
     announceFinal,
     conversation.authoritativeDecision,
     conversation.messages,
     conversation.receipt?.trace_id,
+    resolvedAnnouncementLedger,
     visibleAssistantLabel,
   ]);
 

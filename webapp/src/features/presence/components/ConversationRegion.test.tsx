@@ -14,6 +14,7 @@ import {
   FINAL_ANNOUNCEMENT_ID_CAPACITY,
   ConversationRegion,
   createBoundedIdLedger,
+  getFinalAnnouncementLedgerForScope,
 } from "./ConversationRegion";
 import { LifeRegion } from "./LifeRegion";
 
@@ -346,6 +347,301 @@ describe("ConversationRegion", () => {
     expect(ledger.size).toBe(3);
     expect(ledger.remember("event-a")).toBe(true);
     expect(ledger.size).toBe(3);
+  });
+
+  it("deduplicates one final event across instances and real remounts sharing a scope ledger", () => {
+    const announce = vi.fn();
+    const scope = {};
+    const ledger = getFinalAnnouncementLedgerForScope(scope);
+    const final = message({
+      id: "reply:shared-scope",
+      role: "qiuqiu",
+      text: "同一权威终稿",
+      eventId: "decision-shared-scope",
+    });
+
+    const first = render(
+      <ConversationRegion
+        announcementLedger={ledger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [final] })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    const second = render(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={conversation({ messages: [{ ...final }] })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(1);
+    second.unmount();
+  });
+
+  it("isolates final ledgers by owner scope", () => {
+    const firstAnnounce = vi.fn();
+    const secondAnnounce = vi.fn();
+    const final = message({
+      id: "reply:scope-isolation",
+      role: "qiuqiu",
+      text: "隔离终稿",
+      eventId: "decision-scope-isolation",
+    });
+
+    render(
+      <>
+        <ConversationRegion
+          announcementLedger={getFinalAnnouncementLedgerForScope({})}
+          announceFinal={firstAnnounce}
+          conversation={conversation({ messages: [final] })}
+        />
+        <ConversationRegion
+          announcementLedger={getFinalAnnouncementLedgerForScope({})}
+          announceFinal={secondAnnounce}
+          conversation={conversation({ messages: [{ ...final }] })}
+        />
+      </>,
+    );
+
+    expect(firstAnnounce).toHaveBeenCalledTimes(1);
+    expect(secondAnnounce).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares one ledger without sharing two concurrent viewport scroll states", () => {
+    const announce = vi.fn();
+    const ledger = getFinalAnnouncementLedgerForScope({});
+    const final = message({
+      id: "reply:shared-ledger-local-scroll",
+      role: "qiuqiu",
+      text: "共享公告，不共享滚动",
+      eventId: "decision-shared-ledger-local-scroll",
+    });
+
+    render(
+      <>
+        <ConversationRegion
+          announcementLedger={ledger}
+          announceFinal={announce}
+          conversation={conversation({ messages: [final] })}
+        />
+        <ConversationRegion
+          announcementLedger={ledger}
+          announceFinal={announce}
+          conversation={conversation({ messages: [{ ...final }] })}
+        />
+      </>,
+    );
+
+    expect(announce).toHaveBeenCalledTimes(1);
+    const viewports = screen.getAllByRole("region", { name: "对话记录" });
+    viewports[0].scrollTop = 100;
+    fireEvent.scroll(viewports[0]);
+    expect(screen.getAllByRole("button", { name: "回到最新" })).toHaveLength(1);
+    expect(viewports[0]).toHaveAttribute("tabindex", "0");
+    expect(viewports[1]).toHaveAttribute("tabindex", "0");
+  });
+
+  it("reconciles only the newest 256 finals so a remount cannot cascade-replay evicted history", () => {
+    const announce = vi.fn();
+    const scope = {};
+    const finals = Array.from({ length: 257 }, (_, index) =>
+      message({
+        id: "reply:bounded-" + index,
+        role: "qiuqiu",
+        text: "终稿 " + index,
+        eventId: "decision-bounded-" + index,
+      }),
+    );
+    const first = render(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: finals,
+          authoritativeDecision: decision(
+            "decision-bounded-0",
+            "trace-bounded",
+            "终稿 0",
+          ),
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(256);
+    expect(announce).not.toHaveBeenCalledWith(
+      expect.stringContaining("终稿 0"),
+      "polite",
+    );
+    first.unmount();
+
+    const second = render(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: finals.map((item) => ({ ...item })),
+          authoritativeDecision: decision(
+            "decision-bounded-0",
+            "trace-bounded",
+            "终稿 0",
+          ),
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(256);
+    second.unmount();
+  });
+
+  it("counts a distinct authoritative fallback inside the same 256-event window", () => {
+    const announce = vi.fn();
+    const scope = {};
+    const finals = Array.from({ length: 256 }, (_, index) =>
+      message({
+        id: "reply:fallback-window-" + index,
+        role: "qiuqiu",
+        text: "消息终稿 " + index,
+        eventId: "decision:fallback-window-" + index,
+      }),
+    );
+    const projection = conversation({
+      messages: finals,
+      authoritativeDecision: decision(
+        "decision:distinct-fallback",
+        "trace:distinct-fallback",
+        "独立 fallback",
+      ),
+    });
+
+    const first = render(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={projection}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(256);
+    expect(announce).toHaveBeenCalledWith(
+      "Soul 的权威终稿：独立 fallback",
+      "polite",
+    );
+    expect(announce).not.toHaveBeenCalledWith(
+      expect.stringContaining("消息终稿 0"),
+      "polite",
+    );
+    first.unmount();
+
+    const second = render(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: finals.map((item) => ({ ...item })),
+          authoritativeDecision: decision(
+            "decision:distinct-fallback",
+            "trace:distinct-fallback",
+            "独立 fallback",
+          ),
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(256);
+    second.rerender(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: finals.map((item) => ({ ...item })),
+          authoritativeDecision: null,
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(257);
+    expect(announce).toHaveBeenLastCalledWith(
+      "Soul 回答完成：消息终稿 0",
+      "polite",
+    );
+
+    second.rerender(
+      <ConversationRegion
+        announcementLedger={getFinalAnnouncementLedgerForScope(scope)}
+        announceFinal={announce}
+        conversation={conversation({
+          messages: finals.map((item) => ({ ...item })),
+          authoritativeDecision: null,
+        })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(257);
+    second.unmount();
+  });
+
+  it("atomically reconciles the newest distinct ids without eviction cascades", () => {
+    const ledger = createBoundedIdLedger(3);
+
+    expect(ledger.reconcileWindow(["a", "b", "b", "c", "d"])).toEqual([
+      "b",
+      "c",
+      "d",
+    ]);
+    expect(ledger.size).toBe(3);
+    expect(ledger.reconcileWindow(["a", "b", "c"])).toEqual(["a"]);
+    expect(ledger.size).toBe(3);
+    expect(ledger.reconcileWindow(["a", "b", "c"])).toEqual([]);
+  });
+
+  it("resets the same mounted viewport when its owner ledger changes", () => {
+    const announce = vi.fn();
+    const firstLedger = getFinalAnnouncementLedgerForScope({});
+    const secondLedger = getFinalAnnouncementLedgerForScope({});
+    const final = message({
+      id: "reply:owner-switch",
+      role: "qiuqiu",
+      text: "作用域切换终稿",
+      eventId: "decision-owner-switch",
+    });
+    const { rerender } = render(
+      <ConversationRegion
+        announcementLedger={firstLedger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [final] })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(1);
+    const viewport = screen.getByRole("region", { name: "对话记录" });
+    viewport.scrollTop = 100;
+    fireEvent.scroll(viewport);
+
+    const update = message({
+      id: "reply:owner-switch-update",
+      role: "qiuqiu",
+      text: "A owner 的未读终稿",
+      eventId: "decision-owner-switch-update",
+    });
+    rerender(
+      <ConversationRegion
+        announcementLedger={firstLedger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [final, update] })}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "回到最新，1 条未读更新" }),
+    ).toBeVisible();
+    expect(viewport.scrollTop).toBe(100);
+
+    rerender(
+      <ConversationRegion
+        announcementLedger={secondLedger}
+        announceFinal={announce}
+        conversation={conversation({ messages: [{ ...final }] })}
+      />,
+    );
+    expect(announce).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("region", { name: "对话记录" })).toBe(viewport);
+    expect(viewport.scrollTop).toBe(800);
+    expect(screen.queryByRole("button", { name: /回到最新/ })).toBeNull();
   });
 
   it("announces a matching active-trace compatibility fallback exactly once", () => {

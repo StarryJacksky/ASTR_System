@@ -14,6 +14,7 @@ import { initialSemanticState } from "@/lib/semantic-state";
 import { semanticStore } from "@/lib/semantic-store";
 
 const controllerMocks = vi.hoisted(() => ({
+  owner: {},
   usePresenceController: vi.fn(),
 }));
 
@@ -29,6 +30,9 @@ const visualBridgeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/features/presence/controller/use-presence-controller", () => ({
+  get presenceControllerOwner() {
+    return controllerMocks.owner;
+  },
   usePresenceController: controllerMocks.usePresenceController,
 }));
 
@@ -136,6 +140,8 @@ function createSnapshot(
 
 describe("PresenceExperience", () => {
   beforeEach(() => {
+    controllerMocks.owner = {};
+    controllerMocks.usePresenceController.mockReset();
     vi.clearAllMocks();
     localStorage.clear();
     document.documentElement.removeAttribute("data-visual-motion");
@@ -150,6 +156,9 @@ describe("PresenceExperience", () => {
     const { container } = render(<PresenceExperience />);
 
     expect(controllerMocks.usePresenceController).toHaveBeenCalledTimes(1);
+    expect(controllerMocks.usePresenceController).toHaveBeenCalledWith(
+      controllerMocks.owner,
+    );
     expect(visualBridgeMocks.jewel).toHaveBeenCalledTimes(1);
     expect(visualBridgeMocks.visibility).toHaveBeenCalledTimes(1);
     expect(screen.getAllByRole("main")).toHaveLength(1);

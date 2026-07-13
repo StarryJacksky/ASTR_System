@@ -3,12 +3,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { VoiceprintPanel } from "@/components/astr/VoiceprintPanel";
-import { usePresenceController } from "@/features/presence/controller/use-presence-controller";
+import {
+  presenceControllerOwner,
+  usePresenceController,
+} from "@/features/presence/controller/use-presence-controller";
 import { semanticStore } from "@/lib/semantic-store";
 
 import styles from "./PresenceExperience.module.css";
 import { Composer } from "./components/Composer";
-import { ConversationRegion } from "./components/ConversationRegion";
+import {
+  ConversationRegion,
+  getFinalAnnouncementLedgerForScope,
+} from "./components/ConversationRegion";
 import { LifeRegion } from "./components/LifeRegion";
 import {
   OrbitNavigation,
@@ -56,7 +62,9 @@ const INITIAL_ANNOUNCED_FACTS: PresenceAnnouncedFacts = {
 };
 
 export function PresenceExperience() {
-  const { snapshot, actions } = usePresenceController();
+  const owner = presenceControllerOwner;
+  const { snapshot, actions } = usePresenceController(owner);
+  const announcementLedger = getFinalAnnouncementLedgerForScope(owner);
   const [ui, setUi] = useState<PresenceUiState>(INITIAL_UI_STATE);
   const orbitRegionRef = useRef<HTMLDivElement>(null);
   const soulFieldRef = useRef<HTMLDivElement>(null);
@@ -241,6 +249,7 @@ export function PresenceExperience() {
         <div className={styles.presenceField}>
           <section className={styles.dialogueSurface} aria-label="Presence 对话场">
             <ConversationRegion
+              announcementLedger={announcementLedger}
               assistantLabel={assistantLabel}
               conversation={snapshot.conversation}
               headerAction={
