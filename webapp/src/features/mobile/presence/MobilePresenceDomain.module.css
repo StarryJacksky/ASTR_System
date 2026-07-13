@@ -1,0 +1,39 @@
+.gate {
+  display: grid;
+  min-inline-size: 0;
+  max-inline-size: 52rem;
+  gap: var(--space-4);
+  padding-block: clamp(var(--space-6), 12dvh, var(--space-8));
+  padding-inline: clamp(var(--space-3), 5vw, var(--space-7));
+  border-block: 1px solid var(--astr-hairline-strong);
+  border-inline-start: 3px solid var(--astr-soul);
+  background: var(--astr-surface);
+  color: var(--astr-text);
+}
+
+.gate h1,
+.gate p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gate h1 {
+  max-inline-size: 14ch;
+  font-family: var(--font-display);
+  font-size: clamp(var(--type-3), 10vw, var(--type-5));
+  line-height: var(--leading-display);
+}
+
+.gate p:not(.eyebrow) {
+  max-inline-size: 42rem;
+  color: var(--astr-text-2);
+  font-size: var(--type-1);
+  line-height: var(--leading-long);
+}
+
+.eyebrow {
+  color: var(--astr-soul);
+  font-family: var(--font-mono);
+  font-size: var(--type--1);
+  letter-spacing: 0.14em;
+}
