@@ -59,7 +59,6 @@ export function TrustedMobilePresenceDomain({
       <dl
         aria-label="Presence 连接事实"
         className={styles.statusRail}
-        role="group"
       >
         <div>
           <dt>Core</dt>

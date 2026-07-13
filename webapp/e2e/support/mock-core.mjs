@@ -38,6 +38,10 @@ function createDefaultState() {
     scenario: "happy",
     statusMode: "ready",
     ingestDelayMs: 0,
+    policyMode: "ready",
+    policyDelayMs: 0,
+    auditMode: "ready",
+    auditDelayMs: 0,
     transcription: "语音回填文本",
     effector: {
       stopped: false,
@@ -56,7 +60,15 @@ function createDefaultState() {
       threshold: 0.72,
       require: false,
     },
-    counts: Object.create(null),
+    counts: Object.assign(Object.create(null), {
+      status: 0,
+      ingest: 0,
+      transcribe: 0,
+      stream: 0,
+      "effector-status": 0,
+      "effector-policy": 0,
+      "effector-audit": 0,
+    }),
     emitted: [],
   };
 }
@@ -158,6 +170,7 @@ function corsHeaders() {
 }
 
 function sendJson(response, status, value) {
+  if (response.destroyed || response.writableEnded) return;
   const body = JSON.stringify(value);
   response.writeHead(status, {
     ...corsHeaders(),
@@ -171,6 +184,21 @@ function sendJson(response, status, value) {
 function sendEmpty(response, status = 204) {
   response.writeHead(status, { ...corsHeaders(), "Cache-Control": "no-store" });
   response.end();
+}
+
+function sendAfterDelay(response, delayMs, callback) {
+  const send = () => {
+    pendingResponses.delete(response);
+    if (response.destroyed || response.writableEnded) return;
+    callback();
+  };
+  if (delayMs > 0) {
+    pendingResponses.add(response);
+    response.once("close", () => pendingResponses.delete(response));
+    schedule(send, delayMs);
+  } else {
+    send();
+  }
 }
 
 async function readJson(request) {
@@ -493,6 +521,10 @@ async function handleControl(request, response, pathname) {
     sendJson(response, 200, {
       scenario: state.scenario,
       statusMode: state.statusMode,
+      policyMode: state.policyMode,
+      policyDelayMs: state.policyDelayMs,
+      auditMode: state.auditMode,
+      auditDelayMs: state.auditDelayMs,
       effector: state.effector,
       counts: state.counts,
       emitted: state.emitted,
@@ -516,6 +548,24 @@ async function handleControl(request, response, pathname) {
     if (typeof patch.statusMode === "string") state.statusMode = patch.statusMode;
     if (Number.isFinite(patch.ingestDelayMs)) state.ingestDelayMs = patch.ingestDelayMs;
     if (typeof patch.transcription === "string") state.transcription = patch.transcription;
+    if (typeof patch.policyMode === "string") {
+      if (!["ready", "http-error"].includes(patch.policyMode)) {
+        throw new Error(`unsupported policy mode: ${patch.policyMode}`);
+      }
+      state.policyMode = patch.policyMode;
+    }
+    if (Number.isFinite(patch.policyDelayMs)) {
+      state.policyDelayMs = patch.policyDelayMs;
+    }
+    if (typeof patch.auditMode === "string") {
+      if (!["ready", "http-error"].includes(patch.auditMode)) {
+        throw new Error(`unsupported audit mode: ${patch.auditMode}`);
+      }
+      state.auditMode = patch.auditMode;
+    }
+    if (Number.isFinite(patch.auditDelayMs)) {
+      state.auditDelayMs = patch.auditDelayMs;
+    }
     if (patch.effector && typeof patch.effector === "object") {
       state.effector = { ...state.effector, ...patch.effector };
     }
@@ -589,7 +639,15 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET"
     ) {
       count("effector-policy");
-      sendJson(response, 200, cloneJson(state.policy));
+      const policyMode = state.policyMode;
+      const policy = cloneJson(state.policy);
+      sendAfterDelay(response, state.policyDelayMs, () => {
+        if (policyMode === "http-error") {
+          sendJson(response, 503, { detail: "mock effector policy unavailable" });
+        } else {
+          sendJson(response, 200, policy);
+        }
+      });
       return;
     }
     if (
@@ -611,12 +669,17 @@ const server = http.createServer(async (request, response) => {
       request.method === "GET"
     ) {
       count("effector-audit");
+      const auditMode = state.auditMode;
       const payload = auditPayload(url);
-      if (payload === null) {
-        sendJson(response, 422, { detail: "limit must be an integer" });
-        return;
-      }
-      sendJson(response, 200, payload);
+      sendAfterDelay(response, state.auditDelayMs, () => {
+        if (auditMode === "http-error") {
+          sendJson(response, 503, { detail: "mock effector audit unavailable" });
+        } else if (payload === null) {
+          sendJson(response, 422, { detail: "limit must be an integer" });
+        } else {
+          sendJson(response, 200, payload);
+        }
+      });
       return;
     }
     if (url.pathname === "/v1/voice/transcribe" && request.method === "POST") {
@@ -657,7 +720,6 @@ const server = http.createServer(async (request, response) => {
       count("effector-status");
       const effector = { ...state.effector };
       const sendStatus = () => {
-        pendingResponses.delete(response);
         if (effector.statusMode === "http-error") {
           sendJson(response, 503, { detail: "mock effector unavailable" });
         } else {
@@ -668,13 +730,7 @@ const server = http.createServer(async (request, response) => {
           });
         }
       };
-      if (effector.statusDelayMs > 0) {
-        pendingResponses.add(response);
-        response.once("close", () => pendingResponses.delete(response));
-        schedule(sendStatus, effector.statusDelayMs);
-      } else {
-        sendStatus();
-      }
+      sendAfterDelay(response, effector.statusDelayMs, sendStatus);
       return;
     }
     if (url.pathname === "/v1/effector/estop" && request.method === "POST") {

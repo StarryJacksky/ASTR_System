@@ -83,7 +83,9 @@ describe("TrustedMobilePresenceDomain", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "与 露怀秋 对话" }),
     ).toBeVisible();
-    const facts = screen.getByRole("group", { name: "Presence 连接事实" });
+    const facts = screen.getByLabelText("Presence 连接事实");
+    expect(facts.tagName).toBe("DL");
+    expect(facts).not.toHaveAttribute("role");
     expect(
       within(within(facts).getByText("Core").closest("div")!).getByText(
         "可达",

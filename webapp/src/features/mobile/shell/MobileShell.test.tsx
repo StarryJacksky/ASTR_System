@@ -3,9 +3,10 @@ import { resolve } from "node:path";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 
-import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { semanticStore } from "@/lib/semantic-store";
 import { MobileAuthorityProvider } from "../authority/MobileAuthorityProvider";
 import { MobileShell } from "./MobileShell";
 
@@ -44,6 +45,13 @@ function tree(serverAuthorityTrusted: boolean, children: ReactNode = <h1>任务<
 describe("MobileShell", () => {
   beforeEach(() => {
     pathname = "/mobile/tasks";
+    document.getElementById("__next-route-announcer__")?.remove();
+    semanticStore.getState().clearAnnouncement();
+  });
+
+  afterEach(() => {
+    document.getElementById("__next-route-announcer__")?.remove();
+    vi.restoreAllMocks();
   });
 
   it("renders one semantic main and the exact current five-domain nav", () => {
@@ -99,6 +107,41 @@ describe("MobileShell", () => {
 
     expect(curve).toHaveAttribute("aria-hidden", "true");
     expect(curve?.querySelectorAll("path")).toHaveLength(1);
+  });
+
+  it("owns one Mobile live region by silencing and restoring Next's route announcer", async () => {
+    const nextAnnouncer = document.createElement("div");
+    nextAnnouncer.id = "__next-route-announcer__";
+    nextAnnouncer.setAttribute("aria-live", "assertive");
+    nextAnnouncer.setAttribute("role", "alert");
+    document.body.append(nextAnnouncer);
+
+    const view = render(tree(true));
+
+    await waitFor(() => {
+      expect(nextAnnouncer).not.toHaveAttribute("aria-live");
+      expect(nextAnnouncer).not.toHaveAttribute("role");
+      expect(nextAnnouncer).toHaveAttribute("aria-hidden", "true");
+    });
+
+    view.unmount();
+    expect(nextAnnouncer).toHaveAttribute("aria-live", "assertive");
+    expect(nextAnnouncer).toHaveAttribute("role", "alert");
+    expect(nextAnnouncer).not.toHaveAttribute("aria-hidden");
+  });
+
+  it("publishes Mobile route changes through the application announcer", async () => {
+    const announce = vi.spyOn(semanticStore.getState(), "announce");
+    const view = render(tree(true));
+    announce.mockClear();
+
+    pathname = "/mobile/knowledge";
+    view.rerender(tree(true, <h1>知识</h1>));
+
+    await waitFor(() => {
+      expect(announce).toHaveBeenCalledTimes(1);
+      expect(announce).toHaveBeenCalledWith("已进入 知识");
+    });
   });
 
   it("keeps Shell production files free of domain business imports", () => {

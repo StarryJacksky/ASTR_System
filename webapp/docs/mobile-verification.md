@@ -70,13 +70,51 @@ Mock Core evidence proves deterministic frontend behavior only. It is not proof 
 | Evidence | Status | Required interpretation |
 | --- | --- | --- |
 | Component/unit, coverage, lint, typecheck, six-route production build, and stamped source/chunk boundary | Complete for the assembled shell | Does not replace route-level browser evidence. |
-| Trusted and remote-origin request/authority matrix | Pending Task 10 | Remote Presence/Safety must show gates and make zero Core requests. |
-| Axe, one-live-region, overflow, 200%/400% reflow, focus, and desktop soft-keyboard contraction proxy | Pending Task 10 | Desktop simulation is not a real mobile keyboard or screen reader. |
-| Five domains × dark/light × 390×844/430×932 visual baselines | Pending Task 10 | Exactly 20 inspected screenshots are required. |
-| LCP, CLS, TBT, Event Timing, and lab interaction proxy | Pending Task 10 | Field INP remains pending even after laboratory gates pass. |
+| Trusted and remote-origin request/authority matrix | Automated evidence complete | Remote Presence/Safety gate before owner mount, expose no root/Admin bypass, make zero business requests, and leave all seven mock counters at zero. |
+| Axe, app-owned live region, overflow, 200%/400% reflow, focus, and desktop soft-keyboard contraction proxy | Automated desktop evidence complete | The Mobile document owns exactly one live region: the app StateAnnouncer. While Mobile is mounted, Next's framework announcer is neutralized and Mobile route changes are republished through the app-owned announcer. Desktop simulation is not a real mobile keyboard or screen reader. |
+| Five domains × dark/light × 390×844/430×932 visual baselines | Automated evidence complete | All 20 named screenshots passed without updates and were individually inspected with `view_image`. |
+| LCP, CLS, TBT, Event Timing, and lab interaction proxy | Laboratory metrics complete; real-hidden gate blocked | The measured thresholds pass, but this Windows Chromium automation environment never exposes a real hidden page. Field INP also remains pending. |
 | Pixel 6a, Android Chrome, real soft keyboard, and TalkBack | Pending real-device/manual AT run | Must remain explicitly pending; Playwright cannot certify these rows. |
 
-The planned route-level matrix also covers 320, 390, 430, and 768 CSS-pixel widths, dark/light themes, reduced motion, 200%/400% equivalents, and focused inputs above the fixed navigation. Do not report W4 as fully accepted until the automated rows have evidence. Even then, W4 remains `partial` while the real-device/AT rows and future product contracts above are incomplete.
+The route-level matrix covers 320, 390, 430, and 768 CSS-pixel widths, dark/light themes, reduced motion, 200%/400% equivalents, and focused inputs above the fixed navigation. W4 is not fully accepted because the required real-hidden Chromium gate is still red. It also remains `partial` while the real-device/AT rows and future product contracts above are incomplete.
+
+## Task 10 evidence snapshot — 2026-07-14
+
+The authoritative production build exposed all six Mobile routes. Playwright discovery listed 160 tests in 13 configured files, including 71 tests across all five non-empty Mobile spec files. The Mobile boundary mutation suite passed 85/85. The stamped production checker scanned 36 source files, found exactly the five domains, checked client-chunk ownership as Presence 2, Tasks 1, Workbench 0, Knowledge 0, and Safety 1, and reported zero violations. Mock Core contract tests passed 26/26. The fresh repository unit run passed 1,439/1,439 across 95 files; coverage was 92.3% statements, 91.99% branches, 93.93% functions, and 93.28% lines; lint and typecheck both exited zero.
+
+The eligible Mobile browser matrix has 70 passing tests after excluding only the separately hard-failing real-hidden gate:
+
+- authority 4/4, including absolute `astr-remote.test` fail-closed checks;
+- function 22/22, including four independent unsaved-draft remount contexts and three independent Safety error/stale/retry channels;
+- accessibility and responsive geometry 29/29, with zero axe critical/serious findings in the exact 15-state matrix;
+- visual 10/10, representing 20 dark/light viewport baselines, all individually inspected;
+- performance formula, ambient, hydrated ambient, stable/reduced RAF, and laboratory metrics 5/5.
+
+The complete configured browser regression run, excluding only the separately executed real-hidden gate, finished with 157 passed, two existing opt-in tests skipped by design, and zero failures across Control, Mobile, and Presence. Playwright artifacts and HTML reports are isolated under a sanitized per-invocation run ID; concurrent configuration probes resolved to distinct output directories, preventing one invocation from deleting another invocation's trace files.
+
+Remote Presence and Safety leave `status`, `ingest`, `transcribe`, `stream`, `effector-status`, `effector-policy`, and `effector-audit` at zero. Trusted Presence performs exactly one status read, one Effector status read, and one EventSource open. Trusted Safety performs exactly its three documented GETs. Tasks, Workbench, and Knowledge perform no product operation.
+
+The latest raw laboratory attachment used a fixed 5-second post-LCP window:
+
+| Metric | Measured | Gate |
+| --- | ---: | ---: |
+| LCP | 136 ms | ≤ 2,500 ms |
+| CLS | 0 | ≤ 0.1 |
+| TBT | 0 ms | ≤ 200 ms |
+| observed Event Timing | 16 ms | ≤ 200 ms |
+| click-to-next-paint laboratory proxy | 26.2 ms | ≤ 200 ms |
+
+All four required PerformanceObserver types were available. The evidence window ran from 136 ms through 5,136 ms and was sampled at 5,260.4 ms. This is laboratory evidence, not field INP.
+
+The real-hidden test intentionally remains a hard failure. Bundled Chromium, installed Chrome, and installed Edge were each run headed. A user-like link opened the foreground tab in the same browser window, CDP confirmed the shared window ID, and Chromium accepted a real minimized window state; nevertheless, `document.visibilityState` remained `visible`. No synthetic event or lifecycle override was used. The application RAF probe still reported requested 0, executed 0, cancelled 0, active 0, and no application stacks while the runtime remained visible. Per the W4 plan, that is an environment blocker, not a pass or skip.
+
+Reproduction for the default bundled browser:
+
+```powershell
+npm run test:e2e:no-build -- e2e/mobile-performance.spec.ts -g "real hidden" --headed
+```
+
+Set `ASTR_E2E_BROWSER_CHANNEL=chrome` or `msedge` to repeat the same check against an installed Chromium channel. A real Android Chrome/Pixel 6a soft keyboard run, TalkBack session, real-user monitoring, and field INP remain pending.
 
 ## Verification order
 

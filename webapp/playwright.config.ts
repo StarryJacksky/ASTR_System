@@ -1,9 +1,21 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const APP_ORIGIN = "http://127.0.0.1:3100";
+const REMOTE_APP_ORIGIN = "http://astr-remote.test:3100";
 const MOCK_CORE_ORIGIN = "http://127.0.0.1:18300";
 const coreMode = process.env.ASTR_E2E_CORE_MODE === "real" ? "real" : "mock";
+const browserChannel =
+  process.env.ASTR_E2E_BROWSER_CHANNEL === "chrome"
+    ? "chrome"
+    : process.env.ASTR_E2E_BROWSER_CHANNEL === "msedge"
+      ? "msedge"
+      : undefined;
 const externalServers = process.env.ASTR_E2E_EXTERNAL_SERVERS === "1";
+const runId = (
+  process.env.ASTR_E2E_RUN_NONCE ?? `pid-${process.pid}`
+).replace(/[^a-zA-Z0-9_-]/g, "_");
+const artifactOutputDir = `test-results/presence/${runId}`;
+const htmlReportDir = `playwright-report/${runId}`;
 const coreOrigin =
   coreMode === "real"
     ? process.env.ASTR_REAL_CORE_URL ?? "http://127.0.0.1:8300"
@@ -45,7 +57,7 @@ export default defineConfig({
   testMatch:
     coreMode === "real"
       ? /presence-real-smoke\.spec\.ts/
-      : /(?:presence(?:-[\w-]+)?|control(?:-a11y)?)\.spec\.ts/,
+      : /(?:presence(?:-[\w-]+)?|control(?:-a11y)?|mobile(?:-[\w-]+)?)\.spec\.ts/,
   testIgnore:
     coreMode === "real" ? undefined : /presence-real-smoke\.spec\.ts/,
   fullyParallel: false,
@@ -53,10 +65,11 @@ export default defineConfig({
   forbidOnly: true,
   timeout: 35_000,
   expect: { timeout: 10_000 },
-  outputDir: "test-results/presence",
-  reporter: [["line"], ["html", { open: "never", outputFolder: "playwright-report" }]],
+  outputDir: artifactOutputDir,
+  reporter: [["line"], ["html", { open: "never", outputFolder: htmlReportDir }]],
   use: {
     ...devices["Desktop Chrome"],
+    ...(browserChannel ? { channel: browserChannel } : {}),
     baseURL: APP_ORIGIN,
     locale: "zh-CN",
     timezoneId: "Asia/Taipei",
@@ -64,8 +77,11 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    launchOptions: {
+      args: ["--host-resolver-rules=MAP astr-remote.test 127.0.0.1"],
+    },
   },
   webServer: externalServers ? undefined : servers,
 });
 
-export { APP_ORIGIN, MOCK_CORE_ORIGIN };
+export { APP_ORIGIN, MOCK_CORE_ORIGIN, REMOTE_APP_ORIGIN };
