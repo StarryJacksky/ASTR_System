@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/system/AppShell";
@@ -22,6 +22,12 @@ const notoSerif = Noto_Serif_SC({
 export const metadata: Metadata = {
   title: "星枢 · ASTR 观测舰",
   description: "主权 AI 观测舰 —— 灵魂与躯壳解耦；舰上住着谁，由灵魂数据说了算。",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

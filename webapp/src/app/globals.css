@@ -164,6 +164,13 @@ body {
   opacity: 0.025;
 }
 
+body:has([data-route-surface="mobile"]) .astr-ambient,
+body:has([data-route-surface="mobile"]) .astr-grain {
+  display: none;
+  animation: none;
+  background: none;
+}
+
 /* Material panel: opaque, stable, and bounded by a hairline. */
 .astr-panel {
   background: var(--astr-surface);

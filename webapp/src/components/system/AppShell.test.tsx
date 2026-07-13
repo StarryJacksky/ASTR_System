@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { StrictMode, useState } from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -69,6 +72,18 @@ describe("AppShell", () => {
       announcement: null,
       dispatch: ORIGINAL_SEMANTIC_DISPATCH,
     });
+  });
+
+  it("suppresses global ambient and grain from the Mobile SSR witness", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+    const rule = css.match(
+      /body:has\(\[data-route-surface="mobile"\]\) \.astr-ambient,[\s\S]*?body:has\(\[data-route-surface="mobile"\]\) \.astr-grain\s*\{([\s\S]*?)\}/,
+    )?.[1];
+
+    expect(rule).toBeDefined();
+    expect(rule).toMatch(/display:\s*none/);
+    expect(rule).toMatch(/animation:\s*none/);
+    expect(rule).toMatch(/background:\s*none/);
   });
 
   it("provides one main target, one announcer, and a 44px fallback visual-motion control", () => {
