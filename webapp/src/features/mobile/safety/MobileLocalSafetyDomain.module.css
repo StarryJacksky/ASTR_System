@@ -1,0 +1,321 @@
+.domain {
+  inline-size: 100%;
+  min-inline-size: 0;
+  color: var(--astr-text);
+  overflow-wrap: anywhere;
+}
+
+.domainHeader {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-end: clamp(1.5rem, 5vw, 3.5rem);
+  border-block-end: 1px solid var(--astr-hairline-strong);
+  padding-block-end: 1rem;
+}
+
+.domainHeader h1,
+.trustedHeader h2,
+.channelHeader h3,
+.domainHeader p,
+.trustedHeader p,
+.channelHeader p,
+.gate p,
+.primaryEvidence,
+.channelError,
+.verifiedAt,
+.surfaceLegend {
+  margin: 0;
+}
+
+.domainHeader h1 {
+  max-inline-size: 12ch;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 9vw, 4.75rem);
+  font-weight: 620;
+  letter-spacing: -0.045em;
+  line-height: 0.96;
+}
+
+.eyebrow,
+.coordinate,
+.surfaceLegend {
+  color: var(--astr-soul);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.gate {
+  max-inline-size: 52rem;
+  min-inline-size: 0;
+  border-block: 1px solid var(--astr-hairline-strong);
+  border-inline-start: 3px solid var(--astr-soul);
+  background: var(--astr-surface);
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  color: var(--astr-text-2);
+}
+
+.gate p {
+  max-inline-size: 48ch;
+  font-size: clamp(1rem, 3.8vw, 1.3rem);
+  line-height: 1.65;
+}
+
+.trusted {
+  display: grid;
+  min-inline-size: 0;
+  gap: clamp(1.25rem, 4vw, 2rem);
+}
+
+.trustedHeader {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.trustedHeader h2 {
+  max-inline-size: 24ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.35rem, 5.6vw, 2.6rem);
+  font-weight: 610;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.trustedNote {
+  max-inline-size: 58ch;
+  color: var(--astr-text-2);
+  line-height: 1.65;
+}
+
+.evidenceSurface {
+  display: grid;
+  min-inline-size: 0;
+  gap: clamp(0.9rem, 3vw, 1.5rem);
+  border-block: 1px solid var(--astr-hairline-strong);
+  border-inline-start: 3px solid var(--astr-soul);
+  background: var(--astr-surface);
+  padding: clamp(1rem, 4vw, 2rem);
+}
+
+.surfaceLegend {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-block-end: 1px solid var(--astr-hairline);
+  padding-block-end: 0.75rem;
+  color: var(--astr-text-3);
+}
+
+.surfaceLegend span:first-child {
+  color: var(--astr-soul);
+}
+
+.channelGrid {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 clamp(1rem, 4vw, 2.5rem);
+}
+
+.channel {
+  min-inline-size: 0;
+  border-block-start: 1px solid var(--astr-hairline);
+  padding-block: clamp(1rem, 4vw, 1.5rem);
+}
+
+.statusChannel {
+  grid-column: 1 / -1;
+  border-block-start: 3px solid var(--astr-soul);
+  padding-block: clamp(1.25rem, 5vw, 2.25rem);
+}
+
+.policyChannel {
+  padding-inline-end: clamp(0rem, 2vw, 1.25rem);
+}
+
+.auditChannel {
+  border-inline-start: 1px solid var(--astr-hairline);
+  padding-inline-start: clamp(1rem, 3vw, 1.75rem);
+}
+
+.channelHeader {
+  display: flex;
+  min-inline-size: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.channelHeader h3 {
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 3.8vw, 1.4rem);
+  font-weight: 610;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+.phase {
+  margin-block-start: 0.35rem;
+  color: var(--astr-text-2);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.channelValue {
+  min-inline-size: 0;
+  margin-block-start: 1.1rem;
+}
+
+.primaryEvidence {
+  color: var(--astr-text);
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 4.8vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.compactFacts,
+.evidenceList {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0;
+  margin: 1rem 0 0;
+}
+
+.compactFacts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-inline-size: 34rem;
+}
+
+.compactFacts div,
+.evidenceList div {
+  min-inline-size: 0;
+  border-block-start: 1px solid var(--astr-hairline);
+  padding-block: 0.72rem;
+}
+
+.compactFacts div + div {
+  border-inline-start: 1px solid var(--astr-hairline);
+  padding-inline-start: 1rem;
+}
+
+.compactFacts dt,
+.evidenceList dt {
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.compactFacts dd,
+.evidenceList dd {
+  margin: 0.28rem 0 0;
+  color: var(--astr-text);
+  line-height: 1.5;
+}
+
+.channelError {
+  margin-block-start: 0.9rem;
+  border-inline-start: 2px solid var(--astr-danger);
+  padding-inline-start: 0.75rem;
+  color: var(--astr-danger);
+  line-height: 1.5;
+}
+
+.verifiedAt {
+  display: block;
+  margin-block-start: 0.9rem;
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.action {
+  min-block-size: var(--touch-target);
+  min-inline-size: var(--touch-target);
+  border: 1px solid var(--astr-soul);
+  background: var(--astr-surface-2);
+  padding: 0.65rem 0.85rem;
+  color: var(--astr-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.action:focus-visible,
+.controlRail a:focus-visible {
+  outline: 2px solid var(--astr-action);
+  outline-offset: 3px;
+}
+
+.controlRail {
+  display: flex;
+  min-inline-size: 0;
+  justify-content: flex-end;
+  border-block-start: 1px solid var(--astr-hairline-strong);
+  padding-block-start: 1rem;
+}
+
+.controlRail a {
+  min-block-size: var(--touch-target);
+  min-inline-size: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  border-block-end: 1px solid var(--astr-soul);
+  padding: 0.6rem 0;
+  color: var(--astr-text);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+@media (max-width: 44rem) {
+  .channelGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .statusChannel {
+    grid-column: auto;
+  }
+
+  .policyChannel {
+    padding-inline-end: 0;
+  }
+
+  .auditChannel {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+}
+
+@media (max-width: 25rem) {
+  .channelHeader,
+  .surfaceLegend {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .action {
+    inline-size: 100%;
+  }
+
+  .compactFacts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compactFacts div + div {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+}
