@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 
 import styles from "./EffectorWorkspace.module.css";
 
@@ -34,6 +34,13 @@ export function SegmentedRadio<Value extends string>({
 }: SegmentedRadioProps<Value>) {
   const legendId = useId();
   const radioRefs = useRef(new Map<Value, HTMLButtonElement>());
+  const restoreFocusRef = useRef<Value | null>(null);
+
+  useEffect(() => {
+    if (disabled || restoreFocusRef.current === null) return;
+    restoreFocusRef.current = null;
+    radioRefs.current.get(value)?.focus();
+  }, [disabled, value]);
 
   const selectFromKey = (
     event: KeyboardEvent<HTMLButtonElement>,
@@ -49,7 +56,10 @@ export function SegmentedRadio<Value extends string>({
     if (nextIndex === null) return;
     event.preventDefault();
     const next = options[nextIndex];
-    if (next.value !== value) onChange(next.value);
+    if (next.value !== value) {
+      restoreFocusRef.current = next.value;
+      onChange(next.value);
+    }
     radioRefs.current.get(next.value)?.focus();
   };
 
@@ -78,7 +88,10 @@ export function SegmentedRadio<Value extends string>({
               tabIndex={selected ? 0 : -1}
               type="button"
               onClick={() => {
-                if (!disabled && !selected) onChange(option.value);
+                if (!disabled && !selected) {
+                  restoreFocusRef.current = option.value;
+                  onChange(option.value);
+                }
               }}
               onKeyDown={(event) => selectFromKey(event, index)}
             >

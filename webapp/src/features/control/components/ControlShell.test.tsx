@@ -26,6 +26,7 @@ describe("Control shell", () => {
     expect(screen.getByLabelText("当前档案")).toHaveTextContent("执行策略与审计");
     expect(screen.getByText("SURFACE W2")).toBeVisible();
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
+    expect(screen.getByRole("main")).toHaveAttribute("tabindex", "0");
     expect(screen.getByRole("link", { name: "跳到模块索引" })).toHaveAttribute(
       "href",
       "#module-index",

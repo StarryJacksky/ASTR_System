@@ -101,4 +101,41 @@ describe("SegmentedRadio", () => {
     fireEvent.keyDown(radios[0], { key: "ArrowRight" });
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("restores focus to authoritative selection after a disabled save cycle", () => {
+    const onChange = vi.fn();
+    const view = render(
+      <SegmentedRadio
+        label="审批模式"
+        value="ask"
+        options={OPTIONS}
+        onChange={onChange}
+      />,
+    );
+    const ask = screen.getByRole("radio", { name: "请求" });
+    ask.focus();
+    fireEvent.keyDown(ask, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenCalledWith("audited");
+
+    view.rerender(
+      <SegmentedRadio
+        label="审批模式"
+        value="audited"
+        options={OPTIONS}
+        disabled
+        onChange={onChange}
+      />,
+    );
+    screen.getByRole("radio", { name: "自审核" }).blur();
+    view.rerender(
+      <SegmentedRadio
+        label="审批模式"
+        value="audited"
+        options={OPTIONS}
+        onChange={onChange}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: "自审核" })).toHaveFocus();
+  });
 });

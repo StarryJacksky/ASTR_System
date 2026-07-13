@@ -86,7 +86,7 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
           </div>
         </header>
 
-        <main className={styles.main} id="main-content">
+        <main className={styles.main} id="main-content" tabIndex={0}>
           {children}
         </main>
       </div>

@@ -195,6 +195,16 @@
   gap: 10px;
 }
 
+.headerTools > [data-visual-motion-route-slot] {
+  display: inline-flex;
+}
+
+.headerTools :global(.astr-motion-toggle) {
+  position: static;
+  z-index: auto;
+  inset: auto;
+}
+
 .atlasDisclosure {
   position: static;
 }
@@ -268,7 +278,7 @@
 .dossier::before {
   position: absolute;
   z-index: -1;
-  inset: -28px -24px auto auto;
+  inset: -28px 0 auto auto;
   width: 136px;
   height: 136px;
   border-top: 1px solid var(--astr-hairline-strong);
