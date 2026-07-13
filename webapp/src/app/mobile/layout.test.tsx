@@ -120,7 +120,7 @@ describe("Mobile route layout", () => {
     if (publicCoreUrl) expect(html).not.toContain(publicCoreUrl);
   });
 
-  it("reassesses the current environment on every server render", () => {
+  it("reassesses the current environment for every layout evaluation", () => {
     vi.stubEnv("ASTR_CORE_URL", "http://127.0.0.1:8300");
     vi.stubEnv("NEXT_PUBLIC_ASTR_CORE", "http://localhost:8300");
     expect(renderLayout()).toContain('data-server-authority-trusted="true"');
