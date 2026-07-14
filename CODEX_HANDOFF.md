@@ -3,12 +3,13 @@
 > 交接日期：2026-07-14
 > 工作分支：`codex/astr-frontend-redesign`
 > 远端：`origin = https://github.com/StarryJacksky/ASTR_System.git`
+> Soul 数据远端：`https://github.com/StarryJacksky/ASTR.git`（必须保持私有）
 
 ## 双仓拓扑与文档归属
 
 - **代码仓**：`D:\ASTR_System\astr`，远端为 `StarryJacksky/ASTR_System`。Core、Web、测试、设计规范、工程计划和本交接手册都进入这个仓库。
 - **数据根目录**：`D:\ASTR` 自身不是 Git 仓库，不能在这里直接执行提交。
-- **活动 Soul 数据仓**：`D:\ASTR\soul_package\justin`，当前分支为 `main`，保留独立提交历史；截至本次交接尚未配置 remote。它绝不能被推入公开代码仓。
+- **活动 Soul 数据仓**：`D:\ASTR\soul_package\justin`，当前分支为 `main`，保留独立提交历史；指定远端为 `StarryJacksky/ASTR`。首次推送前必须确认远端为私有并核对历史同源；它绝不能被推入公开代码仓。
 - `D:\ASTR\backups\...\justin` 是备份副本，`uv_cache` 是依赖缓存；两者都不是日常发布仓。
 - API keys、登录态、模型权重、浏览器 profile、依赖缓存和运行时秘密不得提交到任何远端。Soul/Memory 检查点只进入经过确认的私有数据远端，或使用加密 `git bundle` 迁移。
 
@@ -290,14 +291,14 @@ uv run pytest
 uv run astr core --port 8300
 ```
 
-另行恢复数据仓。若之后配置了私有远端：
+另行恢复私有数据仓：
 
 ```bash
 mkdir -p /Users/alice/ASTR/soul_package
-git clone <PRIVATE_SOUL_REPOSITORY_URL> /Users/alice/ASTR/soul_package/justin
+git clone https://github.com/StarryJacksky/ASTR.git /Users/alice/ASTR/soul_package/justin
 ```
 
-若仍无 remote，则先在 Windows 从 `D:\ASTR\soul_package\justin` 生成完整 bundle，将 bundle 通过加密介质带到 Mac，再恢复：
+若私有远端暂时不可用，则先在 Windows 从 `D:\ASTR\soul_package\justin` 生成完整 bundle，将 bundle 通过加密介质带到 Mac，再恢复：
 
 ```powershell
 git -c safe.directory=D:/ASTR/soul_package/justin -C D:/ASTR/soul_package/justin bundle create D:/ASTR/backups/justin-2026-07-14.bundle --all

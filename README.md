@@ -9,7 +9,7 @@
 ## 环境
 
 - Python 3.11（由 uv 锁定）、uv 包管理、Windows + PowerShell。
-- 数据根目录 `D:\ASTR\` 自身不是 Git 仓库；活动 SoulPackage 是独立仓 `D:\ASTR\soul_package\justin`，其余 `embodiments/`、`ops/`、`effector/` 与备份仍是仓库外运行数据。
+- 数据根目录 `D:\ASTR\` 自身不是 Git 仓库；活动 SoulPackage 是独立仓 `D:\ASTR\soul_package\justin`，其指定私有远端为 `https://github.com/StarryJacksky/ASTR.git`。其余 `embodiments/`、`ops/`、`effector/` 与备份仍是仓库外运行数据。
 
 ## 快速开始
 
