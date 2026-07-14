@@ -7,9 +7,14 @@ import {
 
 import {
   configureMockCore,
+  MOCK_CORE_ORIGIN,
   readMockCoreState,
   resetMockCore,
 } from "./support/mock-core-client";
+import {
+  installPresencePerformanceProbe,
+  readPresencePerformanceProbe,
+} from "./support/performance-evidence";
 
 const MODULE_IDS = [
   "dashboard",
@@ -33,6 +38,7 @@ const MODULE_IDS = [
 ] as const;
 
 const MODULE_HREFS = MODULE_IDS.map((id) => `/admin/${id}`);
+const PLANNED_IDS = MODULE_IDS.filter((id) => id !== "effector");
 const pageErrors = new WeakMap<Page, string[]>();
 
 test.beforeEach(async ({ page, request }) => {
@@ -61,10 +67,14 @@ test("renders the exact truthful 18-module Control index", async ({ page }) => {
     .toBeVisible();
 });
 
-test("serves all 18 registered routes and exposes policy controls only for Effector", async ({
+test("serves 18 truthful dossiers with exact direct Atlas access from every origin", async ({
   page,
 }) => {
-  for (const id of MODULE_IDS) {
+  const businessRequests = collectBusinessRequests(page);
+  const plannedQuestions = new Set<string>();
+
+  for (const id of [...PLANNED_IDS, "effector"] as const) {
+    businessRequests.length = 0;
     const response = await page.goto(`/admin/${id}`, { waitUntil: "domcontentloaded" });
     expect(response?.status(), `/admin/${id} status`).toBe(200);
     await expect(page.locator("main#main-content h1")).toHaveCount(1);
@@ -75,27 +85,102 @@ test("serves all 18 registered routes and exposes policy controls only for Effec
       await expect(policyForm.getByRole("radiogroup")).toHaveCount(2);
       await expect(page.getByRole("button", { name: "触发急停" })).toBeEnabled();
     } else {
+      const main = page.locator("main#main-content");
       await expect(policyForm).toHaveCount(0);
-      await expect(page.locator("main#main-content button")).toHaveCount(0);
+      await expect(main.locator(
+        "button, form, input, select, textarea, [contenteditable='true']",
+      )).toHaveCount(0);
       await expect(page.getByText("状态：规划中 · 无可执行操作")).toBeVisible();
+      const questions = page.getByRole("region", { name: "此档案必须回答" });
+      const authority = page.getByRole("region", { name: "尚未接入的权威证据" });
+      await expect(questions.getByRole("listitem")).toHaveCount(2);
+      expect(await authority.getByRole("listitem").count()).toBeGreaterThanOrEqual(1);
+      plannedQuestions.add((await questions.getByRole("listitem").first().innerText()).trim());
+    }
+
+    const summary = page.locator("summary#module-index");
+    const disclosure = summary.locator("xpath=..");
+    await summary.click();
+    const search = disclosure.getByRole("searchbox", { name: "检索 18 个模块" });
+    await expect(search).toBeFocused();
+    const links = disclosure.locator("a[href^='/admin/']");
+    await expect(links).toHaveCount(18);
+    expect(await links.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("href")),
+    )).toEqual(MODULE_HREFS);
+    await page.keyboard.press("Escape");
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(summary).toBeFocused();
+
+    if (id !== "effector") {
+      await nextMacrotask(page);
+      expect(businessRequests, `${id} business request ledger`).toEqual([]);
     }
   }
+
+  expect(plannedQuestions.size).toBe(PLANNED_IDS.length);
 });
 
-test("opens and closes the native atlas without losing keyboard focus", async ({ page }) => {
-  await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
+test("filters the root Atlas by index, subtitle, and title without changing route truth", async ({
+  page,
+}) => {
+  await page.goto("/admin", { waitUntil: "domcontentloaded" });
+  const search = page.getByRole("searchbox", { name: "检索 18 个模块" });
+  const moduleLinks = page.locator("main#main-content a[href^='/admin/']");
+
+  for (const query of ["A03", "星门", "Provider 与模型路由"]) {
+    await search.fill(query);
+    await expect(moduleLinks).toHaveCount(1);
+    await expect(moduleLinks).toHaveAttribute("href", "/admin/model-router");
+    await expect(moduleLinks).toHaveAttribute("data-status", "planned");
+    await expect(moduleLinks).toHaveAttribute("data-domain", "system");
+  }
+
+  await search.fill("不存在的模块");
+  await expect(page.locator("main#main-content").getByRole("status")).toHaveText(
+    "未找到匹配档案 · 18 条真实路由保持不变",
+  );
+  await expect(moduleLinks).toHaveCount(0);
+});
+
+test("keyboard Atlas navigation reaches a planned route, closes, and resets", async ({ page }) => {
+  const businessRequests = collectBusinessRequests(page);
+  await page.goto("/admin/dashboard", { waitUntil: "domcontentloaded" });
   const summary = page.locator("summary#module-index");
   const disclosure = summary.locator("xpath=..");
-
-  await summary.focus();
+  await summary.click();
+  const search = disclosure.getByRole("searchbox", { name: "检索 18 个模块" });
+  await search.fill("A03");
+  await page.keyboard.press("ArrowDown");
+  await expect(disclosure.getByRole("link", { name: /Provider 与模型路由/ })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(disclosure).toHaveAttribute("open", "");
-  await expect(summary).toBeFocused();
-  await expect(disclosure.locator("a[href^='/admin/']")).toHaveCount(18);
 
-  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/admin\/model-router$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Provider 与模型路由" }))
+    .toBeVisible();
+  await expect(page).toHaveTitle("Provider 与模型路由 · ASTR Control");
+  await expect(page.locator("#__next-route-announcer__")).toHaveText("Provider 与模型路由 · ASTR Control");
   await expect(disclosure).not.toHaveAttribute("open", "");
-  await expect(summary).toBeFocused();
+  await summary.click();
+  await expect(disclosure.getByRole("searchbox", { name: "检索 18 个模块" }))
+    .toHaveValue("");
+  await expect(disclosure.locator("a[href^='/admin/']")).toHaveCount(18);
+  await page.keyboard.press("Escape");
+  await nextMacrotask(page);
+  expect(businessRequests).toEqual([]);
+});
+
+test("pointer Atlas navigation closes without restoring focus to the old summary", async ({ page }) => {
+  await page.goto("/admin/memory", { waitUntil: "domcontentloaded" });
+  const summary = page.locator("summary#module-index");
+  const disclosure = summary.locator("xpath=..");
+  await summary.click();
+  await disclosure.getByRole("link", { name: /灵魂迁移/ }).click();
+
+  await expect(page).toHaveURL(/\/admin\/migration$/);
+  await expect(page.getByRole("heading", { level: 1, name: "灵魂迁移" })).toBeVisible();
+  await expect(disclosure).not.toHaveAttribute("open", "");
+  await expect(summary).not.toBeFocused();
 });
 
 test("switches only Control material while preserving module geometry and status", async ({
@@ -113,50 +198,111 @@ test("switches only Control material while preserving module geometry and status
   expect(await readModuleGeometryAndStatus(links)).toEqual(before);
 });
 
-for (const viewport of [
-  { label: "desktop", width: 1440, height: 1000 },
-  { label: "mobile", width: 390, height: 844 },
-] as const) {
-  for (const theme of ["dark", "light"] as const) {
-    test(`matches the approved ${viewport.label} ${theme} Control baseline`, async ({ page }) => {
-      await prepareTheme(page, theme, viewport);
-      await page.goto("/admin", { waitUntil: "domcontentloaded" });
-      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      await expect(page.locator("main#main-content a[href^='/admin/']")).toHaveCount(18);
-      await expectNoHorizontalOverflow(page);
-      await expect(page).toHaveScreenshot(
-        `control-${viewport.width}x${viewport.height}-${theme}.png`,
-        {
-          fullPage: true,
-          animations: "disabled",
-          caret: "hide",
-          scale: "css",
-        },
-      );
-    });
+const VISUAL_SURFACES = [
+  { label: "index", path: "/admin", snapshot: "control", kind: "index" },
+  {
+    label: "system planned dossier",
+    path: "/admin/model-router",
+    snapshot: "control-model-router",
+    kind: "dossier",
+  },
+  {
+    label: "Soul planned dossier",
+    path: "/admin/memory",
+    snapshot: "control-memory",
+    kind: "dossier",
+  },
+  {
+    label: "Effector workspace",
+    path: "/admin/effector",
+    snapshot: "control-effector",
+    kind: "effector",
+  },
+  {
+    label: "filtered disclosure",
+    path: "/admin/model-router",
+    snapshot: "control-atlas-filtered",
+    kind: "disclosure",
+  },
+] as const;
+
+for (const surface of VISUAL_SURFACES) {
+  for (const viewport of [
+    { label: "desktop", width: 1440, height: 1000 },
+    { label: "mobile", width: 390, height: 844 },
+  ] as const) {
+    for (const theme of ["dark", "light"] as const) {
+      test(`matches the approved ${surface.label} ${viewport.label} ${theme} baseline`, async ({
+        page,
+      }) => {
+        await prepareTheme(page, theme, viewport);
+        await page.goto(surface.path, { waitUntil: "domcontentloaded" });
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await prepareVisualSurface(page, surface.kind);
+        await expectNoHorizontalOverflow(page);
+        await expect(page).toHaveScreenshot(
+          `${surface.snapshot}-${viewport.width}x${viewport.height}-${theme}.png`,
+          {
+            fullPage: surface.kind !== "disclosure",
+            animations: "disabled",
+            caret: "hide",
+            scale: "css",
+          },
+        );
+      });
+    }
   }
 }
 
-test("has no horizontal overflow at 1440, 980, 390, or 320 CSS pixels", async ({ page }) => {
+test("index, planned dossiers, and open Atlas have no overflow at four widths", async ({
+  page,
+}) => {
+  await prepareTheme(page, "dark", { width: 1440, height: 1000 });
   for (const viewport of [
     { width: 1440, height: 1000 },
-    { width: 980, height: 900 },
+    { width: 768, height: 900 },
     { width: 390, height: 844 },
     { width: 320, height: 720 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("form", { name: "执行策略编辑" })).toBeVisible();
-    const controlHeader = page
-      .getByRole("navigation", { name: "模块面包屑" })
-      .locator("xpath=ancestor::header[1]");
-    const headerMetrics = await controlHeader.evaluate((element) => ({
-      clientHeight: element.clientHeight,
-      scrollHeight: element.scrollHeight,
-    }));
-    expect(headerMetrics.scrollHeight).toBeLessThanOrEqual(headerMetrics.clientHeight + 1);
-    await expectNoHorizontalOverflow(page);
+    for (const surface of [
+      { path: "/admin", kind: "index" },
+      { path: "/admin/model-router", kind: "dossier" },
+      { path: "/admin/memory", kind: "dossier" },
+      { path: "/admin/model-router", kind: "disclosure" },
+    ] as const) {
+      await page.goto(surface.path, { waitUntil: "domcontentloaded" });
+      await prepareVisualSurface(page, surface.kind);
+      await expectNoHorizontalOverflow(page);
+    }
   }
+});
+
+test("owns zero renderer contexts or continuous RAF in the static Control field", async ({
+  page,
+}) => {
+  await page.addInitScript(installPresencePerformanceProbe);
+  await page.goto("/admin/model-router", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("[data-route-surface='control']")).toBeVisible();
+  for (const selector of [".astr-ambient", ".astr-grain"]) {
+    await expect.poll(() => page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { display: style.display, animationName: style.animationName };
+    })).toEqual({ display: "none", animationName: "none" });
+  }
+  expect(await page.locator("canvas").count()).toBe(0);
+  expect(await page.evaluate(() => document.getAnimations().filter((animation) => {
+    const timing = animation.effect?.getComputedTiming();
+    return animation.playState === "running" && timing?.iterations === Number.POSITIVE_INFINITY;
+  }).length)).toBe(0);
+  await page.waitForTimeout(250);
+  const probe = await readPresencePerformanceProbe(page);
+  expect(probe.support.raf).toMatchObject({ installed: true, observed: true });
+  expect(probe.support.webgl).toMatchObject({ installed: true, observed: true });
+  expect(probe.raf.active).toBe(0);
+  expect(probe.dom.canvasCount).toBe(0);
+  expect(Math.max(...probe.webgl.contextCountSamples)).toBe(0);
+  expect(Math.max(...probe.webgl.successfulContextCreationSamples)).toBe(0);
 });
 
 test("sends one policy key and publishes the returned full effective policy", async ({
@@ -451,6 +597,48 @@ async function prepareTheme(
   }, theme);
 }
 
+async function prepareVisualSurface(
+  page: Page,
+  kind: "index" | "dossier" | "effector" | "disclosure",
+): Promise<void> {
+  if (kind === "index") {
+    await expect(page.locator("main#main-content a[href^='/admin/']")).toHaveCount(18);
+    return;
+  }
+  if (kind === "effector") {
+    await loadReadyEffector(page);
+    return;
+  }
+
+  await expect(page.getByRole("region", { name: "此档案必须回答" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "尚未接入的权威证据" })).toBeVisible();
+  if (kind === "disclosure") {
+    const summary = page.locator("summary#module-index");
+    await summary.click();
+    const disclosure = summary.locator("xpath=..");
+    const search = disclosure.getByRole("searchbox", { name: "检索 18 个模块" });
+    await expect(search).toBeFocused();
+    await search.fill("A03");
+    await expect(disclosure.locator("a[href^='/admin/']")).toHaveCount(1);
+    await expect(page.locator("main#main-content")).toHaveAttribute("inert", "");
+  }
+}
+
+function collectBusinessRequests(page: Page): string[] {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    const proxiedCore = url.pathname.startsWith("/api/core/");
+    const directMockCore = url.origin === MOCK_CORE_ORIGIN && url.pathname.startsWith("/v1/");
+    if (proxiedCore || directMockCore) requests.push(`${request.method()} ${request.url()}`);
+  });
+  return requests;
+}
+
+async function nextMacrotask(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+}
+
 async function loadReadyEffector(page: Page): Promise<void> {
   const response = await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
   expect(response?.status()).toBe(200);
@@ -496,6 +684,12 @@ async function fulfillAudit(
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   await expect.poll(() => page.evaluate(() => {
     const main = document.querySelector("main#main-content");
+    const atlases = [...document.querySelectorAll<HTMLElement>("[data-atlas-variant]")]
+      .filter((atlas) => {
+        const disclosure = atlas.closest("details");
+        return (!(disclosure instanceof HTMLDetailsElement) || disclosure.open) &&
+          atlas.getClientRects().length > 0 && atlas.clientWidth > 0;
+      });
     return {
       body: Math.max(0, document.body.scrollWidth - document.body.clientWidth),
       document: Math.max(
@@ -505,8 +699,12 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
       main: main instanceof HTMLElement
         ? Math.max(0, main.scrollWidth - main.clientWidth)
         : Number.POSITIVE_INFINITY,
+      atlas: atlases.reduce(
+        (maximum, atlas) => Math.max(maximum, atlas.scrollWidth - atlas.clientWidth),
+        0,
+      ),
     };
-  })).toEqual({ body: 0, document: 0, main: 0 });
+  })).toEqual({ body: 0, document: 0, main: 0, atlas: 0 });
 }
 
 async function readModuleGeometryAndStatus(

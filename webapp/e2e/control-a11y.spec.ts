@@ -24,7 +24,8 @@ test.afterEach(async ({ page }) => {
 
 for (const baseline of [
   { label: "Control index", path: "/admin", ready: false },
-  { label: "planned dossier", path: "/admin/dashboard", ready: false },
+  { label: "system planned dossier", path: "/admin/model-router", ready: false },
+  { label: "Soul planned dossier", path: "/admin/memory", ready: false },
   { label: "Effector ready", path: "/admin/effector", ready: true },
 ] as const) {
   test(`${baseline.label} has zero critical or serious axe violations`, async ({ page }) => {
@@ -34,6 +35,32 @@ for (const baseline of [
     if (baseline.ready) await expectReadyEffector(page);
     else await expect(page.locator("main#main-content h1")).toBeVisible();
     await expectNoBlockingAxeViolations(page, baseline.label);
+  });
+}
+
+for (const atlasState of [
+  { label: "filtered", query: "A03", resultCount: 1 },
+  { label: "no-result", query: "不存在的模块", resultCount: 0 },
+] as const) {
+  test(`disclosure ${atlasState.label} has zero critical or serious axe violations`, async ({
+    page,
+  }) => {
+    await prepareControlPage(page, { width: 1440, height: 1000 });
+    await page.goto("/admin/model-router", { waitUntil: "domcontentloaded" });
+    const summary = page.locator("summary#module-index");
+    await summary.click();
+    const disclosure = summary.locator("xpath=..");
+    const search = disclosure.getByRole("searchbox", { name: "检索 18 个模块" });
+    await expect(search).toBeFocused();
+    await search.fill(atlasState.query);
+    await expect(disclosure.locator("a[href^='/admin/']")).toHaveCount(atlasState.resultCount);
+    if (atlasState.resultCount === 0) {
+      await expect(disclosure.getByRole("status")).toHaveText(
+        "未找到匹配档案 · 18 条真实路由保持不变",
+      );
+    }
+    await expect(page.locator("main#main-content")).toHaveAttribute("inert", "");
+    await expectNoBlockingAxeViolations(page, `disclosure ${atlasState.label}`);
   });
 }
 
@@ -98,10 +125,29 @@ test("keyboard users traverse local skips and operate both policy radiogroups", 
   await expect(atlasSkip).toBeFocused();
   await page.keyboard.press("Enter");
   const atlasSummary = page.locator("summary#module-index");
-  await expect(atlasSummary).toBeFocused();
   await expect(atlasSummary.locator("xpath=..")).toHaveAttribute("open", "");
-  await page.keyboard.press("Enter");
+  const atlasSearch = page.getByRole("searchbox", { name: "检索 18 个模块" });
+  await expect(atlasSearch).toBeFocused();
+  await expect(page.locator("main#main-content")).toHaveAttribute("inert", "");
+  await page.keyboard.press("Shift+Tab");
   await expect(atlasSummary).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(atlasSummary.locator("xpath=..")).not.toHaveAttribute("open", "");
+  await expect(page.locator("main#main-content")).not.toHaveAttribute("inert");
+
+  await page.keyboard.press("Enter");
+  await expect(atlasSummary.locator("xpath=..")).toHaveAttribute("open", "");
+  await expect(atlasSearch).toBeFocused();
+  await expect(page.locator("main#main-content")).toHaveAttribute("inert", "");
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => {
+    const main = document.querySelector("main#main-content");
+    return main?.contains(document.activeElement) ?? true;
+  })).toBe(false);
+  await page.keyboard.press("Escape");
+  await expect(atlasSummary).toBeFocused();
+  await expect(atlasSummary.locator("xpath=..")).not.toHaveAttribute("open", "");
+  await expect(page.locator("main#main-content")).not.toHaveAttribute("inert");
 
   const policySkip = page.getByRole("link", { name: "跳到策略表单" });
   await policySkip.focus();
@@ -138,11 +184,44 @@ for (const zoom of [
     page,
   }) => {
     await prepareControlPage(page, zoom.viewport);
-    await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
-    await expectReadyEffector(page);
-    await expectNoHorizontalOverflow(page);
+      await page.goto("/admin/effector", { waitUntil: "domcontentloaded" });
+      await expectReadyEffector(page);
+      await expectNoHorizontalOverflow(page);
 
-    const controls = [
+      const atlasSummary = page.locator("summary#module-index");
+      await atlasSummary.click();
+      const disclosure = atlasSummary.locator("xpath=..");
+      const atlasPanel = disclosure
+        .locator("[data-atlas-variant='disclosure']")
+        .locator("xpath=..");
+      const atlasSearch = disclosure.getByRole("searchbox", { name: "检索 18 个模块" });
+      await expect(atlasSearch).toBeFocused();
+      await expect.poll(async () => {
+        const header = await atlasSummary.locator("xpath=ancestor::header[1]").boundingBox();
+        const panel = await atlasPanel.boundingBox();
+        return header !== null && panel !== null
+          ? panel.y - (header.y + header.height)
+          : Number.NEGATIVE_INFINITY;
+      }).toBeGreaterThanOrEqual(-1.5);
+      await atlasSearch.fill("A03");
+      await page.keyboard.press("ArrowDown");
+      const atlasResult = disclosure.getByRole("link", { name: /Provider 与模型路由/ });
+      await expect(atlasResult).toBeFocused();
+      for (const control of [atlasSearch, atlasResult]) {
+        await control.scrollIntoViewIfNeeded();
+        await expect.poll(() => isInsideHorizontalViewport(control)).toBe(true);
+        await expect.poll(() => isFullyVisibleWithinScrollport(control, atlasPanel)).toBe(true);
+      }
+      await atlasSearch.fill("不存在的模块");
+      const noResult = disclosure.getByRole("status");
+      await noResult.scrollIntoViewIfNeeded();
+      await expect(noResult).toHaveText("未找到匹配档案 · 18 条真实路由保持不变");
+      await expect.poll(() => isFullyVisibleWithinScrollport(noResult, atlasPanel)).toBe(true);
+      await page.keyboard.press("Escape");
+      await expect(atlasSummary).toBeFocused();
+      await expect.poll(() => isInsideHorizontalViewport(atlasSummary)).toBe(true);
+
+      const controls = [
       page.getByRole("button", { name: "切换昼夜主题" }),
       page.getByRole("button", { name: /视觉动效/ }),
       page.getByRole("button", { name: "触发急停" }),
@@ -258,4 +337,23 @@ async function isInsideHorizontalViewport(control: Locator): Promise<boolean> {
     const bounds = element.getBoundingClientRect();
     return bounds.left >= -0.5 && bounds.right <= window.innerWidth + 0.5;
   });
+}
+
+async function isFullyVisibleWithinScrollport(
+  control: Locator,
+  scrollport: Locator,
+): Promise<boolean> {
+  const [controlBounds, scrollportBounds, viewportHeight] = await Promise.all([
+    control.boundingBox(),
+    scrollport.boundingBox(),
+    control.evaluate(() => window.innerHeight),
+  ]);
+  if (controlBounds === null || scrollportBounds === null) return false;
+  const visibleTop = Math.max(0, scrollportBounds.y);
+  const visibleBottom = Math.min(
+    viewportHeight,
+    scrollportBounds.y + scrollportBounds.height,
+  );
+  return controlBounds.y >= visibleTop - 1.5 &&
+    controlBounds.y + controlBounds.height <= visibleBottom + 1.5;
 }

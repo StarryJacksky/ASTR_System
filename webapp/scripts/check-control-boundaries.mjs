@@ -23,6 +23,26 @@ const CONTROL_SOURCE_ROOTS = Object.freeze([
   "src/app/admin",
   "src/features/control",
 ]);
+const EXPECTED_CONTROL_MODULES = Object.freeze([
+  Object.freeze({ id: "dashboard", status: "planned" }),
+  Object.freeze({ id: "platform-gateway", status: "planned" }),
+  Object.freeze({ id: "model-router", status: "planned" }),
+  Object.freeze({ id: "plugins-skills-mcp", status: "planned" }),
+  Object.freeze({ id: "sessions-people", status: "planned" }),
+  Object.freeze({ id: "schedule", status: "planned" }),
+  Object.freeze({ id: "logs-trace", status: "planned" }),
+  Object.freeze({ id: "settings", status: "planned" }),
+  Object.freeze({ id: "resources-knowledge", status: "planned" }),
+  Object.freeze({ id: "setup", status: "planned" }),
+  Object.freeze({ id: "soul", status: "planned" }),
+  Object.freeze({ id: "memory", status: "planned" }),
+  Object.freeze({ id: "emotion", status: "planned" }),
+  Object.freeze({ id: "moa-teaching", status: "planned" }),
+  Object.freeze({ id: "training", status: "planned" }),
+  Object.freeze({ id: "voice", status: "planned" }),
+  Object.freeze({ id: "effector", status: "available" }),
+  Object.freeze({ id: "migration", status: "planned" }),
+]);
 const BUILD_FINGERPRINT_INPUTS = Object.freeze([
   "src",
   "public",
@@ -44,29 +64,32 @@ const ADMIN_MANIFESTS = Object.freeze([
     entry: "src/app/admin/[module]/page",
   }),
 ]);
-const SOURCE_EXTENSIONS = new Set([".css", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
+const SOURCE_EXTENSIONS = new Set([
+  ".cjs",
+  ".css",
+  ".cts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".mts",
+  ".ts",
+  ".tsx",
+]);
 const HEAVY_IMPORT_PATTERN = /(?:^|[/@.-])(?:pixi(?:\.js)?|live2d|soul[-_]lens)(?:$|[/@.-])/i;
 const HEAVY_CHUNK_PATTERN = /pixi|live2d|soul[-_]lens|\.2048(?:[/\\.]|$)/i;
-const RENDER_RULES = Object.freeze([
+const RENDER_CHUNK_PATTERN = /\brequestAnimationFrame\b|(?:\.\s*getContext\b|\[\s*["']getContext["']\s*\])|\b(?:createElement|jsx|jsxs)\s*\(\s*["']canvas["']|\bTicker\s*\.\s*shared\b|\bnew\s+(?:[A-Za-z_$][\w$]*\s*\.\s*)*Application\s*\(/i;
+const VISUAL_RULES = Object.freeze([
   Object.freeze({
-    rule: "control-render-request-animation-frame",
-    pattern: /\brequestAnimationFrame\s*\(/g,
+    rule: "control-visual-gradient",
+    pattern: /\b(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(/gi,
   }),
   Object.freeze({
-    rule: "control-render-get-context",
-    pattern: /\.\s*getContext\s*\(/g,
+    rule: "control-visual-animation",
+    pattern: /\banimation(?:-[a-z-]+)?\s*:/gi,
   }),
   Object.freeze({
-    rule: "control-render-canvas",
-    pattern: /<\s*canvas\b/gi,
-  }),
-  Object.freeze({
-    rule: "control-render-application",
-    pattern: /\bnew\s+(?:(?:PIXI|pixi)\s*\.\s*)?(?:[A-Za-z_$][\w$]*\s*\.\s*)*Application\s*\(/g,
-  }),
-  Object.freeze({
-    rule: "control-render-shared-ticker",
-    pattern: /\bTicker\s*\.\s*shared\b/g,
+    rule: "control-visual-backdrop-filter",
+    pattern: /\b(?:-webkit-)?backdrop-filter\s*:/gi,
   }),
 ]);
 
@@ -74,10 +97,12 @@ export async function checkControlBoundaries({ root = defaultProjectRoot } = {})
   const projectRoot = resolve(root);
   const typescript = await loadTypeScript();
   const findForbiddenGreenUsages = await loadNoGreenScanner(projectRoot, typescript);
-  const sourceFiles = CONTROL_SOURCE_ROOTS
+  const boundaryEntryFiles = CONTROL_SOURCE_ROOTS
     .flatMap((sourceRoot) => listProductionSourceFiles(resolve(projectRoot, ...sourceRoot.split("/"))))
     .sort();
-  const violations = [];
+  const sourceGraph = collectControlSourceGraph(projectRoot, boundaryEntryFiles, typescript);
+  const sourceFiles = sourceGraph.files;
+  const violations = [...sourceGraph.violations];
 
   for (const file of sourceFiles) {
     const source = readFileSync(file, "utf8");
@@ -92,12 +117,21 @@ export async function checkControlBoundaries({ root = defaultProjectRoot } = {})
       ));
     }
 
-    for (const { rule, pattern } of RENDER_RULES) {
+    for (const { rule, match } of forbiddenRendererUsages(source, file, typescript)) {
+      violations.push(createViolation(
+        rule,
+        displayFile,
+        "Control and Admin production source may not own rendering APIs.",
+        match,
+      ));
+    }
+
+    for (const { rule, pattern } of VISUAL_RULES) {
       for (const match of source.matchAll(pattern)) {
         violations.push(createViolation(
           rule,
           displayFile,
-          "Control and Admin production source may not own rendering APIs.",
+          "Control production source may not own gradients, CSS animation, or backdrop filters.",
           match[0],
         ));
       }
@@ -184,13 +218,25 @@ function listProductionSourceFiles(directory) {
       if (entry.name === "test" || entry.name === "__tests__") return [];
       return listProductionSourceFiles(file);
     }
-    if (!entry.isFile() || !SOURCE_EXTENSIONS.has(extname(entry.name))) return [];
+    if (!entry.isFile() || !SOURCE_EXTENSIONS.has(extname(entry.name).toLowerCase())) return [];
     if (/(?:^|\.)test\.|(?:^|\.)spec\.|\.d\.ts$/.test(entry.name)) return [];
     return [file];
   });
 }
 
 function importedModuleSpecifiers(source, file, typescript) {
+  return importedModuleReferences(source, file, typescript)
+    .flatMap(({ specifier }) => specifier === null ? [] : [specifier]);
+}
+
+function importedModuleReferences(source, file, typescript) {
+  if (extname(file) === ".css") {
+    return [
+      ...source.matchAll(
+        /@import\s+(?:url\(\s*)?(?:["']([^"']+)["']|([^"'\s;)]+))\s*\)?/gi,
+      ),
+    ].map((match) => ({ kind: "static", specifier: match[1] ?? match[2] }));
+  }
   const sourceFile = typescript.createSourceFile(
     file,
     source,
@@ -198,24 +244,206 @@ function importedModuleSpecifiers(source, file, typescript) {
     true,
     scriptKindFor(file, typescript),
   );
-  const specifiers = [];
+  const references = [];
   const visit = (node) => {
     if (
       typescript.isImportDeclaration(node) ||
       typescript.isExportDeclaration(node)
     ) {
-      if (typeof node.moduleSpecifier?.text === "string") specifiers.push(node.moduleSpecifier.text);
+      if (typeof node.moduleSpecifier?.text === "string") {
+        references.push({ kind: "static", specifier: node.moduleSpecifier.text });
+      }
     } else if (
       typescript.isCallExpression(node) &&
-      node.expression.kind === typescript.SyntaxKind.ImportKeyword &&
-      typeof node.arguments[0]?.text === "string"
+      node.expression.kind === typescript.SyntaxKind.ImportKeyword
     ) {
-      specifiers.push(node.arguments[0].text);
+      const argument = node.arguments[0];
+      references.push({
+        kind: "dynamic",
+        specifier: argument && typescript.isStringLiteralLike(argument) ? argument.text : null,
+      });
+    } else if (
+      typescript.isCallExpression(node) &&
+      typescript.isIdentifier(node.expression) &&
+      node.expression.text === "require"
+    ) {
+      const argument = node.arguments[0];
+      references.push({
+        kind: "require",
+        specifier: argument && typescript.isStringLiteralLike(argument) ? argument.text : null,
+      });
     }
     typescript.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return specifiers;
+  return references;
+}
+
+function forbiddenRendererUsages(source, file, typescript) {
+  if (extname(file).toLowerCase() === ".css") return [];
+  const sourceFile = typescript.createSourceFile(
+    file,
+    source,
+    typescript.ScriptTarget.Latest,
+    true,
+    scriptKindFor(file, typescript),
+  );
+  const usages = [];
+  const seen = new Set();
+  const record = (rule, node) => {
+    const key = rule + ":" + node.pos + ":" + node.end;
+    if (seen.has(key)) return;
+    seen.add(key);
+    usages.push({ rule, match: node.getText(sourceFile) });
+  };
+  const visit = (node) => {
+    if (typescript.isIdentifier(node) && node.text === "requestAnimationFrame") {
+      record("control-render-request-animation-frame", node);
+    }
+
+    if (
+      typescript.isPropertyAccessExpression(node) ||
+      typescript.isElementAccessExpression(node)
+    ) {
+      const memberName = accessedMemberName(node, typescript);
+      if (memberName === "requestAnimationFrame") {
+        record("control-render-request-animation-frame", node);
+      }
+      if (memberName === "getContext") {
+        record("control-render-get-context", node);
+      }
+      if (
+        memberName === "shared" &&
+        accessedMemberName(node.expression, typescript) === "Ticker"
+      ) {
+        record("control-render-shared-ticker", node);
+      }
+    }
+
+    if (
+      (typescript.isJsxOpeningElement(node) || typescript.isJsxSelfClosingElement(node)) &&
+      node.tagName.getText(sourceFile).toLowerCase() === "canvas"
+    ) {
+      record("control-render-canvas", node);
+    }
+
+    if (typescript.isCallExpression(node)) {
+      const calledName = accessedMemberName(node.expression, typescript);
+      const firstArgument = node.arguments[0];
+      if (
+        calledName === "createElement" &&
+        firstArgument &&
+        typescript.isStringLiteralLike(firstArgument) &&
+        firstArgument.text.toLowerCase() === "canvas"
+      ) {
+        record("control-render-canvas", node);
+      }
+    }
+
+    if (
+      typescript.isNewExpression(node) &&
+      accessedMemberName(node.expression, typescript) === "Application"
+    ) {
+      record("control-render-application", node);
+    }
+
+    typescript.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return usages;
+}
+
+function accessedMemberName(expression, typescript) {
+  if (typescript.isIdentifier(expression)) return expression.text;
+  if (typescript.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (typescript.isElementAccessExpression(expression)) {
+    const argument = expression.argumentExpression;
+    return argument && typescript.isStringLiteralLike(argument) ? argument.text : null;
+  }
+  return null;
+}
+
+function collectControlSourceGraph(projectRoot, entryFiles, typescript) {
+  const pending = [...entryFiles];
+  const visited = new Set();
+  const violations = [];
+
+  while (pending.length > 0) {
+    const file = resolve(pending.pop());
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const source = readFileSync(file, "utf8");
+
+    for (const reference of importedModuleReferences(source, file, typescript)) {
+      if (reference.specifier === null) {
+        violations.push(createViolation(
+          "control-dynamic-import-nonliteral",
+          relativePath(projectRoot, file),
+          "Control's transitive source graph may not use computed import or require targets.",
+          reference.kind,
+        ));
+        continue;
+      }
+      if (!isLocalModuleSpecifier(reference.specifier)) continue;
+      const dependency = resolveLocalSourceModule(projectRoot, file, reference.specifier);
+      if (dependency === null) {
+        violations.push(createViolation(
+          "control-local-import-unresolved",
+          relativePath(projectRoot, file),
+          "A local Control dependency could not be resolved for boundary inspection.",
+          reference.specifier,
+        ));
+        continue;
+      }
+      if (!isWithin(projectRoot, dependency)) {
+        violations.push(createViolation(
+          "control-local-import-outside-project",
+          relativePath(projectRoot, file),
+          "A local Control dependency resolves outside the project boundary.",
+          reference.specifier,
+        ));
+        continue;
+      }
+      const dependencyExtension = extname(dependency).toLowerCase();
+      if (!SOURCE_EXTENSIONS.has(dependencyExtension)) {
+        violations.push(createViolation(
+          "control-local-import-unscannable",
+          relativePath(projectRoot, file),
+          "A resolved local Control dependency has an unsupported source extension.",
+          reference.specifier,
+        ));
+        continue;
+      }
+      pending.push(dependency);
+    }
+  }
+
+  return {
+    files: [...visited].sort(),
+    violations,
+  };
+}
+
+function isLocalModuleSpecifier(specifier) {
+  return specifier.startsWith("./") ||
+    specifier.startsWith("../") ||
+    specifier.startsWith("@/");
+}
+
+function resolveLocalSourceModule(projectRoot, importer, rawSpecifier) {
+  const specifier = rawSpecifier.replace(/[?#].*$/, "");
+  const unresolved = specifier.startsWith("@/")
+    ? resolve(projectRoot, "src", specifier.slice(2))
+    : resolve(dirname(importer), specifier);
+  const candidates = [unresolved];
+  if (extname(unresolved) === "") {
+    for (const extension of SOURCE_EXTENSIONS) candidates.push(`${unresolved}${extension}`);
+    for (const extension of SOURCE_EXTENSIONS) candidates.push(resolve(unresolved, `index${extension}`));
+  }
+  for (const candidate of candidates) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return resolve(candidate);
+  }
+  return null;
 }
 
 function inspectAvailableModules(projectRoot, typescript) {
@@ -250,27 +478,122 @@ function inspectAvailableModules(projectRoot, typescript) {
     }
   }
 
-  const availableModules = [];
+  const modules = [];
+  const violations = [];
   if (moduleArray) {
     for (const element of moduleArray.elements) {
-      const candidate = unwrapExpression(element, typescript);
-      if (!typescript.isObjectLiteralExpression(candidate)) continue;
+      const candidate = unwrapModuleDefinition(element, typescript);
+      if (candidate === null) {
+        violations.push(createViolation(
+          "control-module-registry-shape",
+          CONTROL_REGISTRY_SOURCE,
+          "Every Control module must be an inspectable object or defineControlModule(object).",
+          element.getText(sourceFile),
+        ));
+        continue;
+      }
       const id = stringProperty(candidate, "id", typescript);
+      const href = stringProperty(candidate, "href", typescript);
       const status = stringProperty(candidate, "status", typescript);
-      if (id !== null && status === "available") availableModules.push(id);
+      if (id === null || href === null || status === null) {
+        violations.push(createViolation(
+          "control-module-registry-shape",
+          CONTROL_REGISTRY_SOURCE,
+          "Every Control module requires literal id, href, and status fields.",
+          element.getText(sourceFile),
+        ));
+        continue;
+      }
+      modules.push({ id, href, status });
+    }
+  } else {
+    violations.push(createViolation(
+      "control-module-registry-shape",
+      CONTROL_REGISTRY_SOURCE,
+      "The Control registry must declare a literal modules array.",
+      "missing modules array",
+    ));
+  }
+
+  const moduleIds = modules.map(({ id }) => id);
+  const duplicateIds = [...new Set(moduleIds.filter((id, index) => moduleIds.indexOf(id) !== index))]
+    .sort();
+  if (duplicateIds.length > 0) {
+    violations.push(createViolation(
+      "control-module-registry-duplicate",
+      CONTROL_REGISTRY_SOURCE,
+      "Control module IDs must be unique.",
+      duplicateIds.join(", "),
+    ));
+  }
+
+  const expectedIds = EXPECTED_CONTROL_MODULES.map(({ id }) => id).sort();
+  const actualIds = [...new Set(moduleIds)].sort();
+  if (
+    expectedIds.length !== actualIds.length ||
+    expectedIds.some((id, index) => id !== actualIds[index])
+  ) {
+    violations.push(createViolation(
+      "control-module-registry-membership",
+      CONTROL_REGISTRY_SOURCE,
+      "The Control registry must expose the exact 18 approved route IDs.",
+      actualIds.length > 0 ? actualIds.join(", ") : "none",
+    ));
+  }
+
+  const expectedStatusById = new Map(
+    EXPECTED_CONTROL_MODULES.map(({ id, status }) => [id, status]),
+  );
+  for (const moduleDefinition of modules) {
+    const expectedStatus = expectedStatusById.get(moduleDefinition.id);
+    if (expectedStatus !== undefined && moduleDefinition.status !== expectedStatus) {
+      violations.push(createViolation(
+        "control-module-registry-status",
+        CONTROL_REGISTRY_SOURCE,
+        "Exactly 17 modules must remain planned and only Effector may be available.",
+        `${moduleDefinition.id}: ${moduleDefinition.status}`,
+      ));
+    }
+    if (moduleDefinition.href !== `/admin/${moduleDefinition.id}`) {
+      violations.push(createViolation(
+        "control-module-registry-route",
+        CONTROL_REGISTRY_SOURCE,
+        "Every Control route must be the canonical /admin/{id} path.",
+        `${moduleDefinition.id}: ${moduleDefinition.href}`,
+      ));
     }
   }
+
+  const availableModules = modules
+    .filter(({ status }) => status === "available")
+    .map(({ id }) => id);
   availableModules.sort();
   const valid = availableModules.length === 1 && availableModules[0] === "effector";
-  return {
-    availableModules,
-    violations: valid ? [] : [createViolation(
+  if (!valid) {
+    violations.push(createViolation(
       "control-available-modules",
       CONTROL_REGISTRY_SOURCE,
       "The Control registry must expose exactly Effector as available.",
       availableModules.length > 0 ? availableModules.join(", ") : "none",
-    )],
+    ));
+  }
+  return {
+    availableModules,
+    violations,
   };
+}
+
+function unwrapModuleDefinition(expression, typescript) {
+  const candidate = unwrapExpression(expression, typescript);
+  if (typescript.isObjectLiteralExpression(candidate)) return candidate;
+  if (
+    !typescript.isCallExpression(candidate) ||
+    !typescript.isIdentifier(candidate.expression) ||
+    candidate.expression.text !== "defineControlModule" ||
+    candidate.arguments.length !== 1
+  ) return null;
+  const argument = unwrapExpression(candidate.arguments[0], typescript);
+  return typescript.isObjectLiteralExpression(argument) ? argument : null;
 }
 
 function unwrapExpression(expression, typescript) {
@@ -397,6 +720,15 @@ function inspectAdminBuildEvidence(projectRoot) {
         match[0],
       ));
     }
+    const rendererMatch = source.match(RENDER_CHUNK_PATTERN);
+    if (rendererMatch) {
+      violations.push(createViolation(
+        "admin-chunk-renderer-api",
+        displayFile,
+        "An Admin production chunk contains a forbidden renderer API.",
+        rendererMatch[0],
+      ));
+    }
   }
 
   return { status: "checked", chunks: sortedChunks, violations };
@@ -481,7 +813,9 @@ function appendBuildInput(hash, projectRoot, relativePathFromRoot) {
 function scriptKindFor(file, typescript) {
   if (file.endsWith(".tsx")) return typescript.ScriptKind.TSX;
   if (file.endsWith(".jsx")) return typescript.ScriptKind.JSX;
-  if (file.endsWith(".js") || file.endsWith(".mjs")) return typescript.ScriptKind.JS;
+  if (file.endsWith(".js") || file.endsWith(".mjs") || file.endsWith(".cjs")) {
+    return typescript.ScriptKind.JS;
+  }
   return typescript.ScriptKind.TS;
 }
 

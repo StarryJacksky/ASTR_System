@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -21,18 +21,30 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
   const currentModule = currentModuleFromPath(pathname);
   const atlasDisclosureRef = useRef<HTMLDetailsElement>(null);
   const atlasSummaryRef = useRef<HTMLElement>(null);
+  const [atlasOpenPath, setAtlasOpenPath] = useState<string | null>(null);
+  const atlasOpen = atlasOpenPath === pathname;
+
+  useEffect(() => {
+    const disclosure = atlasDisclosureRef.current;
+    if (disclosure !== null) disclosure.open = false;
+  }, [pathname]);
 
   const openModuleIndex = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     const disclosure = atlasDisclosureRef.current;
-    const summary = atlasSummaryRef.current;
-    if (disclosure === null || summary === null) return;
+    if (disclosure === null) return;
     disclosure.open = true;
-    summary.focus();
+  };
+
+  const dismissAtlas = (reason: "escape" | "navigate") => {
+    const disclosure = atlasDisclosureRef.current;
+    if (disclosure !== null) disclosure.open = false;
+    setAtlasOpenPath(null);
+    if (reason === "escape") atlasSummaryRef.current?.focus();
   };
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-route-surface="control">
       <div className={styles.controlField} aria-hidden />
       <a className={styles.localSkip} href="#module-index" onClick={openModuleIndex}>
         跳到模块索引
@@ -88,15 +100,44 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
 
           <div className={styles.headerTools}>
             <span className={styles.surfaceVersion}>SURFACE W2</span>
-            <details className={styles.atlasDisclosure} ref={atlasDisclosureRef}>
-              <summary id="module-index" ref={atlasSummaryRef}>
+            <details
+              className={styles.atlasDisclosure}
+              ref={atlasDisclosureRef}
+              onToggle={(event) => {
+                setAtlasOpenPath(event.currentTarget.open ? pathname : null);
+              }}
+            >
+              <summary
+                id="module-index"
+                ref={atlasSummaryRef}
+                onKeyDown={(event) => {
+                  if (
+                    event.key !== "Escape" ||
+                    !atlasOpen ||
+                    event.nativeEvent.isComposing ||
+                    event.nativeEvent.keyCode === 229 ||
+                    event.altKey ||
+                    event.ctrlKey ||
+                    event.metaKey ||
+                    event.shiftKey
+                  ) return;
+                  event.preventDefault();
+                  dismissAtlas("escape");
+                }}
+              >
                 <span aria-hidden className={styles.indexGlyph}>
                   18
                 </span>
                 <span>模块索引</span>
               </summary>
               <div className={styles.atlasPanel}>
-                <ControlAtlas activeId={currentModule?.id} />
+                <ControlAtlas
+                  key={pathname}
+                  variant="disclosure"
+                  activeId={currentModule?.id}
+                  open={atlasOpen}
+                  onDismiss={dismissAtlas}
+                />
               </div>
             </details>
             <ThemeToggle />
@@ -104,7 +145,12 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
           </div>
         </header>
 
-        <main className={styles.main} id="main-content" tabIndex={0}>
+        <main
+          className={styles.main}
+          id="main-content"
+          tabIndex={0}
+          inert={atlasOpen ? true : undefined}
+        >
           {children}
         </main>
       </div>

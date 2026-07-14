@@ -54,7 +54,7 @@ describe("Control shell", () => {
     expect(breadcrumb).toHaveTextContent("执行策略与审计");
   });
 
-  it("opens the complete module atlas through a native disclosure", async () => {
+  it("opens the complete module atlas, focuses search once, and inerts the covered page", async () => {
     const user = userEvent.setup();
     render(
       <ControlShell>
@@ -63,16 +63,25 @@ describe("Control shell", () => {
     );
 
     const disclosure = screen.getByText("模块索引").closest("details");
+    const main = screen.getByRole("main");
     expect(disclosure).not.toHaveAttribute("open");
+    expect(main).not.toHaveAttribute("inert");
 
     await user.click(screen.getByText("模块索引"));
 
     expect(disclosure).toHaveAttribute("open");
+    expect(screen.getByRole("searchbox", { name: "检索 18 个模块" })).toHaveFocus();
+    expect(main).toHaveAttribute("inert");
     expect(screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/admin/")))
       .toHaveLength(18);
+
+    await user.keyboard("{Escape}");
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(screen.getByText("模块索引").closest("summary")).toHaveFocus();
+    expect(main).not.toHaveAttribute("inert");
   });
 
-  it("opens and focuses the atlas disclosure from the local skip link", async () => {
+  it("opens the Atlas search from the local skip link", async () => {
     const user = userEvent.setup();
     render(
       <ControlShell>
@@ -88,7 +97,81 @@ describe("Control shell", () => {
     await user.click(screen.getByRole("link", { name: "跳到模块索引" }));
 
     expect(disclosure).toHaveAttribute("open");
+    expect(screen.getByRole("searchbox", { name: "检索 18 个模块" })).toHaveFocus();
+    expect(summary).not.toHaveFocus();
+  });
+
+  it("closes from Escape after reverse tabbing from Atlas search to its summary", async () => {
+    const user = userEvent.setup();
+    render(
+      <ControlShell>
+        <p>Effector workspace</p>
+      </ControlShell>,
+    );
+    const summary = screen.getByText("模块索引").closest("summary")!;
+    const disclosure = summary.closest("details")!;
+    await user.click(summary);
+    expect(screen.getByRole("searchbox", { name: "检索 18 个模块" })).toHaveFocus();
+
+    summary.focus();
     expect(summary).toHaveFocus();
+    expect(screen.getByRole("main")).toHaveAttribute("inert");
+    await user.keyboard("{Escape}");
+
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(summary).toHaveFocus();
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+  });
+
+  it("closes and clears the disclosure before native result navigation", async () => {
+    const user = userEvent.setup();
+    render(
+      <ControlShell>
+        <p>Effector workspace</p>
+      </ControlShell>,
+    );
+    const summary = screen.getByText("模块索引").closest("summary")!;
+    const disclosure = summary.closest("details")!;
+    await user.click(summary);
+    const search = screen.getByRole("searchbox", { name: "检索 18 个模块" });
+    await user.type(search, "A03");
+    const route = screen.getByRole("link", { name: /Provider 与模型路由/ });
+    route.addEventListener("click", (event) => event.preventDefault(), { once: true });
+
+    await user.click(route);
+
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+    expect(summary).not.toHaveFocus();
+
+    await user.click(summary);
+    expect(search).toHaveValue("");
+    expect(disclosure.querySelectorAll("a[href^='/admin/']")).toHaveLength(18);
+  });
+
+  it("defensively closes and resets a persistent disclosure when pathname changes", async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <ControlShell>
+        <p>Persistent layout</p>
+      </ControlShell>,
+    );
+    const summary = screen.getByText("模块索引").closest("summary")!;
+    const disclosure = summary.closest("details")!;
+    await user.click(summary);
+    await user.type(screen.getByRole("searchbox", { name: "检索 18 个模块" }), "A03");
+
+    usePathname.mockReturnValue("/admin/model-router");
+    view.rerender(
+      <ControlShell>
+        <p>Persistent layout</p>
+      </ControlShell>,
+    );
+
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+    expect(screen.getByRole("searchbox", { name: "检索 18 个模块" })).toHaveValue("");
+    expect(screen.getByLabelText("当前档案")).toHaveTextContent("Provider 与模型路由");
   });
 
   it("uses a neutral Control index label at the root route", () => {
@@ -101,6 +184,45 @@ describe("Control shell", () => {
 
     expect(screen.getByLabelText("当前档案")).toHaveTextContent("主权档案索引");
     expect(screen.queryByText("状态：可用")).toBeNull();
+  });
+
+  it("marks the Control route surface and keeps the disclosure heading subordinate", async () => {
+    const user = userEvent.setup();
+    usePathname.mockReturnValue("/admin");
+    render(
+      <ControlShell>
+        <h1>Root atlas</h1>
+      </ControlShell>,
+    );
+
+    expect(document.querySelector("[data-route-surface='control']"))
+      .toHaveAttribute("data-route-surface", "control");
+    await user.click(screen.getByText("模块索引"));
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 2, name: "主权档案索引" })).toBeVisible();
+  });
+
+  it("removes Control-owned gradients and suppresses the global ambient layers", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/features/control/components/ControlShell.tsx"),
+      "utf8",
+    );
+    const css = readFileSync(
+      resolve(process.cwd(), "src/features/control/components/ControlShell.module.css"),
+      "utf8",
+    );
+    const globals = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
+
+    expect(source).toMatch(/data-route-surface="control"/);
+    expect(css).not.toMatch(/\b(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(/i);
+    expect(css).not.toMatch(/\banimation(?:-[a-z-]+)?\s*:/i);
+    expect(css).not.toMatch(/\b(?:-webkit-)?backdrop-filter\s*:/i);
+    expect(globals).toContain(
+      'body:has([data-route-surface="control"]) .astr-ambient',
+    );
+    expect(globals).toContain(
+      'body:has([data-route-surface="control"]) .astr-grain',
+    );
   });
 
   it("keeps the two cross-space links in distinct desktop and compact spine slots", () => {

@@ -1,6 +1,7 @@
 .shell {
   --control-spine: 76px;
   --control-header: 82px;
+  --control-top-offset: 0px;
 
   position: relative;
   display: grid;
@@ -15,14 +16,32 @@
   z-index: 0;
   inset: 0;
   pointer-events: none;
-  background-image:
-    radial-gradient(circle at 8% 16%, color-mix(in srgb, var(--astr-action) 32%, transparent) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 74% 9%, color-mix(in srgb, var(--astr-soul) 28%, transparent) 0 1px, transparent 1.6px),
-    radial-gradient(circle at 91% 67%, color-mix(in srgb, var(--astr-text) 18%, transparent) 0 1px, transparent 1.4px),
-    linear-gradient(90deg, transparent 0 49.95%, color-mix(in srgb, var(--astr-text) 3%, transparent) 50%, transparent 50.05%);
-  background-size: 210px 190px, 310px 260px, 270px 240px, 64px 100%;
-  mask-image: linear-gradient(to bottom, black, transparent 92%);
   opacity: 0.66;
+}
+
+.controlField::before {
+  position: absolute;
+  top: 7vh;
+  left: 4vw;
+  width: 1px;
+  height: 1px;
+  background: color-mix(in srgb, var(--astr-action) 48%, transparent);
+  box-shadow:
+    4vw 9vh 0 0 color-mix(in srgb, var(--astr-action) 40%, transparent),
+    14vw 66vh 0 0 color-mix(in srgb, var(--astr-soul) 32%, transparent),
+    25vw 21vh 0 0 color-mix(in srgb, var(--astr-text) 24%, transparent),
+    38vw 2vh 0 0 color-mix(in srgb, var(--astr-soul) 34%, transparent),
+    49vw 54vh 0 0 color-mix(in srgb, var(--astr-action) 30%, transparent),
+    60vw 27vh 0 0 color-mix(in srgb, var(--astr-text) 20%, transparent),
+    70vw 2vh 0 0 color-mix(in srgb, var(--astr-soul) 44%, transparent),
+    78vw 37vh 0 0 color-mix(in srgb, var(--astr-action) 34%, transparent),
+    87vw 60vh 0 0 color-mix(in srgb, var(--astr-text) 24%, transparent),
+    93vw 15vh 0 0 color-mix(in srgb, var(--astr-soul) 28%, transparent),
+    7vw 81vh 0 0 color-mix(in srgb, var(--astr-text) 18%, transparent),
+    33vw 74vh 0 0 color-mix(in srgb, var(--astr-action) 36%, transparent),
+    65vw 76vh 0 0 color-mix(in srgb, var(--astr-soul) 34%, transparent),
+    84vw 84vh 0 0 color-mix(in srgb, var(--astr-action) 28%, transparent);
+  content: "";
 }
 
 .controlField::after {
@@ -306,7 +325,7 @@
 .atlasPanel {
   position: fixed;
   z-index: var(--z-modal);
-  inset: var(--control-header) 0 0 var(--control-spine);
+  inset: calc(var(--control-top-offset) + var(--control-header)) 0 0 var(--control-spine);
   overflow: auto;
   border-top: 1px solid var(--astr-action);
   background: color-mix(in srgb, var(--astr-bg) 98%, var(--astr-soul));
@@ -390,6 +409,68 @@
   line-height: 1.75;
 }
 
+.atlasSearchBlock {
+  display: grid;
+  gap: clamp(20px, 3vw, 34px);
+}
+
+.atlasSearch {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(160px, 1fr);
+  gap: 8px 18px;
+  align-items: center;
+  padding-block: 10px;
+  border-block: 1px solid var(--astr-hairline-strong);
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+}
+
+.atlasSearch input {
+  min-width: 0;
+  min-height: var(--touch-target);
+  border: 0;
+  border-bottom: 1px solid var(--astr-action);
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--astr-text);
+  font: 500 var(--text-base) / 1.4 var(--font-sans);
+}
+
+.atlasSearch input::placeholder {
+  color: var(--astr-text-3);
+  opacity: 0.72;
+}
+
+.atlasSearch input:focus-visible {
+  border-bottom-width: 2px;
+  box-shadow: 0 5px 0 -3px color-mix(in srgb, var(--astr-action) 54%, transparent);
+}
+
+.atlasSearch small {
+  grid-column: 2;
+  color: var(--astr-text-3);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+}
+
+.atlasNoResult {
+  min-height: min(440px, 54dvh);
+  margin: 0;
+  padding: clamp(44px, 8vw, 116px) clamp(18px, 4vw, 64px);
+  border-bottom: 1px solid var(--astr-hairline-strong);
+  color: var(--astr-text-2);
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 4vw, 3.8rem);
+  line-height: 1.18;
+}
+
+.atlas[data-atlas-variant="disclosure"] .atlasTitle {
+  font-size: clamp(2.4rem, 5.4vw, 5.2rem);
+}
+
 .atlasDomains {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
@@ -414,7 +495,7 @@
   padding-top: 12px;
 }
 
-.domainHeader h2 {
+.domainHeader :is(h2, h3) {
   margin: 4px 0 0;
   font-family: var(--font-display);
   font-size: clamp(1.7rem, 3vw, 2.7rem);
@@ -621,10 +702,253 @@
   color: var(--astr-text-3);
 }
 
+.readinessFlow {
+  position: relative;
+  display: grid;
+  max-width: 1320px;
+  grid-template-areas:
+    "chapter questions authority"
+    ". related authority"
+    ". domain domain";
+  grid-template-columns: minmax(72px, 0.16fr) minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: clamp(24px, 4vw, 64px);
+  padding: clamp(48px, 8vw, 112px) 0 0;
+  border-top: 1px solid var(--astr-hairline-strong);
+}
+
+.readinessFlow::before {
+  position: absolute;
+  top: 18px;
+  right: clamp(8px, 7vw, 96px);
+  width: min(42%, 470px);
+  aspect-ratio: 2.8;
+  border-top: 1px solid color-mix(in srgb, var(--astr-soul) 42%, transparent);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+  transform: rotate(-4deg);
+}
+
+.readinessChapter {
+  grid-area: chapter;
+  align-self: start;
+  width: clamp(68px, 7vw, 96px);
+  min-height: 134px;
+  padding: 18px 12px;
+  border: 1px solid var(--astr-action);
+  color: var(--astr-action);
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 74% 100%, 0 100%);
+  font-family: var(--font-mono);
+}
+
+.readinessChapter span,
+.readinessChapter small {
+  display: block;
+}
+
+.readinessChapter span {
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
+  letter-spacing: 0.12em;
+}
+
+.readinessChapter small {
+  margin-top: 48px;
+  color: var(--astr-text-3);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  writing-mode: vertical-rl;
+}
+
+.readinessQuestions {
+  grid-area: questions;
+  min-width: 0;
+}
+
+.readinessQuestions h2,
+.authorityLedger h2 {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3.2vw, 3.15rem);
+  font-weight: 560;
+  line-height: 1.08;
+}
+
+.questionList,
+.authorityList,
+.relatedDossiers ul {
+  margin: clamp(24px, 4vw, 44px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.questionList {
+  border-top: 1px solid var(--astr-hairline-strong);
+}
+
+.questionList li {
+  display: grid;
+  min-height: 84px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--astr-hairline);
+}
+
+.questionList span,
+.authorityList span,
+.relatedDossiers a > span,
+.domainDossierLink > span {
+  color: var(--astr-text-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+}
+
+.questionList p,
+.authorityList p {
+  margin: 0;
+  color: var(--astr-text-2);
+  line-height: 1.7;
+}
+
+.authorityLedger {
+  grid-area: authority;
+  align-self: start;
+  margin-top: clamp(30px, 7vw, 96px);
+  padding: clamp(24px, 3vw, 42px) 0 clamp(24px, 3vw, 42px) clamp(22px, 3vw, 46px);
+  border-left: 1px solid var(--astr-hairline-strong);
+}
+
+.authorityIntroduction {
+  max-width: 38rem;
+  margin: 20px 0 0;
+  color: var(--astr-text-3);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+.authorityList li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 14px;
+  padding: 17px 0;
+  border-top: 1px dashed var(--astr-hairline-strong);
+}
+
+.authorityList span {
+  width: 8px;
+  height: 8px;
+  margin-top: 8px;
+  border: 1px solid var(--astr-soul);
+  transform: rotate(45deg);
+}
+
+.relatedDossiers {
+  grid-area: related;
+  padding-top: clamp(12px, 2vw, 28px);
+}
+
+.relatedDossiers ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--astr-hairline-strong);
+}
+
+.relatedDossiers li + li {
+  border-left: 1px solid var(--astr-hairline);
+}
+
+.relatedDossiers a {
+  display: grid;
+  min-height: calc(var(--touch-target) * 1.75);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 14px;
+  align-content: center;
+  padding: 14px 18px;
+  color: var(--astr-text);
+  text-decoration: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.relatedDossiers a:hover,
+.relatedDossiers a:focus-visible {
+  background: color-mix(in srgb, var(--astr-action) 6%, transparent);
+  outline-offset: -2px;
+}
+
+.relatedDossiers strong {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.relatedDossiers small {
+  grid-column: 2;
+  color: var(--astr-text-3);
+  font-family: var(--font-display);
+}
+
+.domainDossiers {
+  display: grid;
+  grid-area: domain;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: clamp(12px, 3vw, 38px);
+  border-block: 1px solid var(--astr-hairline-strong);
+  background: var(--astr-hairline);
+}
+
+.domainDossierLink {
+  display: grid;
+  min-height: calc(var(--touch-target) * 1.55);
+  gap: 6px;
+  align-content: center;
+  padding: 12px 18px;
+  background: var(--astr-bg);
+  color: var(--astr-text);
+  text-decoration: none;
+}
+
+.domainDossierLink:last-child {
+  text-align: right;
+}
+
+.domainDossierLink:only-child[rel="next"] {
+  grid-column: 2;
+}
+
+.domainDossierLink:hover,
+.domainDossierLink:focus-visible {
+  color: var(--astr-action);
+}
+
+.domainDossierLink strong {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .readinessFlow {
+    grid-template-areas:
+      "chapter questions"
+      ". authority"
+      ". related"
+      ". domain";
+    grid-template-columns: minmax(68px, 0.16fr) minmax(0, 1fr);
+  }
+
+  .authorityLedger {
+    margin-top: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .shell {
     --control-spine: 0px;
     --control-header: 112px;
+    --control-top-offset: 48px;
 
     display: block;
     overflow: visible;
@@ -633,7 +957,7 @@
   .spine {
     position: relative;
     display: grid;
-    min-height: 48px;
+    min-height: var(--control-top-offset);
     grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr);
     border-right: 0;
     border-bottom: 1px solid var(--astr-hairline-strong);
@@ -644,7 +968,7 @@
   }
 
   .wordmark {
-    min-height: 48px;
+    min-height: var(--control-top-offset);
     border-right: 1px solid var(--astr-hairline);
     border-bottom: 0;
   }
@@ -669,7 +993,7 @@
   }
 
   .spaceLink {
-    min-block-size: 48px;
+    min-block-size: var(--control-top-offset);
     flex-direction: row;
   }
 
@@ -679,7 +1003,7 @@
   }
 
   .workspace {
-    min-height: calc(100dvh - 48px);
+    min-height: calc(100dvh - var(--control-top-offset));
     grid-template-rows: var(--control-header) minmax(0, 1fr);
   }
 
@@ -711,10 +1035,6 @@
     margin-right: auto;
   }
 
-  .atlasPanel {
-    inset: 160px 0 0;
-  }
-
   .localSkip {
     inset-inline-start: 10px;
   }
@@ -727,6 +1047,14 @@
 
   .atlasHeader {
     gap: 24px;
+  }
+
+  .atlasSearch {
+    grid-template-columns: 1fr;
+  }
+
+  .atlasSearch small {
+    grid-column: 1;
   }
 
   .atlasDomain + .atlasDomain {
@@ -758,12 +1086,79 @@
     width: 72px;
     height: 72px;
   }
+
+  .readinessFlow {
+    grid-template-areas:
+      "chapter questions"
+      "authority authority"
+      "related related"
+      "domain domain";
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 26px 18px;
+  }
+
+  .readinessChapter {
+    width: 62px;
+    min-height: 112px;
+    padding-inline: 9px;
+  }
+
+  .readinessChapter small {
+    margin-top: 32px;
+  }
+
+  .authorityLedger {
+    margin-top: 12px;
+    padding-left: 18px;
+  }
+
+  .relatedDossiers ul,
+  .domainDossiers {
+    grid-template-columns: 1fr;
+  }
+
+  .relatedDossiers li + li {
+    border-top: 1px solid var(--astr-hairline);
+    border-left: 0;
+  }
+
+  .domainDossierLink,
+  .domainDossierLink:last-child {
+    text-align: left;
+  }
+
+  .domainDossierLink:only-child[rel="next"] {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 760px) and (max-height: 300px) {
+  .atlas[data-atlas-variant="disclosure"] .moduleLink {
+    min-height: max(
+      var(--touch-target),
+      calc(100dvh - var(--control-top-offset) - var(--control-header) - 2px)
+    );
+    padding-block: 4px;
+  }
+
+  .atlas[data-atlas-variant="disclosure"] .atlasNoResult {
+    display: grid;
+    min-height: max(
+      var(--touch-target),
+      calc(100dvh - var(--control-top-offset) - var(--control-header) - 2px)
+    );
+    place-items: center start;
+    padding: 8px 18px;
+    font-size: 1rem;
+    line-height: 1.35;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .moduleLink,
   .moduleLink::before,
-  .atlasDisclosure > summary {
+  .atlasDisclosure > summary,
+  .relatedDossiers a {
     transition: none;
   }
 }

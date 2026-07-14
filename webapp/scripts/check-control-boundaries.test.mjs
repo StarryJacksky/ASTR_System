@@ -17,6 +17,26 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const boundaryScript = resolve(process.cwd(), "scripts/check-control-boundaries.mjs");
 const temporaryDirectories = [];
+const EXPECTED_CONTROL_MODULES = Object.freeze([
+  ["dashboard", "planned"],
+  ["platform-gateway", "planned"],
+  ["model-router", "planned"],
+  ["plugins-skills-mcp", "planned"],
+  ["sessions-people", "planned"],
+  ["schedule", "planned"],
+  ["logs-trace", "planned"],
+  ["settings", "planned"],
+  ["resources-knowledge", "planned"],
+  ["setup", "planned"],
+  ["soul", "planned"],
+  ["memory", "planned"],
+  ["emotion", "planned"],
+  ["moa-teaching", "planned"],
+  ["training", "planned"],
+  ["voice", "planned"],
+  ["effector", "available"],
+  ["migration", "planned"],
+]);
 
 afterEach(() => {
   while (temporaryDirectories.length > 0) {
@@ -70,6 +90,24 @@ describe("Control production boundary command", () => {
     ]));
   });
 
+  it("rejects Control-owned gradients, CSS animation, and backdrop filtering", () => {
+    const root = createFixture({
+      "src/features/control/rogue-material.css": `
+        .gradient { background: radial-gradient(circle, #000, #111); }
+        .animated { animation: drift 9s linear infinite; }
+        .glass { backdrop-filter: blur(18px); }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+    const rules = report.violations.map(({ rule }) => rule);
+
+    expect(rules).toEqual(expect.arrayContaining([
+      "control-visual-gradient",
+      "control-visual-animation",
+      "control-visual-backdrop-filter",
+    ]));
+  });
+
   it("rejects Live2D, Pixi, and Soul Lens imports in the Control boundary", () => {
     const root = createFixture({
       "src/app/admin/rogue-imports.ts": `
@@ -84,6 +122,123 @@ describe("Control production boundary command", () => {
     expect(result.status).not.toBe(0);
     expect(report.violations.filter(({ rule }) => rule === "control-heavy-visual-import"))
       .toHaveLength(3);
+  });
+
+  it("rejects renderer ownership hidden in a transitive local dependency", () => {
+    const root = createFixture({
+      "src/app/admin/page.tsx": `
+        import { mountRenderer } from "@/components/rogue-renderer";
+        export default function AdminPage() { mountRenderer(); return <main>Control</main>; }
+      `,
+      "src/components/rogue-renderer.ts": `
+        export function mountRenderer() {
+          requestAnimationFrame(() => undefined);
+          document.createElement("canvas").getContext("webgl");
+        }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rule: "control-render-request-animation-frame",
+        file: "src/components/rogue-renderer.ts",
+      }),
+      expect.objectContaining({
+        rule: "control-render-get-context",
+        file: "src/components/rogue-renderer.ts",
+      }),
+    ]));
+  });
+
+  it.each(["cjs", "cts"])
+    ("scans a transitive local .%s dependency instead of silently skipping it", (extension) => {
+      const root = createFixture({
+        "src/app/admin/page.tsx": `
+          import "@/components/rogue-renderer.${extension}";
+          export default function AdminPage() { return <main>Control</main>; }
+        `,
+        [`src/components/rogue-renderer.${extension}`]: `
+          window.requestAnimationFrame?.(() => undefined);
+        `,
+      });
+      const report = parseReport(runBoundary(root).stdout);
+
+      expect(report.violations).toContainEqual(expect.objectContaining({
+        rule: "control-render-request-animation-frame",
+        file: `src/components/rogue-renderer.${extension}`,
+      }));
+    });
+
+  it("fails closed when a resolved local dependency has an unscannable extension", () => {
+    const root = createFixture({
+      "src/app/admin/page.tsx": `
+        import "@/components/opaque.wasm";
+        export default function AdminPage() { return <main>Control</main>; }
+      `,
+      "src/components/opaque.wasm": "opaque renderer payload",
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "control-local-import-unscannable",
+      file: "src/app/admin/page.tsx",
+      match: "@/components/opaque.wasm",
+    }));
+  });
+
+  it("follows an unquoted CSS url import into the transitive graph", () => {
+    const root = createFixture({
+      "src/features/control/control.css": `
+        @import url(../../components/rogue-material.css);
+      `,
+      "src/components/rogue-material.css": `
+        .rogue { background: radial-gradient(circle, #000, #111); }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "control-visual-gradient",
+      file: "src/components/rogue-material.css",
+    }));
+  });
+
+  it("rejects optional, bracketed, and createElement renderer equivalents", () => {
+    const root = createFixture({
+      "src/features/control/rogue-renderer.tsx": `
+        window.requestAnimationFrame?.(tick);
+        surface.getContext?.("webgl");
+        surface["getContext"]("webgl");
+        React.createElement("canvas");
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+    const rules = report.violations.map(({ rule }) => rule);
+
+    expect(rules).toEqual(expect.arrayContaining([
+      "control-render-request-animation-frame",
+      "control-render-get-context",
+      "control-render-canvas",
+    ]));
+  });
+
+  it("fails closed on a computed dynamic import in the transitive Control graph", () => {
+    const root = createFixture({
+      "src/app/admin/page.tsx": `
+        const target = "@/components/renderer";
+        export default async function AdminPage() {
+          await import(target);
+          return <main>Control</main>;
+        }
+      `,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "control-dynamic-import-nonliteral",
+      file: "src/app/admin/page.tsx",
+    }));
   });
 
   it("reuses the constitutional no-green scanner", () => {
@@ -118,6 +273,35 @@ describe("Control production boundary command", () => {
   });
 
   it.each([
+    [
+      "a planned module is missing",
+      EXPECTED_CONTROL_MODULES.slice(1),
+      "control-module-registry-membership",
+    ],
+    [
+      "a module ID is duplicated",
+      [...EXPECTED_CONTROL_MODULES, EXPECTED_CONTROL_MODULES[0]],
+      "control-module-registry-duplicate",
+    ],
+    [
+      "a route does not match its module ID",
+      EXPECTED_CONTROL_MODULES.map(([id, status]) => ({
+        id,
+        status,
+        href: id === "dashboard" ? "/admin/not-dashboard" : `/admin/${id}`,
+      })),
+      "control-module-registry-route",
+    ],
+  ])("rejects route truth when %s", (_label, entries, expectedRule) => {
+    const root = createFixture({
+      "src/features/control/model/control-modules.ts": registrySource(entries),
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({ rule: expectedRule }));
+  });
+
+  it.each([
     ["pixi", "imported pixi.js runtime"],
     ["live2d", "pixi-live2d-display"],
     ["soul-lens", "soul-lens-pass"],
@@ -132,6 +316,22 @@ describe("Control production boundary command", () => {
     expect(result.status).not.toBe(0);
     expect(report.violations).toContainEqual(expect.objectContaining({
       rule: "admin-chunk-heavy-visual",
+      file: ".next/static/chunks/control-effector.js",
+    }));
+  });
+
+  it.each([
+    ["RAF", "globalThis.requestAnimationFrame?.(tick)"],
+    ["canvas context", "surface[\"getContext\"](\"webgl\")"],
+    ["canvas creation", "React.createElement(\"canvas\")"],
+  ])("rejects %s renderer bytes in a resolved Admin production chunk", (_label, bytes) => {
+    const root = createFixture({
+      ".next/static/chunks/control-effector.js": bytes,
+    });
+    const report = parseReport(runBoundary(root).stdout);
+
+    expect(report.violations).toContainEqual(expect.objectContaining({
+      rule: "admin-chunk-renderer-api",
       file: ".next/static/chunks/control-effector.js",
     }));
   });
@@ -194,10 +394,7 @@ function createFixture(files = {}, options = {}) {
   const defaults = {
     "src/app/admin/page.tsx": "export default function AdminPage() { return <main>Control</main>; }",
     "src/app/admin/[module]/page.tsx": "export default function ModulePage() { return <main>Module</main>; }",
-    "src/features/control/model/control-modules.ts": registrySource([
-      ["dashboard", "planned"],
-      ["effector", "available"],
-    ]),
+    "src/features/control/model/control-modules.ts": registrySource(EXPECTED_CONTROL_MODULES),
     ".next/server/app/admin/page_client-reference-manifest.js": adminManifest(
       "/admin/page",
       "src/app/admin/page",
@@ -231,8 +428,23 @@ function createFixture(files = {}, options = {}) {
   return root;
 }
 
-function registrySource(entries) {
-  return `const modules = ${JSON.stringify(entries.map(([id, status]) => ({ id, status })))} as const;
+function registrySource(entries, { wrapped = true } = {}) {
+  const modules = entries.map((entry) => {
+    const value = Array.isArray(entry)
+      ? { id: entry[0], status: entry[1] }
+      : entry;
+    return {
+      id: value.id,
+      href: value.href ?? `/admin/${value.id}`,
+      status: value.status,
+    };
+  });
+  const moduleSource = modules
+    .map((module) => wrapped
+      ? `defineControlModule(${JSON.stringify(module)})`
+      : JSON.stringify(module))
+    .join(",\n");
+  return `${wrapped ? "function defineControlModule(module) { return Object.freeze(module); }\n" : ""}const modules = [${moduleSource}] as const;
 export const CONTROL_MODULES = Object.freeze(modules);`;
 }
 

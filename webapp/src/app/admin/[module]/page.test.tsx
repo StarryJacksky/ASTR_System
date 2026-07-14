@@ -8,7 +8,7 @@ const { notFound } = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({ notFound }));
 
-import ControlModulePage, { generateStaticParams } from "./page";
+import ControlModulePage, { generateMetadata, generateStaticParams } from "./page";
 
 describe("Control module routes", () => {
   it("generates the exact 18 target paths", () => {
@@ -39,5 +39,13 @@ describe("Control module routes", () => {
       ControlModulePage({ params: Promise.resolve({ module: "remote-task" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFound).toHaveBeenCalledTimes(1);
+  });
+
+  it("publishes a distinct route title for assistive route announcements", async () => {
+    await expect(generateMetadata({
+      params: Promise.resolve({ module: "model-router" }),
+    })).resolves.toEqual({
+      title: "Provider 与模型路由 · ASTR Control",
+    });
   });
 });
