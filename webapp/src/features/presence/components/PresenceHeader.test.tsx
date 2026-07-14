@@ -321,7 +321,7 @@ describe("PresenceHeader", () => {
     expect(actions.reset).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps exactly five global controls plus safety at the constitutional target", async () => {
+  it("keeps exactly six global controls plus safety at the constitutional target", async () => {
     const { container } = render(
       <AppShell>
         <main id="main-content">
@@ -331,6 +331,7 @@ describe("PresenceHeader", () => {
     );
 
     const controls = [
+      screen.getByRole("link", { name: "Studio" }),
       screen.getByRole("link", { name: "Control" }),
       screen.getByRole("link", { name: "Mobile" }),
       screen.getByRole("button", { name: "切换昼夜主题" }),
@@ -349,10 +350,19 @@ describe("PresenceHeader", () => {
       expect(within(header).getByRole("button", { name: "暂停视觉动效" })).toBeEnabled(),
     );
     const globalControls = within(header).getByRole("navigation", { name: "全局控制" });
-    expect(globalControls.querySelectorAll("a[href], button")).toHaveLength(5);
+    expect(globalControls.querySelectorAll("a[href], button")).toHaveLength(6);
     expect(within(globalControls).getByRole("button", { name: "切换昼夜主题" })).toBeVisible();
     expect(within(globalControls).getByRole("button", { name: "暂停视觉动效" })).toBeVisible();
     expect(within(globalControls).getByRole("button", { name: "打开设置" })).toBeVisible();
+    expect(within(globalControls).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "Studio",
+      "Control",
+      "Mobile",
+    ]);
+    expect(within(globalControls).getByRole("link", { name: "Studio" })).toHaveAttribute(
+      "href",
+      "/studio",
+    );
     expect(within(globalControls).getByRole("link", { name: "Control" })).toHaveAttribute(
       "href",
       "/admin",
@@ -368,8 +378,14 @@ describe("PresenceHeader", () => {
       resolve(process.cwd(), "src/features/presence/components/PresenceHeader.tsx"),
       "utf8",
     );
+    const studioLink =
+      source.match(/<Link(?=[^>]*href="\/studio")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
+    const controlLink =
+      source.match(/<Link(?=[^>]*href="\/admin")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
     const mobileLink =
       source.match(/<Link(?=[^>]*href="\/mobile\/presence")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
+    expect(studioLink).toMatch(/prefetch=\{false\}/);
+    expect(controlLink).toMatch(/prefetch=\{false\}/);
     expect(mobileLink).toMatch(/prefetch=\{false\}/);
   });
 

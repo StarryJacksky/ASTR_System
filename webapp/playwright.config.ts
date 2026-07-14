@@ -57,7 +57,7 @@ export default defineConfig({
   testMatch:
     coreMode === "real"
       ? /presence-real-smoke\.spec\.ts/
-      : /(?:presence(?:-[\w-]+)?|control(?:-a11y)?|mobile(?:-[\w-]+)?)\.spec\.ts/,
+      : /(?:presence(?:-[\w-]+)?|control(?:-a11y)?|studio(?:-[\w-]+)?|mobile(?:-[\w-]+)?)\.spec\.ts/,
   testIgnore:
     coreMode === "real" ? undefined : /presence-real-smoke\.spec\.ts/,
   fullyParallel: false,

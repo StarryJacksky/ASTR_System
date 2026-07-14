@@ -25,16 +25,21 @@ describe("Control shell", () => {
     );
 
     const spaceLinks = screen.getByRole("navigation", { name: "跨空间" });
-    expect(within(spaceLinks).getAllByRole("link")).toHaveLength(2);
+    expect(within(spaceLinks).getAllByRole("link")).toHaveLength(3);
     expect(within(spaceLinks).getByRole("link", { name: "返回 Presence" })).toHaveAttribute(
       "href",
       "/",
+    );
+    expect(within(spaceLinks).getByRole("link", { name: "Studio" })).toHaveAttribute(
+      "href",
+      "/studio",
     );
     expect(within(spaceLinks).getByRole("link", { name: "Mobile" })).toHaveAttribute(
       "href",
       "/mobile/presence",
     );
     expect(screen.getAllByRole("link", { name: "返回 Presence" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Studio" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "Mobile" })).toHaveLength(1);
     expect(screen.getByLabelText("当前档案")).toHaveTextContent("执行策略与审计");
     expect(screen.getByText("SURFACE W2")).toBeVisible();
@@ -225,7 +230,7 @@ describe("Control shell", () => {
     );
   });
 
-  it("keeps the two cross-space links in distinct desktop and compact spine slots", () => {
+  it("keeps the three cross-space links in distinct desktop and compact spine slots", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/features/control/components/ControlShell.tsx"),
       "utf8",
@@ -234,6 +239,10 @@ describe("Control shell", () => {
       resolve(process.cwd(), "src/features/control/components/ControlShell.module.css"),
       "utf8",
     );
+    const presenceLink =
+      source.match(/<Link(?=[^>]*href="\/")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
+    const studioLink =
+      source.match(/<Link(?=[^>]*href="\/studio")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
     const mobileLink =
       source.match(/<Link(?=[^>]*href="\/mobile\/presence")[^>]*>[\s\S]*?<\/Link>/)?.[0] ?? "";
     const desktopSpaceLinks = css.match(/\.spaceLinks\s*\{([^}]*)\}/)?.[1] ?? "";
@@ -243,7 +252,10 @@ describe("Control shell", () => {
     const compactSpaceLinks = compactCss.match(/\.spaceLinks\s*\{([^}]*)\}/)?.[1] ?? "";
 
     expect(source).toMatch(/<nav className=\{styles\.spaceLinks\} aria-label="跨空间">/);
+    expect(source.match(/href="\/studio"/g)).toHaveLength(1);
     expect(source.match(/href="\/mobile\/presence"/g)).toHaveLength(1);
+    expect(presenceLink).toMatch(/prefetch=\{false\}/);
+    expect(studioLink).toMatch(/prefetch=\{false\}/);
     expect(mobileLink).toMatch(/prefetch=\{false\}/);
     expect(source).not.toMatch(/styles\.presenceLink/);
     expect(css).not.toMatch(/\.presenceLink\b/);
@@ -262,7 +274,7 @@ describe("Control shell", () => {
     );
     expect(compactSpaceLinks).toMatch(/grid-column:\s*2\s*\/\s*-1/);
     expect(compactSpaceLinks).toMatch(
-      /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+      /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
     );
     expect(compactSpaceLinks).not.toMatch(/grid-column:\s*3\b/);
   });

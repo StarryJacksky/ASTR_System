@@ -1,0 +1,60 @@
+# 执行层安全护栏策略（effector/guard.py 读取）
+# 落点：P2-W1 → src/astr/effector/guard_policy.yaml（敏感值可移入 .env）
+# 规范：总规 §2.4.5、P2-W1、05 §7、06。安全是 P2 的一等需求，不是附加项。
+# 【你本人要填】的字段已标 TODO——这些是只有你能定的现实世界边界，开 P2 前先填好。
+
+# —— ① 应用白名单：Computer Use 只能操作前台是这些进程的窗口（pygetwindow 校验）——
+# 留空 = 拒绝一切 CU 操作（默认最安全）。TODO 按你愿意让她碰的程序填。
+app_whitelist: []            # TODO 例：["explorer.exe", "Code.exe", "chrome.exe", "WeChat.exe"]
+
+# —— ② 危险动作 → 强制 L3 二次确认（声纹 + 屏幕弹窗，P5 起加声纹）——
+dangerous_actions:
+  categories:                # 这些类别的动作一律 L3
+    - file_delete            # 删除/移动到回收站/覆盖
+    - send_message           # 发消息（任何平台）
+    - send_email             # 发/回邮件
+    - payment                # 转账/付款/下单/资金界面
+    - install_uninstall      # 安装/卸载软件
+    - system_settings        # 改系统设置/注册表/计划任务
+    - credential_access      # 读取 .env/密钥/密码/cookies
+    - external_upload        # 向外部地址上传/外发数据
+  keyword_blacklist:         # 规范化（去全角/零宽/大小写）后命中即视为危险，需 L3
+    - 删除
+    - 卸载
+    - 格式化
+    - 转账
+    - 付款
+    - 汇款
+    - 发送邮件
+    - rm
+    - del
+    - format
+    - sudo
+    - regedit
+    - shutdown
+
+# —— ③ 浏览器登录态站点白名单：只有这些站点允许带你的登录态操作 ——
+# TODO 你手动登录后把允许她使用的站点域名加进来；留空=不允许任何登录态操作。
+login_sites_whitelist: []    # TODO 例：["arxiv.org", "scholar.google.com", "mail.qq.com"]
+
+# —— ④ 沙箱：CU 的破坏性测试只允许发生在这个目录内 ——
+sandbox_dir: "D:/ASTR/effector/sandbox"   # P2 里程碑"桌面文件夹归类"先在这里跑
+
+# —— ⑤ 提示注入防护 ——
+untrusted_wrapping: true     # 所有来自屏幕/网页/文件/工具结果的文本，进 prompt 前包 <untrusted_content>
+redteam_set: "tests/redteam_injection.jsonl"   # CI 回归集（拷自 reference_impl/effector/）
+normalize_before_match: true # 关键词匹配前先规范化（防全角/零宽/unicode 混淆，见 inj-14）
+
+# —— ⑥ 审计与急停 ——
+audit:
+  log_dir: "D:/ASTR/effector/logs"
+  hash_chain: true           # 每行含前一行 sha256，防篡改、可回放
+  screenshot_each_step: true # 动作前后截图引用
+emergency_stop:
+  hotkey: "Ctrl+Alt+Space"   # 全局热键，<500ms 停手；不依赖她正在控制的鼠标
+  web_button: true           # 网页也有急停钮（双保险）
+max_steps_per_task: 25       # CU 单任务硬上限，超过即中止
+
+# —— ⑦ 权限分级映射（总规 §2.2.2）——
+# L0 任何人 / L1 群友 / L2 你（声纹或平台ID）/ L3 你 + 二次确认
+# 表达类(text/sticker/voice)=L0-1；文件读=L1；文件写/CU/邮件草稿=L2；上面 dangerous_actions=L3

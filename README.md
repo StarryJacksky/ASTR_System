@@ -2,12 +2,14 @@
 
 露怀秋（秋秋）的主权 AI 内核。核心信条：**灵魂与算力解耦**——身份资产（人格、记忆、宪法、评分）永远存在模型无关的 `SoulPackage`，模型只是暂时附身的躯壳。
 
-工程计划见 `../engineering_plan/`（宪法：`02_TECH_STACK_LOCKED.md` + `03_CONTRACTS.md`）。
+工程计划已随仓库归档在 [`engineering_plan/`](engineering_plan/)（宪法：[`02_TECH_STACK_LOCKED.md`](engineering_plan/02_TECH_STACK_LOCKED.md) + [`03_CONTRACTS.md`](engineering_plan/03_CONTRACTS.md)）。当前实现批次的设计与执行记录见 [`docs/superpowers/`](docs/superpowers/)。
+
+换机、接任开发、当前前后端合同与后续路线请先读 [`CODEX_HANDOFF.md`](CODEX_HANDOFF.md)。
 
 ## 环境
 
 - Python 3.11（由 uv 锁定）、uv 包管理、Windows + PowerShell。
-- 数据盘 `D:\ASTR\`（不在本仓库内）：`soul_package/` 真身、`embodiments/` 躯壳产物、`ops/` 运维与评估。
+- 数据根目录 `D:\ASTR\` 自身不是 Git 仓库；活动 SoulPackage 是独立仓 `D:\ASTR\soul_package\justin`，其余 `embodiments/`、`ops/`、`effector/` 与备份仍是仓库外运行数据。
 
 ## 快速开始
 
@@ -46,7 +48,7 @@ src/astr/
 
 ## 许可证与合规
 
-本项目（ASTR 应用主仓）采用 **AGPL-3.0**（见 `LICENSE`）——三根支柱 AstrBot / SillyTavern / MaiBot 均为 copyleft，且 AGPL 与"家庭主权、不被圈占"立场同向。第三方组件声明见 `THIRD_PARTY_NOTICES.md`；CI 跑 `scripts/check_licenses.py` 兜底扫描依赖许可（UNKNOWN 即失败）。合规边界详见 `../engineering_plan/06_LICENSING_AND_COMPLIANCE.md`。
+本项目（ASTR 应用主仓）采用 **AGPL-3.0**（见 `LICENSE`）——三根支柱 AstrBot / SillyTavern / MaiBot 均为 copyleft，且 AGPL 与"家庭主权、不被圈占"立场同向。第三方组件声明见 `THIRD_PARTY_NOTICES.md`；CI 跑 `scripts/check_licenses.py` 兜底扫描依赖许可（UNKNOWN 即失败）。合规边界详见 [`engineering_plan/06_LICENSING_AND_COMPLIANCE.md`](engineering_plan/06_LICENSING_AND_COMPLIANCE.md)。
 
 ## 站在巨人肩上（Built on / Inspired by）
 

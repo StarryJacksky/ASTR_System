@@ -209,7 +209,20 @@ export function PresenceHeader({
             <span aria-hidden="true">⌘</span>
             <span className={styles.controlText}>设置</span>
           </button>
-          <Link className={styles.control} style={TOUCH_TARGET_STYLE} href="/admin">
+          <Link
+            className={styles.control}
+            style={TOUCH_TARGET_STYLE}
+            href="/studio"
+            prefetch={false}
+          >
+            Studio
+          </Link>
+          <Link
+            className={styles.control}
+            style={TOUCH_TARGET_STYLE}
+            href="/admin"
+            prefetch={false}
+          >
             Control
           </Link>
           <Link

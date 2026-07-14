@@ -27,6 +27,7 @@ export default defineConfig({
         "src/lib/**/*.ts",
         "src/components/system/**/*.tsx",
         "src/features/mobile/**/*.{ts,tsx}",
+        "src/features/studio/**/*.{ts,tsx}",
       ],
       exclude: [
         "**/*.test.*",
@@ -69,6 +70,12 @@ export default defineConfig({
           statements: 100,
           functions: 100,
           branches: 100,
+        },
+        "src/features/studio/**/*.{ts,tsx}": {
+          lines: 100,
+          statements: 100,
+          functions: 100,
+          branches: 95,
         },
       },
     },

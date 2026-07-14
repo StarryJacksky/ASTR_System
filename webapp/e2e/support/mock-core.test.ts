@@ -277,14 +277,14 @@ describe("mock Core contract fidelity", () => {
     expect(recovered.map((response) => response.status)).toEqual([200, 200, 200]);
   });
 
-  it("includes Mobile specs and the remote authority host in mock Playwright config", async () => {
+  it("includes Studio and Mobile specs plus the remote authority host in mock Playwright config", async () => {
     const source = await readFile(resolve(process.cwd(), "playwright.config.ts"), "utf8");
 
     expect(source).toContain(
       'const REMOTE_APP_ORIGIN = "http://astr-remote.test:3100";',
     );
     expect(source).toContain(
-      '/(?:presence(?:-[\\w-]+)?|control(?:-a11y)?|mobile(?:-[\\w-]+)?)\\.spec\\.ts/',
+      '/(?:presence(?:-[\\w-]+)?|control(?:-a11y)?|studio(?:-[\\w-]+)?|mobile(?:-[\\w-]+)?)\\.spec\\.ts/',
     );
     expect(source).toContain(
       '"--host-resolver-rules=MAP astr-remote.test 127.0.0.1"',

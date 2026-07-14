@@ -59,9 +59,17 @@ export function ControlShell({ children }: { readonly children: ReactNode }) {
           CONTROL
         </span>
         <nav className={styles.spaceLinks} aria-label="跨空间">
-          <Link className={styles.spaceLink} href="/" aria-label="返回 Presence">
+          <Link
+            className={styles.spaceLink}
+            href="/"
+            aria-label="返回 Presence"
+            prefetch={false}
+          >
             <span aria-hidden>←</span>
             <span>Presence</span>
+          </Link>
+          <Link className={styles.spaceLink} href="/studio" prefetch={false}>
+            Studio
           </Link>
           <Link
             className={styles.spaceLink}

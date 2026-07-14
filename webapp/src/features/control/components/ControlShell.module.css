@@ -986,7 +986,7 @@
     width: 100%;
     margin: 0;
     grid-column: 2 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-auto-rows: minmax(var(--touch-target), auto);
     border-top: 0;
     border-left: 1px solid var(--astr-hairline);

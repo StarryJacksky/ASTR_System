@@ -332,6 +332,7 @@ test("keyboard users can skip, compose, switch theme, deepen dialogue, and expli
   const theme = page.getByRole("button", { name: "切换昼夜主题" });
   const visualMotion = page.getByRole("button", { name: /视觉动效/ });
   const settings = page.getByRole("button", { name: "打开设置" });
+  const studio = page.getByRole("link", { name: "Studio" });
   const controlCenter = page.getByRole("link", { name: "Control" });
   const mobilePresence = page.getByRole("link", { name: "Mobile" });
   const systemDetails = page.locator("summary").filter({ hasText: "系统细节" });
@@ -355,6 +356,7 @@ test("keyboard users can skip, compose, switch theme, deepen dialogue, and expli
   for (const nextControl of [
     visualMotion,
     settings,
+    studio,
     controlCenter,
     mobilePresence,
     systemDetails,
