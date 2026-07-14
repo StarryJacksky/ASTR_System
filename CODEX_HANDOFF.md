@@ -23,6 +23,18 @@
 
 规划文档描述目标和约束，不自动证明能力已经实现；出现冲突时，以当前代码、合同测试和本手册的“当前事实”段落为准。
 
+### 2026-07-14 发布状态
+
+- 代码分支 `codex/astr-frontend-redesign` 已推送到 `StarryJacksky/ASTR_System`。
+- Soul 数据仓已配置 `origin = https://github.com/StarryJacksky/ASTR.git`，191 个新增 `memory/chunks` 与 `memory/life` 文件已形成本地提交 `d0ed888`。
+- 当前 Codex 执行环境禁止代理把私人 Soul/Memory 内容外发到第三方，即使目标仓已由所有者确认为私有。因此数据提交不能由 Codex 代推；仓库所有者需在换机前于本机 PowerShell 亲自执行：
+
+```powershell
+git -c safe.directory=D:/ASTR/soul_package/justin -c credential.useHttpPath=true -C D:/ASTR/soul_package/justin push -u origin main
+```
+
+成功后用 `git -C D:/ASTR/soul_package/justin status -sb` 确认显示 `main...origin/main` 且工作树干净，再在 Mac 克隆私有仓。
+
 ## 给接任 Codex 的第一句话
 
 不要从零重做，也不要根据页面外观猜后端能力。先阅读本文件、`README.md`、`webapp/README.md`、`webapp/AGENTS.md`，再运行 `git status -sb` 和 `git log -10 --oneline`。当前分支已经连续完成 Presence、Mobile、Control 与 Studio 的前端重构和严格验收；下一阶段应先完成 macOS 迁移基线与真实权限合同，再逐步打开仍为 unavailable/planned 的功能。
