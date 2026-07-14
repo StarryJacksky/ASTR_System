@@ -85,6 +85,7 @@ Run the focused test again and require PASS.
 - Create: `webapp/src/app/studio/page.tsx`
 - Create: `webapp/src/app/studio/page.test.tsx`
 - Modify: `webapp/src/app/globals.css`
+- Modify: `webapp/vitest.config.mts`
 
 **RED — semantics and truth**
 
@@ -114,6 +115,8 @@ Build `StudioShell` as a server component with:
 - the workplane as the only main content.
 
 Build `StudioUnavailableWorkplane` as static semantic HTML. Use the frozen taxonomy and no runtime owner. Add a Studio-specific global ambient/grain suppression rule so global gradients/animation do not remain active behind this route.
+
+Add `src/features/studio/**/*.{ts,tsx}` to coverage collection with 100% lines/statements/functions and at least 95% branches. The static shell is small enough that unavailable-state truth must not hide in uncovered branches.
 
 Run:
 
